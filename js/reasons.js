@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.1.0-beta';
-import { dateWords, stageWords } from './words.js?v=0.1.0-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.1.1-beta';
+import { dateWords, stageWords } from './words.js?v=0.1.1-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -33,6 +33,7 @@ export const REASONS = {
     'excluded': () => 'Another Azure service manages this VM. This tool gives no target size for it.',
     'disk-encryption-present': () => 'v6 and v7 sizes do not support Azure Disk Encryption. Microsoft recommends encryption at host instead. You cannot turn on encryption at host for a VM that had Azure Disk Encryption.',
     'sap-needs-a-certified-size': () => 'This VM runs SAP. SAP supports only the sizes that SAP certifies (SAP Note 1928533). This tool cannot check that list.',
+    'nva-requires-parallel-deployment': () => 'This VM is a network virtual appliance. Network traffic goes through it, and a move stops the traffic. Ask the vendor which sizes they support. Then deploy a new appliance beside this one and move the traffic.',
     'unmanaged-os-disk': () => 'This VM has unmanaged disks (VHD files in a storage account). Convert them to managed disks first.',
     'ephemeral-os-disk': () => 'This VM has an ephemeral OS disk. That disk is on the host, and Azure empties it when the VM stops. This tool gives no target size for this VM.',
 

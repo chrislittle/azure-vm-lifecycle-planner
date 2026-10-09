@@ -186,7 +186,7 @@ Agreed so far:
   | No - family is not a target | No - Microsoft lists no target for this family |
   | No - out of scope | No - not covered here |
 
-- **Caveats** - each has three answers: fine, a problem, or blank (a hand-made list).
+- **Caveats** - each has three answers: fine, a problem, or blank (a hand-made list). (0.1.1-beta: a fine fact shows no note.)
   "Check:" means it is on the customer; "fits" means it was checked.
 
   | Topic | Fine | Problem | Blank |
@@ -371,6 +371,23 @@ GitHub Pages from `main`, root folder, turned on by the owner after he has tried
      with `.github/workflows/pages.yml`: the tests run first, and a failing test stops
      the publish. Each action is pinned to the exact commit of a current release (all
      on Node.js 24), and the build machine is Ubuntu 24.04.
+
+## 0.1.1-beta (2026-10-09)
+
+- **Network virtual appliances** (owner: so that appliances are
+  not moved without the vendor). Found by the marketplace image: the publisher AND
+  the offer must match Microsoft's list in the Azure built-in policy "Configure
+  Marketplace Network Virtual Appliances (NVAs) to add a MANA support tag"
+  (`data/nva-images.js`, policy version 1.4.0, read 2026-10-09: 44 publishers, 179
+  offer patterns). The broad offer patterns
+  (ubuntu*, win*) count only with an appliance publisher. An appliance gets no target
+  size on any series ("Move needed - no suggestion", or "Not needed" when its size is
+  current); a custom image cannot tell. The appliance note shows only on an appliance.
+- **Notes show only what needs attention** (owner: "make it simple & easy to spot"):
+  a problem or "Check:". A fact that is fine has no note.
+- A size shows only where it is supported: a blocked option shows no size in the
+  details or in vm-target-sizes.csv.
+- The sample has a made-up firewall (contoso-fw01, a Palo Alto image).
 
 ## Next
 

@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.1.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.1.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -31,8 +31,14 @@ For each VM:
 - The supported size on v5, v6 and v7, and the reason when there is no size. For B v1,
   Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2).
 - Notes for each size: for example NVMe support of the OS, Azure Disk Encryption, the
-  temporary disk, accelerated networking, and the NIC and data-disk limits. Each note
-  is fine, a problem, or "Check:". "Check:" means that the list does not give the fact.
+  temporary disk, accelerated networking, and the NIC and data-disk limits. A note is a
+  problem or "Check:". "Check:" means that the list does not give the fact. A fact
+  that is fine has no note.
+- Network virtual appliances (NVAs): the tool finds them by their marketplace image,
+  from the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
+  Appliances (NVAs) to add a MANA support tag". It gives no target size for an
+  appliance. Ask the vendor which sizes they support, and deploy a new appliance
+  beside the old one.
 
 The zip file has these files:
 

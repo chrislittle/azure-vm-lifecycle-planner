@@ -1,10 +1,11 @@
 // The facts the Azure Resource Graph query adds beyond size and generation:
 // reading them from the list, the reasons they give an option, and the
-// caveats on every target - each fine, a problem, or "check" when the list
+// notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import nvme from '../data/nvme-images.js?v=0.1.0-beta';
-import { readCount } from './planner.js?v=0.1.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.1.1-beta';
+import nvme from '../data/nvme-images.js?v=0.1.1-beta';
+import { readCount } from './planner.js?v=0.1.1-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -36,6 +37,31 @@ export function readExtras(cell) {
     };
 }
 
+// Is this marketplace image a network virtual appliance? Microsoft's list
+// (an Azure built-in policy): the publisher AND the offer must match. A * matches
+// any text; case is ignored. A custom image (no publisher) cannot tell: false,
+// and the tool says nothing about it, as for any VM that is not an appliance.
+// One pattern: the text between the * signs must appear in order; the first part
+// at the start and the last part at the end.
+function like(value, pattern) {
+    const v = value.toLowerCase();
+    const parts = pattern.toLowerCase().split('*');
+    if (parts.length === 1) return v === parts[0];
+    if (!v.startsWith(parts[0]) || !v.endsWith(parts[parts.length - 1])) return false;
+    let at = parts[0].length;
+    for (const part of parts.slice(1, -1)) {
+        const i = v.indexOf(part, at);
+        if (i < 0) return false;
+        at = i + part.length;
+    }
+    return at <= v.length - parts[parts.length - 1].length;
+}
+const likeAny = (value, patterns) => patterns.some((p) => like(value, p));
+export function isApplianceImage(publisher, offer) {
+    if (!publisher || !offer) return false;
+    return likeAny(publisher, nvaImages.publishers) && likeAny(offer, nvaImages.offers);
+}
+
 // The reasons the extra facts give, as the target logic reads them. Each
 // applies to the series its rule names (data/series-rules.js).
 export function extraBlockers(x) {
@@ -44,6 +70,9 @@ export function extraBlockers(x) {
     if (x.sap === true) out.push('sap-needs-a-certified-size');
     if (x.unmanagedDisks === true) out.push('unmanaged-os-disk');
     if (x.ephemeralOsDisk === true) out.push('ephemeral-os-disk');
+    // Traffic goes through an appliance: it is rebuilt beside the old one with
+    // the vendor, never moved in place.
+    if (isApplianceImage(x.imagePublisher, x.imageOffer)) out.push('nva-requires-parallel-deployment');
     return out;
 }
 
@@ -132,7 +161,9 @@ export function imageSupportsNvme(publisher, offer, sku) {
 // ---------------------------------------------------------------------------
 
 // One caveat: { state: 'fine' | 'problem' | 'check' | '', text }.
-const fine = (text) => ({ state: 'fine', text });
+// A fact that is fine shows nothing (owner, 2026-10-09: show only what needs
+// attention, so that it is simple to see).
+const fine = () => ({ state: '', text: '' });
 const problem = (text) => ({ state: 'problem', text });
 const check = (text) => ({ state: 'check', text });
 const none = { state: '', text: '' };
@@ -199,6 +230,9 @@ export function caveats(vm, x, option) {
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
     out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? problem('In an availability set. Azure can make you stop all the VMs in the set for the move.') : check('Check: the list does not say if the VM is in an availability set.');
+    // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
+    out['Network virtual appliance'] = isApplianceImage(x.imagePublisher, x.imageOffer)
+        ? problem('Ask the vendor which sizes they support before a move.') : none;
     out['Zone'] = x.zone ? fine(/^none$/i.test(x.zone) ? 'No zone.' : `Zone ${x.zone}.`) : check('Check: the list does not give the zone. The new size must be available in it.');
     return out;
 }
