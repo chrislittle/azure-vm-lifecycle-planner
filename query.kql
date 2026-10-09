@@ -1,0 +1,95 @@
+// VM Lifecycle Planner for Azure - the VM list.
+// Run in the Azure portal: Resource Graph Explorer. Then "Download as CSV" and load
+// the file into the planner page. Reads only; changes nothing.
+Resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| extend vmId = tolower(id)
+| mv-expand nic = properties.networkProfile.networkInterfaces
+| extend nicId = tolower(tostring(nic.id))
+| join kind=leftouter (
+    Resources
+    | where type =~ 'microsoft.network/networkinterfaces'
+    // Azure leaves enableAcceleratedNetworking out when it is off (checked 2026-10-09),
+    // so on a NIC that was read, missing means off. nicRead marks a NIC that was read.
+    | project nicId = tolower(id), nicRead = true,
+              nicAccelerated = coalesce(tobool(properties.enableAcceleratedNetworking), false),
+              nicPrimary = tobool(properties.primary)
+  ) on nicId
+| join kind=leftouter (
+    Resources
+    | where type =~ 'microsoft.compute/virtualmachines/extensions'
+    | extend extType = tostring(properties.type), extPublisher = tostring(properties.publisher)
+    | extend vmId = tolower(tostring(split(id, '/extensions/')[0]))
+    // The Azure VM extension for SAP solutions has no other purpose: it means SAP.
+    | summarize adeExtension = countif(extType in~ ('AzureDiskEncryption', 'AzureDiskEncryptionForLinux')),
+                sapExtension = countif(extPublisher in~ ('Microsoft.AzureCAT.AzureEnhancedMonitoring', 'Microsoft.OSTCExtensions')
+                                       and extType in~ ('MonitorX64Linux', 'MonitorX64Windows', 'AzureEnhancedMonitorForLinux'))
+                by vmId
+  ) on vmId
+| join kind=leftouter (
+    desktopvirtualizationresources
+    | where type =~ 'microsoft.desktopvirtualization/hostpools/sessionhosts'
+    | summarize avdHost = count() by vmId = tolower(tostring(properties.resourceId))
+  ) on vmId
+| summarize
+    name = any(name),
+    location = any(location),
+    size = any(tostring(properties.hardwareProfile.vmSize)),
+    generation = any(tostring(properties.extended.instanceView.hyperVGeneration)),
+    os = any(tostring(properties.storageProfile.osDisk.osType)),
+    nicCount = any(array_length(properties.networkProfile.networkInterfaces)),
+    dataDiskCount = any(array_length(properties.storageProfile.dataDisks)),
+    securityType = any(tostring(properties.securityProfile.securityType)),
+    imagePublisher = any(tostring(properties.storageProfile.imageReference.publisher)),
+    imageOffer = any(tostring(properties.storageProfile.imageReference.offer)),
+    imageSku = any(tostring(properties.storageProfile.imageReference.sku)),
+    diskController = any(tostring(properties.storageProfile.diskControllerType)),
+    acceleratedNics = countif(nicAccelerated == true),
+    nicsRead = countif(nicRead == true),
+    primaryAccelerated = countif(nicAccelerated == true and nicPrimary == true),
+    adeOsDisk = any(tostring(properties.storageProfile.osDisk.encryptionSettings.enabled)),
+    adeExtension = any(adeExtension),
+    hibernation = any(tobool(properties.additionalCapabilities.hibernationEnabled)),
+    scaleSet = any(tostring(properties.virtualMachineScaleSet.id)),
+    sapExtension = any(sapExtension),
+    licenseType = any(tostring(properties.licenseType)),
+    osDiskVhd = any(tostring(properties.storageProfile.osDisk.vhd.uri)),
+    dataDisks = any(tostring(properties.storageProfile.dataDisks)),
+    osDiskOption = any(tostring(properties.storageProfile.osDisk.diffDiskSettings.option)),
+    identityType = any(tostring(identity.type)),
+    availabilitySet = any(tostring(properties.availabilitySet.id)),
+    zones = any(tostring(zones)),
+    avdHost = any(avdHost)
+    by vmId
+| project
+    ['Machine name'] = name,
+    Region = location,
+    ['Current size'] = size,
+    Generation = generation,
+    OS = os,
+    ['NIC count'] = nicCount,
+    ['Data-disk count'] = dataDiskCount,
+    ['Security type'] = iff(isempty(securityType), 'Standard', securityType),
+    ['Image publisher'] = imagePublisher,
+    ['Image offer'] = imageOffer,
+    ['Image SKU'] = imageSku,
+    ['Disk controller'] = diskController,
+    // Blank when a NIC could not be read: unknown, never "off".
+    ['Accelerated NICs'] = iff(nicsRead == nicCount, tostring(acceleratedNics), ''),
+    ['Primary NIC accelerated'] = iff(nicsRead == nicCount, iff(primaryAccelerated > 0, 'Yes', 'No'), ''),
+    ['Azure Disk Encryption'] = iff(adeExtension > 0 or adeOsDisk =~ 'true', 'Yes', 'No'),
+    Hibernation = iff(hibernation == true, 'Yes', 'No'),
+    ['Scale set'] = iff(isempty(scaleSet), 'No', 'Yes'),
+    ['Azure Virtual Desktop'] = iff(avdHost > 0, 'Yes', 'No'),
+    // SAP: the extension for SAP solutions, a licence type that puts the machine on SAP
+    // repositories, or an SAP marketplace image (Microsoft's Azure Hybrid Benefit page).
+    SAP = iff(sapExtension > 0
+              or licenseType in~ ('RHEL_SAPAPPS', 'RHEL_SAPHA', 'RHEL_BASESAPAPPS', 'RHEL_BASESAPHA', 'SLES_SAP')
+              or (imagePublisher =~ 'RedHat' and imageOffer in~ ('rhel-sap-apps', 'rhel-sap-ha'))
+              or (imagePublisher =~ 'SUSE' and tolower(imageOffer) startswith 'sles-sap'), 'Yes', 'No'),
+    ['Unmanaged disks'] = iff(isnotempty(osDiskVhd) or dataDisks contains '"vhd"', 'Yes', 'No'),
+    ['Ephemeral OS disk'] = iff(osDiskOption =~ 'Local', 'Yes', 'No'),
+    ['System-assigned identity'] = iff(identityType contains 'SystemAssigned', 'Yes', 'No'),
+    ['Availability set'] = iff(isempty(availabilitySet), 'No', 'Yes'),
+    Zone = iff(isempty(zones) or zones == '[]', 'None', replace_regex(zones, @'[\[\]"]', ''))
+| order by ['Machine name'] asc

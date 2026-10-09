@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Nothing leaves this page: no network requests (connect-src 'none'), no
+     scripts or styles from anywhere but this site, no form posts. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<title>VM Lifecycle Planner for Azure</title>
+<meta name="description" content="Give this tool your Azure VM list. It shows the lifecycle stage of each VM and the supported v5, v6 and v7 sizes. It runs only in your browser.">
+<link rel="stylesheet" href="style.css?v=0.1.0-beta">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b6bcb'/%3E%3Cpath d='M8 22V10h4v12zm6 0V6h4v16zm6 0v-8h4v8z' fill='white'/%3E%3C/svg%3E">
+<script type="module" src="js/page.js?v=0.1.0-beta"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>VM Lifecycle Planner for Azure</h1>
+    <p class="lede">Give this tool your Azure VM list. It shows the lifecycle stage of each VM and the supported v5, v6 and v7 sizes.</p>
+    <p class="disclaimer">A community tool. Not affiliated with or endorsed by Microsoft.</p>
+    <p class="privacy"><strong>This tool runs only in your browser.</strong> It does not upload or keep your list. This page cannot send data over the network. <a href="#privacy">How to make sure that no data leaves your browser</a></p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="step" aria-labelledby="s1">
+    <h2 id="s1"><span class="num">1</span> Get your VM list</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>From Azure <span class="tag">recommended</span></h3>
+        <ol>
+          <li>In the Azure portal, open <strong>Resource Graph Explorer</strong>.</li>
+          <li>Paste this query and select <strong>Run query</strong>. The query only reads data. It does not change anything.</li>
+          <li>Select <strong>Download as CSV</strong>. Then load the file in step 2.</li>
+        </ol>
+        <div class="code">
+          <div class="code-head"><span>Azure Resource Graph query</span><button type="button" id="copy-query" class="small">Copy query</button></div>
+          <pre id="query" tabindex="0"></pre>
+        </div>
+        <p class="hint">The query lists each VM in the subscriptions that you can see. It gives the facts that this tool needs, for example the size, generation, OS image, NICs, disks, accelerated networking and Azure Disk Encryption.</p>
+      </div>
+      <div class="card">
+        <h3>By hand</h3>
+        <p>If you make the list yourself, use the template. Only <strong>Machine name</strong>, <strong>Current size</strong> and <strong>Generation</strong> are necessary. If one of these three columns is empty, the result is "Not checked". If another column is empty, this tool shows "Check:". It does not show an empty column as a pass.</p>
+        <p><a class="button secondary" href="template.csv" download="vm-list-template.csv">Download the template</a></p>
+        <p class="hint">In Excel, select the rows and the header row. Copy them. Paste them in step 2.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="s2">
+    <h2 id="s2"><span class="num">2</span> Give the list to this tool</h2>
+    <div id="drop" class="drop">
+      <label for="paste" class="label">Paste your rows here, with the header row</label>
+      <textarea id="paste" rows="7" spellcheck="false" placeholder="Machine name&#9;Region&#9;Current size&#9;Generation&#9;..."></textarea>
+      <div class="actions">
+        <label class="button secondary file">Load a CSV file<input type="file" id="file" accept=".csv,.txt,text/csv"></label>
+        <span class="or">or drag a file here</span>
+        <span class="spacer"></span>
+        <button type="button" id="sample" class="link">Try the sample</button>
+        <button type="button" id="clear" class="secondary">Clear</button>
+        <button type="button" id="run">Show results</button>
+      </div>
+    </div>
+    <div id="messages" aria-live="polite"></div>
+  </section>
+
+  <section class="step" id="results-section" hidden aria-labelledby="s3">
+    <h2 id="s3"><span class="num">3</span> Results</h2>
+    <div id="counts" class="counts"></div>
+    <div class="downloads">
+      <button type="button" id="download">Download results (.zip)</button>
+      <span class="hint">The zip file has three results files and one file about the results. Start with vm-summary.csv.</span>
+    </div>
+    <div class="filters">
+      <label>Show <select id="filter"></select></label>
+      <label>Find <input type="search" id="find" placeholder="VM or size"></label>
+      <span id="shown" class="hint"></span>
+    </div>
+    <div class="table-wrap results-wrap">
+      <table id="table">
+        <thead><tr><th>VM</th><th>Current size</th><th>Lifecycle stage</th><th>Result</th><th>v5</th><th>v6</th><th>v7</th><th>Burstable</th><th>Problems</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p><button type="button" id="more" class="secondary" hidden>Show more</button></p>
+    <ul class="hint">
+      <li>Select a VM to see the reason and the notes for each series. The table shows size names without "Standard_". The details and the download files show the full names.</li>
+      <li>"Supported" means that Azure lets you move this VM to the new size. It does not mean that the VM is ready to move.</li>
+      <li>A move is a resize or a rebuild. In a resize, Azure changes the size of the same VM. In a rebuild, you make a new VM with the same disks. A rebuild removes a system-assigned identity and Azure Disk Encryption.</li>
+      <li>This tool does not check if a size is available in your region.</li>
+      <li>AKS nodes are not in the VM list. To change their size, change the AKS node pool.</li>
+    </ul>
+  </section>
+
+  <section class="step about" id="privacy" aria-labelledby="s4">
+    <h2 id="s4">Privacy, and how to make sure that no data leaves your browser</h2>
+    <ul>
+      <li>This tool runs only in your browser. There is no server. GitHub Pages sends the page as plain HTML and JavaScript. Anyone can read the code.</li>
+      <li>A Content-Security-Policy in the page stops all network requests (<code>connect-src 'none'</code>). It also stops scripts from other sites.</li>
+      <li><strong>To make sure:</strong> Open the developer tools of your browser (F12). Select the <strong>Network</strong> tab. Then show the results for a list. The page sends no request.</li>
+      <li>You can also disconnect from the internet after the page opens. The tool continues to work.</li>
+      <li>Your browser makes the results files. The download saves them on your computer. The page does not send them over the network.</li>
+    </ul>
+    <h2>The sources of the answers</h2>
+    <ul id="sources"></ul>
+    <h3>The target sizes that this tool suggests</h3>
+    <div class="table-wrap narrow">
+      <table>
+        <thead><tr><th>Series</th><th>Families</th><th>For which VMs</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td>v5</td><td>D, E</td><td>Generation 1 and Generation 2 VMs</td><td class="size">Standard_D4s_v5</td></tr>
+          <tr><td>v6</td><td>D, E</td><td>Generation 2 VMs</td><td class="size">Standard_D4s_v6</td></tr>
+          <tr><td>v6</td><td>F (Falsv6)</td><td>F, Fs and Fsv2 VMs</td><td class="size">Standard_F4als_v6</td></tr>
+          <tr><td>v7</td><td>D, E</td><td>Generation 2 VMs</td><td class="size">Standard_D4s_v7</td></tr>
+          <tr><td>v7</td><td>F</td><td>F, Fs and Fsv2 VMs</td><td class="size">Standard_F4alds_v7</td></tr>
+          <tr><td>Burstable</td><td>Bsv2, Basv2</td><td>B v1, Av2 and Amv2 VMs</td><td class="size">Standard_B2s_v2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">The D and E families include their AMD (a) and lower-memory (l) sizes, for example Standard_D4as_v6 and Standard_D4ls_v6. The sources are the Microsoft v6 and v7 modernization overview and the Microsoft guide for retired sizes.</p>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>VM Lifecycle Planner for Azure. A community tool. Not affiliated with or endorsed by Microsoft. MIT licence. <a href="https://github.com/chrislittle/azure-vm-lifecycle-planner">Source code on GitHub</a>. <span id="version"></span></p>
+</footer>
+</body>
+</html>
