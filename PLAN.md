@@ -355,5 +355,26 @@ GitHub Pages from `main`, root folder, turned on by the owner after he has tried
      the sample and an open VM at 320, 360, 414, 768, 1,000, 1,024, 1,280, 1,366,
      1,440, 1,920 and 2,560 pixels: nothing goes past the edge of the page at any width.
      Check these widths again after any change to the page layout.
-7. README: what it does, the privacy promises, how to check them.
-8. Owner tries it; then GitHub Pages.
+7. README - done 2026-10-09: what the tool does, how to use it, the privacy promise and
+   how to make sure (the Network tab), what it does not check, sources, feedback (no
+   customer data in issues), and notes for developers. Written in STE.
+8. First release - done 2026-10-09: **0.1.0-beta** for peer testing. Pull request
+   #1 (merged by the owner), tag `v0.1.0-beta`, GitHub pre-release, GitHub Pages at
+   https://chrislittle.github.io/azure-vm-lifecycle-planner/. Checked on the live
+   site: the sample plans, the footer shows the version, planning sends no request,
+   and the Content-Security-Policy blocks a test request.
+   - Each link from the page to its own files carries `?v=<version>` (set with
+     `node tools/set-version.mjs <version>`; a test checks it), so a browser does not
+     mix old and new files after an update.
+   - Publishing (owner, 2026-10-09: no deprecated parts): GitHub's built-in Pages job
+     used an action on Node.js 20, which GitHub has deprecated. The site now publishes
+     with `.github/workflows/pages.yml`: the tests run first, and a failing test stops
+     the publish. Each action is pinned to the exact commit of a current release (all
+     on Node.js 24), and the build machine is Ubuntu 24.04.
+
+## Next
+
+- Peer feedback, as GitHub issues.
+- Before each release: `node tools/set-version.mjs <version>`, then check the screen
+  widths (step 6) and the STE check of all customer text.
+- Refresh the size table and Microsoft's lists when the owner asks.
