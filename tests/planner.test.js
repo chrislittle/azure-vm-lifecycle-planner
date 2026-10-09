@@ -222,3 +222,25 @@ test('every link from the page to its own files carries the release version', as
     assert.ok(html.includes(`src="js/page.js${tag}"`), 'index.html: page.js');
     assert.ok(html.includes(`href="style.css${tag}"`), 'index.html: style.css');
 });
+
+test('a network virtual appliance gets no target size; other VMs get no appliance note', async () => {
+    const { isApplianceImage } = await import('../js/extras.js');
+    assert.equal(isApplianceImage('paloaltonetworks', 'vmseries-flex'), true);
+    assert.equal(isApplianceImage('Canonical', 'ubuntu-24_04-lts'), false, 'ubuntu* counts only with an appliance publisher');
+    assert.equal(isApplianceImage('', 'vmseries-flex'), false, 'a custom image cannot tell');
+    const p = run(sample).plan;
+    const fw = byName(p, 'contoso-fw01');
+    assert.equal(fw.outcome, 'Must move - outside the scope of this tool');
+    assert.ok(F.warnings(fw).some((w) => w.startsWith('Network virtual appliance')));
+    for (const m of p.machines.filter((x) => x.read.name !== 'contoso-fw01' && x.vm)) {
+        for (const r of m.rows) assert.equal(r.caveats['Network virtual appliance']?.state || '', '', m.read.name);
+    }
+});
+
+test('a fact that is fine shows no note', () => {
+    const p = run(sample).plan;
+    for (const m of p.machines) for (const r of m.rows) for (const c of Object.values(r.caveats || {})) {
+        assert.ok(['', 'problem', 'check'].includes(c.state), `${m.read.name}: ${c.state} ${c.text}`);
+        if (!c.state) assert.equal(c.text, '');
+    }
+});

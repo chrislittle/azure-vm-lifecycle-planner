@@ -9,14 +9,14 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.1.0-beta';
-import capacity from '../data/capacity.js?v=0.1.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.1.1-beta';
+import capacity from '../data/capacity.js?v=0.1.1-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.1.0-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.1.0-beta';
+} from './lifecycle.js?v=0.1.1-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.1.1-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -270,6 +270,7 @@ export const BY_DESIGN = [
     // Owner's audit, 2026-10-09: a family with no v5, v6 or v7 size at all (M, for
     // example) is outside this tool - said as such, not as "not checked".
     'family-not-in-region', 'confidential-family',
+    'nva-requires-parallel-deployment',
 ];
 // The logic could not judge these: a person must.
 const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone'];
@@ -304,6 +305,7 @@ export function shortAnswer(result, codes, targetSize) {
         'disk-encryption-present': 'No - Azure Disk Encryption', 'sap-needs-a-certified-size': 'No - SAP',
         'unmanaged-os-disk': 'No - unmanaged disks', 'ephemeral-os-disk': 'No - ephemeral OS disk',
         'family-not-in-region': 'No - no size in this family', 'confidential-family': 'No - confidential VM out of scope',
+        'nva-requires-parallel-deployment': 'No - network virtual appliance',
     };
     return by[first] || 'No - out of scope';
 }

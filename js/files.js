@@ -4,14 +4,14 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.1.0-beta';
-import families from '../data/families.js?v=0.1.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.1.0-beta';
-import capacity from '../data/capacity.js?v=0.1.0-beta';
-import nvme from '../data/nvme-images.js?v=0.1.0-beta';
-import { capacityRestricted } from './planner.js?v=0.1.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.1.0-beta';
-import { GUIDANCE, OUTCOME, answerWords, capacityWords, dateWords, stageWords } from './words.js?v=0.1.0-beta';
+import sizes from '../data/sizes.js?v=0.1.1-beta';
+import families from '../data/families.js?v=0.1.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.1.1-beta';
+import capacity from '../data/capacity.js?v=0.1.1-beta';
+import nvme from '../data/nvme-images.js?v=0.1.1-beta';
+import { capacityRestricted } from './planner.js?v=0.1.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.1.1-beta';
+import { GUIDANCE, OUTCOME, answerWords, capacityWords, dateWords, stageWords } from './words.js?v=0.1.1-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -44,7 +44,7 @@ function base(m) {
 }
 
 const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
-    'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Zone'];
+    'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Zone'];
 
 // The problems on the option a VM would most likely take: its Current
 // default, else its Extended default, else any option with a size.
@@ -100,7 +100,8 @@ export function targetRows(p, table, now = new Date()) {
                 'Current stage': stageText(m),
                 'Move needed': MOVE_NEEDED[m.moveRequired],
                 'Series': SERIES(r.series),
-                'Target size': o.targetSize || '',
+                // A size only where it is supported: a blocked option shows no size.
+                'Target size': o.supported ? o.targetSize : '',
                 'Result': m.moveRequired === 'No' && r.result !== 'Supported' ? 'Not needed' : RESULT[r.result],
                 'Supported': r.result === 'Supported' ? 'Yes' : r.result === 'Needs team review' ? 'Not checked' : 'No',
                 'Reason': optionReason(r, table, now),
@@ -184,7 +185,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '            and Azure Disk Encryption.',
         '',
         'NOTES',
-        '  Each note is fine, a problem, or "Check:". "Check:" means that the list does not give the fact.',
+        '  Each note is a problem or "Check:". "Check:" means that the list does not give the fact.',
+        '  A fact that is fine has no note.',
         '  This tool does not show an unknown fact as a pass.',
         '  If the list has no NIC count, this tool selects the size for 1 NIC.',
         '  If the list has no data-disk count, this tool selects the size for 0 data disks.',

@@ -95,6 +95,7 @@ const SHORT = {
     'No - unmanaged disks': 'No - convert to managed disks first',
     'No - ephemeral OS disk': 'No - ephemeral OS disk not in this tool',
     'No - no size in this family': 'No size in this family',
+    'No - network virtual appliance': 'No - network virtual appliance (ask the vendor)',
 };
 export const shortWords = (label) => (label in SHORT ? SHORT[label] : label);
 

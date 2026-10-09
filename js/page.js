@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.1.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.1.0-beta';
-import capacity from '../data/capacity.js?v=0.1.0-beta';
-import nvme from '../data/nvme-images.js?v=0.1.0-beta';
-import query from './query.js?v=0.1.0-beta';
-import sample from './sample.js?v=0.1.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.1.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.1.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.1.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.1.0-beta';
-import { GUIDANCE, OUTCOME, OUTCOME_SHORT, answerWords, capacityWords, dateWords, stageShort, stageWords } from './words.js?v=0.1.0-beta';
-import * as F from './files.js?v=0.1.0-beta';
-import { makeZip } from './zip.js?v=0.1.0-beta';
-import version from './version.js?v=0.1.0-beta';
+import sizes from '../data/sizes.js?v=0.1.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.1.1-beta';
+import capacity from '../data/capacity.js?v=0.1.1-beta';
+import nvme from '../data/nvme-images.js?v=0.1.1-beta';
+import query from './query.js?v=0.1.1-beta';
+import sample from './sample.js?v=0.1.1-beta';
+import { SizeTable } from './lifecycle.js?v=0.1.1-beta';
+import { COLUMNS, readList } from './input.js?v=0.1.1-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.1.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.1.1-beta';
+import { GUIDANCE, OUTCOME, OUTCOME_SHORT, answerWords, capacityWords, dateWords, stageShort, stageWords } from './words.js?v=0.1.1-beta';
+import * as F from './files.js?v=0.1.1-beta';
+import { makeZip } from './zip.js?v=0.1.1-beta';
+import version from './version.js?v=0.1.1-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -119,7 +119,7 @@ function run() {
         if (list.notes.length) msgs.push(message('note', 'Note:', list.notes));
         const missing = COLUMNS.map((c) => c.name).filter((c) => !(c in list.map));
         if (missing.length) msgs.push(message('note', 'Your list does not have all the columns that the Azure Resource Graph query in step 1 gives.', [
-            `Missing columns: ${missing.join(', ')}.`,
+            `Columns not in your list: ${missing.join(', ')}.`,
             'For these facts, the notes show "Check:".',
             'To get all the facts, run the query in step 1 and load its CSV file.',
         ]));
@@ -237,11 +237,11 @@ function details(m) {
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const box = el('div', {},
-                el('h4', { text: o.targetSize ? `${name}: ${o.targetSize}` : name }),
+                el('h4', { text: o.supported ? `${name}: ${o.targetSize}` : name }),
                 el('p', { text: optionReason(r, table, now) }));
-            if (o.targetSize && o.targetStage) box.append(el('p', { class: 'hint', text: `Lifecycle stage: ${o.targetStage.stage}.${o.sizeChoices.length > 1 ? ` Other possible sizes: ${r.otherSizes.join(', ')}.` : ''}` }));
+            if (o.supported && o.targetStage) box.append(el('p', { class: 'hint', text: `Lifecycle stage: ${o.targetStage.stage}.${o.sizeChoices.length > 1 ? ` Other possible sizes: ${r.otherSizes.join(', ')}.` : ''}` }));
             const cav = Object.entries(r.caveats || {}).filter(([, c]) => c.state);
-            if (o.targetSize && cav.length) {
+            if (o.supported && cav.length) {
                 box.append(el('ul', { class: 'caveats' }, cav.map(([topic, c]) => el('li', { class: c.state }, el('span', { class: 'topic', text: `${topic}: ` }), c.text))));
             }
             grid.append(box);
