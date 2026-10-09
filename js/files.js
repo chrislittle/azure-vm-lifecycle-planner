@@ -4,14 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.1.1-beta';
-import families from '../data/families.js?v=0.1.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.1.1-beta';
-import capacity from '../data/capacity.js?v=0.1.1-beta';
-import nvme from '../data/nvme-images.js?v=0.1.1-beta';
-import { capacityRestricted } from './planner.js?v=0.1.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.1.1-beta';
-import { GUIDANCE, OUTCOME, answerWords, capacityWords, dateWords, stageWords } from './words.js?v=0.1.1-beta';
+import sizes from '../data/sizes.js?v=0.2.0-beta';
+import families from '../data/families.js?v=0.2.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.2.0-beta';
+import capacity from '../data/capacity.js?v=0.2.0-beta';
+import nvme from '../data/nvme-images.js?v=0.2.0-beta';
+import { capacityRestricted } from './planner.js?v=0.2.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.2.0-beta';
+import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.2.0-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.2.0-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -46,17 +47,50 @@ function base(m) {
 const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
     'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Zone'];
 
-// The problems on the option a VM would most likely take: its Current
-// default, else its Extended default, else any option with a size.
-// Only for a VM that must move: one that stays where it is has nothing to warn about.
+// The option a VM would most likely take: its Current default, else its
+// Extended default, else any supported option.
+function likelyRow(m) {
+    return m.rows.find((r) => r.result === 'Supported' && m.advice && r.series === m.advice.start.current)
+        || m.rows.find((r) => r.result === 'Supported') || null;
+}
+
+// The readiness signals of a VM that must move and has a supported size:
+// { actions, attention, checks }, each [{ topic, text }]. An action is a
+// recommended action (Microsoft's term); attention is a fact to know, with
+// nothing to do first; a check is a fact that the list does not give. A VM
+// that stays where it is has none.
+export function signals(m) {
+    const none = { actions: [], attention: [], checks: [] };
+    if (!m.vm || m.moveRequired !== 'Yes') return none;
+    const r = likelyRow(m);
+    if (!r || !r.caveats) return none;
+    const pick = (state) => CAVEAT_TOPICS.filter((t) => r.caveats[t] && r.caveats[t].state === state).map((t) => ({ topic: t, text: r.caveats[t].text }));
+    return { actions: pick('problem'), attention: pick('attention'), checks: pick('check') };
+}
+
+// The recommended actions as text, 'Topic: action'.
 export function warnings(m) {
-    if (!m.vm || m.moveRequired === 'No') return [];
-    const pick = m.rows.find((r) => r.result === 'Supported' && m.advice && r.series === m.advice.start.current)
-        || m.rows.find((r) => r.result === 'Supported')
-        || m.rows.find((r) => r.option.targetSize)
-        || m.rows.find((r) => r.series === 'v5');
-    if (!pick || !pick.caveats) return [];
-    return CAVEAT_TOPICS.filter((t) => pick.caveats[t] && pick.caveats[t].state === 'problem').map((t) => `${t}: ${pick.caveats[t].text}`);
+    return signals(m).actions.map((a) => `${a.topic}: ${a.text}`);
+}
+
+// The result group of a VM (words.js GROUPS).
+export function groupOf(m) {
+    switch (m.outcome) {
+        case 'No move required': return 'modern';
+        case 'Needs team review': return 'unchecked';
+        case 'Must move - outside the scope of this tool':
+            return (m.vm.blockers || []).some((b) => b === 'sap-needs-a-certified-size' || b === 'nva-requires-parallel-deployment') ? 'gate' : 'nopath';
+        default: {
+            const s = signals(m);
+            return s.actions.length || s.checks.length ? 'first' : 'ready';
+        }
+    }
+}
+
+// The ranked sizes of one supported option, in words.
+export function rankedFor(m, r, table, now = new Date()) {
+    const list = rankedSizes(m.vm, table, r.option, now);
+    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel') }));
 }
 
 function stageText(m) {
@@ -64,25 +98,27 @@ function stageText(m) {
 }
 
 export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Problems', 'Not checked', 'Notes'];
+    'Result', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
         ...base(m),
         'Current stage': stageText(m),
         'Move needed': MOVE_NEEDED[m.moveRequired],
-        'Result': OUTCOME[m.outcome],
+        'Result': GROUPS[groupOf(m)].short,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
         'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
-        'Problems': m.vm ? warnings(m).join('; ') : '',
+        'Readiness signals': warnings(m).join('; '),
+        'Attention': signals(m).attention.map((a) => `${a.topic}: ${a.text}`).join('; '),
+        'To check': signals(m).checks.map((c) => c.topic).join(', '),
         'Not checked': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
     }));
 }
 
 export const TARGET_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Series', 'Target size', 'Result', 'Supported', 'Reason', 'Target stage', 'Lifecycle change', 'Suggested', 'Move', 'Rebuild',
-    'Premium SSD on target', 'Burstable ends', 'Region availability', 'Other sizes', ...CAVEAT_TOPICS, 'Notes'];
+    'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
+    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
@@ -108,12 +144,12 @@ export function targetRows(p, table, now = new Date()) {
                 'Target stage': o.targetStage ? o.targetStage.stage : '',
                 'Lifecycle change': has ? CHANGE[o.stageChange] : '',
                 'Suggested': r.isDefault.map((d) => (d === 'Current default' ? 'Current stage' : 'Extended stage')).join(', '),
-                'Move': !has ? '' : o.move === 'nvme-conversion' ? 'SCSI to NVMe' : 'Resize (SCSI)',
+                'How to move': o.supported ? moveWords(r.series, o.rebuild, Boolean(m.vm.os)) : '',
+                'Ranked sizes': o.supported ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
                 'Rebuild': !has ? '' : !m.vm.os ? 'Not checked. This tool does not know the OS.' : o.rebuild ? 'Yes' : 'No',
                 'Premium SSD on target': !has ? '' : o.premiumDisks === null ? 'Not checked' : o.premiumDisks ? 'Yes' : 'No',
                 'Burstable ends': o.burstableEnds ? 'Yes. The new size has fixed CPU performance. It does not use CPU credits.' : '',
                 'Region availability': has ? 'Not checked' : '',
-                'Other sizes': r.otherSizes.join(', '),
                 'Notes': m.notes.join('; '),
             };
             for (const t of CAVEAT_TOPICS) row[t] = r.caveats && r.caveats[t] ? r.caveats[t].text : '';
@@ -142,7 +178,7 @@ export function notCheckedRows(p, table, now = new Date()) {
 // The notes file.
 export function aboutText(p, list, sourceName, now = new Date()) {
     const used = Object.keys(list.map);
-    const counts = (label) => p.machines.filter((m) => m.outcome === label).length;
+    const counts = (g) => p.machines.filter((m) => groupOf(m) === g).length;
     return [
         'VM Lifecycle Planner for Azure - about these results',
         'A community tool. Not affiliated with or endorsed by Microsoft.',
@@ -160,7 +196,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '',
         'VMS',
         `  This tool read ${p.machines.length} ${p.machines.length === 1 ? 'VM' : 'VMs'}.`,
-        ...Object.keys(OUTCOME).map((k) => `  ${OUTCOME[k]} ${counts(k)}`),
+        ...Object.keys(GROUPS).map((g) => `  ${GROUPS[g].short}: ${counts(g)}`),
         '',
         'FILES',
         '  vm-summary.csv         One row for each VM. Start with this file.',
@@ -168,6 +204,9 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  vm-target-sizes.csv    One row for each VM and series. It gives the reasons and the notes.',
         '  vm-not-checked.csv     The items that this tool cannot check.',
         '  about-these-results.txt  This file.',
+        '',
+        'RESULT GROUPS',
+        ...Object.values(GROUPS).map((g) => `  ${g.short}. ${g.long}`),
         '',
         'WHAT A RESULT MEANS',
         '  Supported:          Azure lets you move this VM to the new size.',
@@ -178,14 +217,25 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '                      No, when the current size is Current or Extended.',
         '  Not checked:        This tool cannot read or check an item.',
         '',
-        'TWO TYPES OF MOVE',
-        '  Resize:   Azure changes the size of the same VM. The VM keeps its identity and its disks.',
-        '  Rebuild:  You make a new VM with the same disks. A Windows VM needs a rebuild when one size',
-        '            has a temporary disk and the other size does not. A rebuild removes a system-assigned identity',
-        '            and Azure Disk Encryption.',
+        'HOW TO MOVE',
+        '  v5:        Resize the current VM, when Azure supports a resize to the new size.',
+        '             A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.',
+        '  v6 and v7: Deploy a new VM in parallel, move the workload, then retire the old VM.',
+        '             Microsoft highly recommends this. A move to v6 or v7 is not a normal resize.',
+        '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
+        '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
+        '             and a rebuild removes Azure Disk Encryption.',
         '',
-        'NOTES',
-        '  Each note is a problem or "Check:". "Check:" means that the list does not give the fact.',
+        'RANKED SIZES',
+        '  For each supported series, up to five sizes, best first. Each one passes the same checks.',
+        '  Microsoft recommends that a workload support more than one compatible size (capacity resilience).',
+        `  ${PROCESSOR_NOTE}`,
+        '  https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience',
+        '',
+        'READINESS SIGNALS',
+        '  A readiness signal is a recommended action: a step to do before the move. It does not block the move.',
+        '  Attention: a fact to know, with nothing to do first. A VM with only attention notes is ready.',
+        '  Check: the list does not give the fact.',
         '  A fact that is fine has no note.',
         '  This tool does not show an unknown fact as a pass.',
         '  If the list has no NIC count, this tool selects the size for 1 NIC.',

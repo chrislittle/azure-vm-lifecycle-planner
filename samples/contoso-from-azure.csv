@@ -17,3 +17,4 @@ contoso-f01,eastus2,Standard_F4s_v2,V2,Windows,1,0,TrustedLaunch,MicrosoftWindow
 contoso-odd01,eastus2,Standard_Q4z_v9,V2,Linux,1,0,Standard,Canonical,ubuntu-24_04-lts,server,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,None
 contoso-nogen01,eastus2,Standard_D4s_v3,,Windows,1,0,Standard,MicrosoftWindowsServer,WindowsServer,2019-Datacenter,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,None
 contoso-fw01,eastus2,Standard_D4s_v3,V2,Linux,3,1,Standard,paloaltonetworks,vmseries-flex,byol,SCSI,3,Yes,No,No,No,No,No,No,No,No,Yes,1
+contoso-api01,eastus2,Standard_D8s_v3,V2,Linux,1,2,TrustedLaunch,Canonical,ubuntu-24_04-lts,server,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,2

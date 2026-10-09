@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.1.1-beta). The results are advice. They are not a check
+**Status:** beta (version 0.2.0-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -27,18 +27,37 @@ To try the tool without your own data, select **Try the sample** on the page.
 For each VM:
 
 - The lifecycle stage of the current size: Current, Extended, End of Life or Retired.
-- If the VM must move. A VM on an End of Life or Retired size must move.
+  Current and Extended are modern sizes: Microsoft fully supports them.
+- A result group:
+
+  | Group | What it means |
+  |---|---|
+  | Modern size - no move needed | Microsoft fully supports the current size. |
+  | Move needed - ready | A supported size is available, and there is no action to do first. |
+  | Move needed - do this first | A supported size is available. Do the recommended actions first. |
+  | Move needed - hard gate | SAP or the appliance vendor must certify the new size. |
+  | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
+  | Not checked | The tool cannot read the VM or its size. |
+
 - The supported size on v5, v6 and v7, and the reason when there is no size. For B v1,
   Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2).
-- Notes for each size: for example NVMe support of the OS, Azure Disk Encryption, the
-  temporary disk, accelerated networking, and the NIC and data-disk limits. A note is a
-  problem or "Check:". "Check:" means that the list does not give the fact. A fact
-  that is fine has no note.
-- Network virtual appliances (NVAs): the tool finds them by their marketplace image,
-  from the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
-  Appliances (NVAs) to add a MANA support tag". It gives no target size for an
-  appliance. Ask the vendor which sizes they support, and deploy a new appliance
-  beside the old one.
+- How to move, by series, as Microsoft recommends. On v5, resize the current VM when
+  Azure supports it. On v6 and v7, deploy a new VM in parallel and move the workload.
+  Microsoft says that a move to v6 or v7 is "not a normal VM resize".
+- Ranked sizes: up to five sizes for each series, best first. Each one passes the same
+  checks. Microsoft recommends that a workload support more than one compatible size
+  ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
+  A size with a different processor has an asterisk: test the application first.
+- Readiness signals (Microsoft's term). Each one is one of these:
+  - A **recommended action** to do before the move (amber).
+  - A fact that needs your **attention** (blue).
+  - "Check:", when the list does not give the fact (grey).
+
+  A readiness signal does not block the move. A fact that is fine has no note.
+- Network virtual appliances (NVAs). The tool finds them by their marketplace image.
+  It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
+  Appliances (NVAs) to add a MANA support tag". An appliance is a hard gate. Ask the
+  vendor which sizes they certify. Then deploy a new appliance beside the old one.
 
 The zip file has these files:
 

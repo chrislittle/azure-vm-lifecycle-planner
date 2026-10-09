@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.1.1-beta';
-import seriesRules from '../data/series-rules.js?v=0.1.1-beta';
+import families from '../data/families.js?v=0.2.0-beta';
+import seriesRules from '../data/series-rules.js?v=0.2.0-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -961,4 +961,62 @@ export function burstableOption(vm, table, now = new Date()) {
         .map((f) => ({ size: f.size, family: f.amd ? 'Basv2' : 'Bsv2', variant: 'default', vcpus: f.vcpus, activeVcpus: f.vcpus, memoryGB: f.memoryGB, best: f.size === best.size }));
     option.supported = true;
     return option;
+}
+
+// ---------------------------------------------------------------------------
+// Ranked sizes (Microsoft's capacity resilience guidance: "Prefer fungible VM
+// deployments ... support multiple compatible VM SKUs")
+// ---------------------------------------------------------------------------
+
+// Up to five sizes for one supported option, best first: the option's own size,
+// then the same shape on the other processor (AMD or Intel), with or without a
+// temporary disk, the next family up for more memory, and the shape choices.
+// Each must pass every check that the option's own size passed, and must not be
+// smaller than the VM. [{ size, why }], why: 'closest' | 'processor' |
+// 'temp-disk-added' | 'temp-disk-removed' | 'more-memory' | 'other-shape'.
+export function rankedSizes(vm, table, option, now = new Date()) {
+    if (!option.supported || !option.targetSize || option.option === 'gen1Route') return [];
+    const best = option.targetSize;
+    const out = [{ size: best, why: 'closest' }];
+    const m = /^Standard_([A-Z]+)(\d+)(-\d+)?([a-z]*)_(v\d+)$/.exec(best);
+    const candidates = [];
+    if (m && option.option !== 'burstable') {
+        const [, fam, num, con = '', letters, ver] = m;
+        const name = (f, l) => `Standard_${f}${num}${con}${l}_${ver}`;
+        // The other processor: 'a' is AMD (it comes first in the letters).
+        candidates.push({ size: name(fam, letters.startsWith('a') ? letters.slice(1) : `a${letters}`), why: 'processor' });
+        // With or without a temporary disk ('d' comes before the last 's').
+        if (letters.includes('d')) candidates.push({ size: name(fam, letters.replace('d', '')), why: 'temp-disk-removed' });
+        else if (letters.endsWith('s')) candidates.push({ size: name(fam, `${letters.slice(0, -1)}ds`), why: 'temp-disk-added' });
+        // More memory: Dl to D, D to E.
+        if (fam === 'D' && letters.includes('l')) candidates.push({ size: name('D', letters.replace('l', '')), why: 'more-memory' });
+        else if (fam === 'D') candidates.push({ size: name('E', letters), why: 'more-memory' });
+    }
+    for (const c of option.sizeChoices || []) {
+        if (c.size === best) continue;
+        // The burstable choices are the same shape on the other processor.
+        candidates.push({ size: c.size, why: option.option === 'burstable' ? 'processor' : 'other-shape' });
+    }
+
+    const source = skuShape(table.has(vm.sourceSize) ? table.get(vm.sourceSize) : null);
+    const series = option.option === 'burstable' ? 'v5' : option.option;
+    for (const c of candidates) {
+        if (out.length >= 5) break;
+        if (out.some((o) => eqI(o.size, c.size)) || !table.has(c.size)) continue;
+        const size = table.get(c.size).name;
+        if (sizeSmaller(source, skuShape(table.get(size))) !== 'fits') continue;
+        if (option.option === 'burstable') { out.push({ size, why: c.why }); continue; }
+        // The same checks as the option's own size: target family, processor,
+        // generation, NIC and data-disk limits.
+        const nics = vm.nicCount !== undefined && vm.nicCount > 0 ? vm.nicCount : 1;
+        const disks = vm.dataDiskCount !== undefined ? vm.dataDiskCount : 0;
+        const mp = targetSize({ sourceSize: vm.sourceSize, sizeMap: [{ source: vm.sourceSize, target: size }], table,
+            requiredNics: nics, requiredDataDisks: disks, targetGeneration: series, hyperVGeneration: vm.gen });
+        if (!eqI(mp.target, size) || mp.code !== 'mapped') continue;
+        // A Windows rebuild (the temporary disk changes type) removes Azure Disk Encryption.
+        const arch = diskArchitecture(size, maxResourceMB(table.get(size)));
+        if (eqI(vm.os, 'Windows') && !eqI(vm.sourceDiskArch, arch) && hasI(vm.blockers, 'disk-encryption-present')) continue;
+        out.push({ size, why: c.why });
+    }
+    return out;
 }

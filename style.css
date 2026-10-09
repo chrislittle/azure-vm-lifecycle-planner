@@ -92,7 +92,7 @@ textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--te
 .msg.ok { background: var(--fine-bg); border-left: 4px solid var(--fine); }
 .msg ul { margin: 6px 0 0; padding-left: 20px; }
 
-.counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.counts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .count { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; text-align: left; color: var(--text); font-weight: 400; }
 .count .n { font-size: 26px; font-weight: 700; display: block; line-height: 1.1; }
 .count .t { font-size: 13px; color: var(--muted); }
@@ -114,9 +114,18 @@ td.stage .sub { display: block; color: var(--muted); font-size: 12px; }
 .tag-limit { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--check-bg); color: var(--check); white-space: nowrap; }
 td.warn { min-width: 140px; }
 .tags { display: flex; flex-wrap: wrap; min-width: 0; }
-.tag-problem { display: inline-block; margin: 0 4px 3px 0; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--problem-bg); color: var(--problem); white-space: nowrap; }
+.tag-action, .tag-check { display: inline-block; margin: 0 4px 3px 0; padding: 0 6px; border-radius: 8px; font-size: 11px; white-space: nowrap; }
+.tag-action { background: var(--check-bg); color: var(--check); }
+.tag-check { background: var(--none-bg); color: var(--muted); }
+.tag-note { display: inline-block; margin: 0 4px 3px 0; padding: 0 6px; border-radius: 8px; font-size: 11px; white-space: nowrap; background: var(--none-bg); color: var(--accent); }
+.pill.ready { background: var(--fine-bg); color: var(--fine); border: 1px solid var(--fine); }
+.label-small { margin: 8px 0 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+ol.ranked { margin: 0 0 6px; padding-left: 20px; }
+ol.ranked .size-name { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.caveats li.action::before { background: var(--check); }
+.caveats li.attention::before { background: var(--accent); }
 td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; max-width: 150px; }
 .pill.no-move { background: var(--fine-bg); color: var(--fine); }
 .pill.move { background: var(--check-bg); color: var(--check); }
 .pill.no-suggestion { background: var(--problem-bg); color: var(--problem); }
@@ -145,6 +154,7 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 
 /* Narrow screens: each VM is a card with a label on each line, not a wide table row. */
 @media (max-width: 1000px) {
+    .counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     #table thead { display: none; }
     #table, #table tbody { display: block; }
     #table tr.machine { display: block; padding: 8px 4px; border-bottom: 1px solid var(--line); }

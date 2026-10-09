@@ -12,6 +12,45 @@ export const OUTCOME = {
     'Needs team review': 'Not checked. This tool cannot read this VM or its size.',
 };
 
+// The result groups, in Microsoft's terms where Microsoft has them (lifecycle
+// overview: "modern sizes"; v6/v7 Assess page: "hard gates", "readiness
+// signals"). Peer feedback (2026-10-09): ready and "do this first" apart, and a
+// readiness signal must not read as an unsolvable blocker.
+export const GROUPS = {
+    modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
+    ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and the list shows no readiness signal to act on.' },
+    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. First, do the recommended actions in the readiness signals.' },
+    gate: { short: 'Move needed - hard gate', long: 'Move needed. A hard gate applies: SAP or the appliance vendor must certify the new size. See the reason.' },
+    nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
+    unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
+};
+
+// Why a size is on the ranked list. processor: the name of the other processor.
+export function rankWords(why, processor) {
+    return {
+        'closest': 'Closest match',
+        'processor': `Same shape, ${processor} processor*`,
+        'temp-disk-removed': 'Same shape, no temporary disk',
+        'temp-disk-added': 'Same shape, with a temporary disk',
+        'more-memory': 'More memory for each vCPU',
+        'other-shape': 'Other shape that fits',
+    }[why] || why;
+}
+export const PROCESSOR_NOTE = '* A processor change. Test the application, and check its licence terms.';
+
+// How to move to a supported size. Microsoft: v5 - "Resize the current VM" when
+// the VM supports the target size (v5 overview, "Choose a transition method");
+// v6 and v7 - "not a normal VM resize": deploy in parallel, highly recommended
+// (v6/v7 FAQ and Plan page).
+export function moveWords(series, rebuild, osKnown) {
+    if (series === 'v6' || series === 'v7') {
+        return 'Deploy a new VM at this size in parallel, move the workload, then retire the old VM. Microsoft highly recommends this for v6 and v7. An in-place upgrade is possible, but it has more steps and more risk.';
+    }
+    if (rebuild) return 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
+    if (!osKnown) return 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.';
+    return 'Resize the current VM. Azure supports a resize to this size.';
+}
+
 // A short label for counts and filters.
 export const OUTCOME_SHORT = {
     'No move required': 'No move needed',
