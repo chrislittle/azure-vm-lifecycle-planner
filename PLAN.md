@@ -389,6 +389,120 @@ GitHub Pages from `main`, root folder, turned on by the owner after he has tried
   details or in vm-target-sizes.csv.
 - The sample has a made-up firewall (contoso-fw01, a Palo Alto image).
 
+## 0.2.0-beta (planned 2026-10-09): Microsoft's workload patterns
+
+Microsoft's chart "Discover migration pattern by workload type" (v6 and v7
+modernization) sorts workloads into seven patterns. The tool puts each VM in one,
+and the pattern decides the advice: **how** to move, not only the size.
+
+| Pattern | Detect? | Signal (from the query) | Advice | Size |
+|---|---|---|---|---|
+| A Compute pools: AKS, ARO, scale sets, DevOps scale-set agents | Yes (Batch and CycleCloud partly, by test; single CI agent VMs no) | Resource group "managed by" an AKS or ARO cluster; scale set membership; scale sets as their own rows | Do not resize the VMs. Add a new node pool or scale set at the new size, move the work, remove the old one. | For the new pool |
+| B Image-based desktops: AVD pooled | Yes (Citrix partly, by tags; Horizon no) | Host pool type Pooled (AVD personal is E) | Do not resize the hosts. New session hosts from the image at the new size, drain, remove the old ones. | For the new hosts |
+| C Service-managed: Databricks | Yes; Data Explorer, Synapse Spark, SSIS IR, PostgreSQL/MySQL are not in the VM list | Resource group managed by the Databricks workspace | Change the node type in the service. | To choose in the service |
+| D Cluster re-creation: HDInsight, Azure ML | Not in the VM list (to confirm by test) | - | Make a new cluster at the new size. | For the new cluster |
+| E Customer-managed VMs | Yes, by default | Any VM not in another pattern | v5: **resize in place** when compatible, one VM at a time (owner: E and F change the size in place). v6/v7: **deploy in parallel** (Microsoft: highly recommended); in-place upgrade with conditions. See "Grounding" below. | Today's logic |
+| F Stateful and clustered: SQL Server / Always On, failover clusters, Service Fabric, SAP | Yes (Oracle Data Guard partly; AD DS domain controllers, NoSQL and search no) | SQL IaaS Agent resource and availability group; shared managed disk (more than one VM); Service Fabric extension or managed-cluster group; SAP (have) | **Change the size in place, one node at a time:** move the role away (fail over, drain), resize, check health, next node. SAP: certified sizes only. | Today's logic, per node |
+| G ISV appliances | Yes (have; storage and backup appliances only when on Microsoft's list) | Microsoft's appliance list | No in-place change. Vendor certification, parallel appliances, move the traffic. | None until certified |
+
+Where the tool cannot detect a pattern, the page says so ("This tool cannot find
+domain controllers or self-hosted CI agents. Check for them yourself.").
+
+**Peer feedback (2026-10-09):**
+- Rename the "Problems" column to **"Before the move"**: it holds things to do or
+  check, not blockers (the blockers show as "No - ..." in the series columns).
+- Split the notes in two (peer, 2026-10-09: "these are not really problems"):
+  **action needed before the move** (turn on accelerated networking, turn off
+  hibernation, convert unmanaged disks) and **attention** (temporary-disk data is
+  lost, an availability set can need all VMs stopped, a rebuild removes the
+  system-assigned identity, zone). Use Microsoft's own names for these two groups if
+  the docs give them; the peer found none (2026-10-09), so: **"Before the move"** and
+  **"Attention"**. The peer: "make sure customers do not read this as an unsolvable
+  blocker." So these tags are not red: red stays only for a real "No" in a series
+  column. "Before the move" is amber, "Attention" is grey or blue, and each "Before
+  the move" item gives the fix as a step (for example "Turn on accelerated
+  networking."), so it reads as a task.
+- The counts and filters: **Move needed - ready** (a supported size, nothing to do
+  first), **Move needed - do this first** (a supported size, with items before the
+  move), **Move needed - no path** (no supported size), No move needed, Not checked;
+  and a filter by pattern.
+
+**Peer suggestions, part 2 (2026-10-09):**
+- **Categories in Microsoft's marketing and docs terms** (replace our result names):
+  | Category | Was | Contains |
+  |---|---|---|
+  | Already Modern | No move needed | Current or Extended (Microsoft: both "modern") |
+  | Modernization Required | Move needed - ready | a supported size, nothing to do first |
+  | Modernization Required - Pre-Reqs Required | Move needed - do this first | accelerated networking, temporary disk, availability set, hibernation, unmanaged disks |
+  | Modernization Required - Blocked/Redeploy | Move needed - no path | Generation 1, Azure Disk Encryption on v6/v7, no matching size |
+  | Modernization Required - Change upstream Service Host Pool | patterns A-D | AKS, ARO, AVD pooled, Databricks; links to each service's docs |
+  To settle: SAP is a hard gate in Microsoft's chart ("confirm before anything
+  else"), so keep it Blocked until SAP certifies a size (the peer put it under
+  Pre-Reqs). The peer suggested filtering out A, B, C and F; keep F (the owner: F
+  changes the size in place, node by node).
+- **Size fungibility: 3 to 5 ranked sizes for each VM**, not one. Order: the same
+  shape on v5, v6 and v7 (closest); the AMD (or Intel) equivalent, marked * (a
+  processor change: check licensing and performance); a size from the next family
+  (for example E for more memory per vCPU). Label each with why it is there. Builds
+  on today's size choices. Link to the Well-Architected Framework guidance on
+  capacity resilience, which recommends size fungibility.
+
+**Grounding in Microsoft's docs (checked 2026-10-09; owner: "those are sort of made
+up categories"):** the peer's names (Already Modern, Modernization Required, Pre-Reqs
+Required, Blocked/Redeploy, Change upstream Service Host Pool) are in none of the
+lifecycle or modernization pages. Use Microsoft's own terms instead:
+- **Modern size**: lifecycle overview - "Current and Extended sizes are both
+  considered modern sizes because they're fully supported."
+- **Hard gates**: v6/v7 Assess page - SAP (certified sizes only) and ISV appliances
+  (vendor certification); "Confirm the gate first."
+- **Readiness signals** with a **recommended action** each: v6/v7 Assess page
+  ("Readiness signals to check": Generation 1, OS NVMe support, custom image, MANA,
+  SCSI disk paths, persistent data on the OS disk, temporary disk, ADE for Linux,
+  local NVMe disk, region and zone, quota, reservations). This replaces "Problems" /
+  "Before the move".
+- **Workload modernization categories A-G**: v6/v7 Discover page.
+- **Fungibility**: Well-Architected Framework, "How to design for capacity
+  resilience" - "Prefer fungible VM deployments. Design workloads to support
+  multiple compatible VM SKUs instead of pinning to a single series."
+- **How to move, by series** (changes the E and F advice above):
+  - v5 (v5 overview, "Choose a transition method"): **Resize the existing VM** when
+    the VM, disks, generation, region and availability support the target size;
+    otherwise rebuild from a current image, replace instances in a scale set, or
+    replicate and cut over.
+  - v6 and v7 (FAQ: "Is moving to v6 or v7 a normal VM resize? No, treat it as a
+    platform modernization"; Plan page): **deploy in parallel and modernize (highly
+    recommended)**; in-place upgrade is possible with conditions and more risk. A
+    source with a temporary disk "can't convert in place directly to a v6 size".
+
+**Done in 0.2.0-beta (2026-10-09), items 1-3 of the owner's list:**
+- Result groups in Microsoft's terms where they exist: Modern size - no move needed;
+  Move needed - ready; Move needed - do this first; Move needed - hard gate (SAP, NVA);
+  Move needed - no supported size; Not checked. Colours: red only for no supported
+  size; amber for "do this first" and hard gate.
+- Readiness signals: each problem is a **recommended action** (amber), or
+  **attention** (blue: temporary disk, availability set - facts with nothing to do
+  first, which do not stop a VM from being "ready"), or "Check:" (grey). Found while
+  testing: with the temporary disk as an action, almost no v3 VM could ever be ready.
+- How to move, by series (Microsoft): v5 resize the current VM; v6 and v7 deploy in
+  parallel. On v6 and v7 the identity note applies (a new VM gets a new identity).
+- Ranked sizes: up to five per supported series (closest; the other processor*;
+  with or without a temporary disk; more memory; other shapes), each through the same
+  checks and never smaller than the VM.
+- Not yet: the pattern detection (steps below).
+
+**Steps:**
+1. Rebuild the query as one pass that combines the records by VM (a union, not
+   joins: Resource Graph allows only three joins), and add: the resource group
+   "managed by" field, scale sets as their own rows, the SQL IaaS Agent records and
+   availability groups, shared disks, the Service Fabric extension, AVD host pool type.
+2. A temporary test build to prove each signal (small AKS cluster, SQL Server VM
+   with the SQL IaaS Agent, a VM with a shared disk, a scale set; maybe Databricks),
+   torn down the same hour. Confirm the list and cost with the owner first.
+3. The Pattern column and the advice for each pattern; the text for what the tool
+   cannot detect.
+4. The feedback changes.
+5. Tests, the STE check, screen widths; pull request.
+
 ## Next
 
 - Peer feedback, as GitHub issues.

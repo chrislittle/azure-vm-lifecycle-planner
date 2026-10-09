@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.1.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.1.1-beta';
-import capacity from '../data/capacity.js?v=0.1.1-beta';
-import nvme from '../data/nvme-images.js?v=0.1.1-beta';
-import query from './query.js?v=0.1.1-beta';
-import sample from './sample.js?v=0.1.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.1.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.1.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.1.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.1.1-beta';
-import { GUIDANCE, OUTCOME, OUTCOME_SHORT, answerWords, capacityWords, dateWords, stageShort, stageWords } from './words.js?v=0.1.1-beta';
-import * as F from './files.js?v=0.1.1-beta';
-import { makeZip } from './zip.js?v=0.1.1-beta';
-import version from './version.js?v=0.1.1-beta';
+import sizes from '../data/sizes.js?v=0.2.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.2.0-beta';
+import capacity from '../data/capacity.js?v=0.2.0-beta';
+import nvme from '../data/nvme-images.js?v=0.2.0-beta';
+import query from './query.js?v=0.2.0-beta';
+import sample from './sample.js?v=0.2.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.2.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.2.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.2.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.2.0-beta';
+import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.2.0-beta';
+import * as F from './files.js?v=0.2.0-beta';
+import { makeZip } from './zip.js?v=0.2.0-beta';
+import version from './version.js?v=0.2.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -136,10 +136,9 @@ function run() {
 const PAGE = 200;
 let filter = 'all';
 let limit = PAGE;
-const PILL = {
-    'No move required': 'no-move', 'Must move - supported target': 'move',
-    'Must move - outside the scope of this tool': 'no-suggestion', 'Needs team review': 'not-checked',
-};
+// The colour of each result group. Red only for no supported size; a hard gate
+// and "do this first" are amber: they are steps, not dead ends (peer, 2026-10-09).
+const PILL = { modern: 'no-move', ready: 'ready', first: 'move', gate: 'move', nopath: 'no-suggestion', unchecked: 'not-checked' };
 
 function showResults() {
     const p = current.plan;
@@ -147,17 +146,16 @@ function showResults() {
 
     // Counts, which also filter.
     const counts = $('counts');
-    counts.replaceChildren(...Object.keys(OUTCOME_SHORT).map((k) => {
-        const n = p.machines.filter((m) => m.outcome === k).length;
-        const b = el('button', { type: 'button', class: `count${filter === k ? ' active' : ''}`, 'aria-pressed': String(filter === k) },
-            el('span', { class: 'n', text: String(n) }), el('span', { class: 't', text: OUTCOME_SHORT[k] }));
-        b.addEventListener('click', () => { filter = filter === k ? 'all' : k; limit = PAGE; showResults(); });
+    counts.replaceChildren(...Object.keys(GROUPS).map((g) => {
+        const n = p.machines.filter((m) => F.groupOf(m) === g).length;
+        const b = el('button', { type: 'button', class: `count${filter === g ? ' active' : ''}`, 'aria-pressed': String(filter === g) },
+            el('span', { class: 'n', text: String(n) }), el('span', { class: 't', text: GROUPS[g].short }));
+        b.addEventListener('click', () => { filter = filter === g ? 'all' : g; limit = PAGE; showResults(); });
         return b;
     }));
     const sel = $('filter');
     sel.replaceChildren(el('option', { value: 'all', text: `All VMs (${p.machines.length})` }),
-        ...Object.keys(OUTCOME_SHORT).map((k) => el('option', { value: k, text: OUTCOME_SHORT[k] })),
-        el('option', { value: 'warnings', text: 'Move needed - with problems' }));
+        ...Object.keys(GROUPS).map((g) => el('option', { value: g, text: GROUPS[g].short })));
     sel.value = filter;
     renderTable();
 }
@@ -166,18 +164,23 @@ $('filter').addEventListener('change', (e) => { filter = e.target.value; limit =
 $('find').addEventListener('input', () => { limit = PAGE; renderTable(); });
 $('more').addEventListener('click', () => { limit += PAGE; renderTable(); });
 
-function machineWarnings(m) {
-    return m.vm ? F.warnings(m) : [];
-}
-
 const HEADERS = [...document.querySelectorAll('#table thead th')].map((th) => th.textContent);
+
+// The readiness signals of a VM, as small tags: an amber tag for each recommended
+// action, a blue tag for each fact to know, and one grey tag for the facts to check.
+function signalsCell(m) {
+    const s = F.signals(m);
+    const tags = s.actions.map((a) => el('span', { class: 'tag-action', title: a.text, text: a.topic }));
+    for (const a of s.attention) tags.push(el('span', { class: 'tag-note', title: a.text, text: a.topic }));
+    if (s.checks.length) tags.push(el('span', { class: 'tag-check', title: s.checks.map((c) => c.text).join('\n'), text: `${s.checks.length} to check` }));
+    return el('td', { class: 'warn' }, tags.length ? el('span', { class: 'tags' }, tags) : null);
+}
 
 function renderTable() {
     const p = current.plan;
     const q = $('find').value.trim().toLowerCase();
     const rows = p.machines.filter((m) => {
-        if (filter === 'warnings' && !machineWarnings(m).length) return false;
-        if (filter !== 'all' && filter !== 'warnings' && m.outcome !== filter) return false;
+        if (filter !== 'all' && F.groupOf(m) !== filter) return false;
         if (q && !`${m.read.name} ${m.read.size || m.read.sizeAsWritten}`.toLowerCase().includes(q)) return false;
         return true;
     });
@@ -190,14 +193,14 @@ function renderTable() {
             if (!t) return el('td', {});
             return /^(Standard|Basic)_/.test(t) ? el('td', {}, el('span', { class: 'ans-ok', title: t, text: shortSize(t) })) : el('td', {}, el('span', { class: 'ans-no', text: answerWords(m, s) }));
         };
-        const warns = machineWarnings(m);
+        const g = F.groupOf(m);
         tr.append(
             el('td', { text: m.read.name }),
             el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
             stageCell(m),
-            el('td', {}, el('span', { class: `pill ${PILL[m.outcome]}`, text: OUTCOME_SHORT[m.outcome] })),
+            el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
             answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
-            el('td', { class: 'warn' }, warns.length ? el('span', { class: 'tags' }, warns.map((w) => el('span', { class: 'tag-problem', title: w, text: w.split(':')[0] }))) : null),
+            signalsCell(m),
         );
         // On a narrow screen each row shows as a card; each cell gets its column name.
         [...tr.children].forEach((td, i) => { td.dataset.label = HEADERS[i]; });
@@ -223,31 +226,45 @@ function stageCell(m) {
         s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity limited', title: 'Microsoft limits new capacity for this series. Select the VM to read more.' }) : null);
 }
 
-// The reason and caveats for each series of one machine.
+// The reason, how to move, the ranked sizes and the readiness signals for each
+// series of one VM.
 function details(m) {
     const { now } = current;
     const td = el('td', { colspan: '9' });
-    td.append(el('p', {}, el('strong', { text: OUTCOME[m.outcome] })));
+    const g = F.groupOf(m);
+    td.append(el('p', {}, el('strong', { text: GROUPS[g].long })));
     if (m.stage) td.append(el('p', { text: `Lifecycle stage: ${stageWords(m.stage, capacityRestricted(m.vm.sourceSize))}` }));
     if (!m.vm) {
         td.append(el('ul', {}, m.problems.map((pr) => el('li', { text: reasonFor(pr.why, { problem: pr }) }))));
     } else {
         const grid = el('div', { class: 'series' });
+        let processorChange = false;
         for (const r of m.rows) {
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const box = el('div', {},
                 el('h4', { text: o.supported ? `${name}: ${o.targetSize}` : name }),
                 el('p', { text: optionReason(r, table, now) }));
-            if (o.supported && o.targetStage) box.append(el('p', { class: 'hint', text: `Lifecycle stage: ${o.targetStage.stage}.${o.sizeChoices.length > 1 ? ` Other possible sizes: ${r.otherSizes.join(', ')}.` : ''}` }));
-            const cav = Object.entries(r.caveats || {}).filter(([, c]) => c.state);
-            if (o.supported && cav.length) {
-                box.append(el('ul', { class: 'caveats' }, cav.map(([topic, c]) => el('li', { class: c.state }, el('span', { class: 'topic', text: `${topic}: ` }), c.text))));
+            if (o.supported && m.moveRequired === 'Yes') box.append(el('p', {}, el('strong', { text: 'How to move: ' }), moveWords(r.series, o.rebuild, Boolean(m.vm.os))));
+            if (o.supported) {
+                const ranked = F.rankedFor(m, r, table, now);
+                if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;
+                if (ranked.length > 1) {
+                    box.append(el('p', { class: 'label-small', text: 'Ranked sizes' }),
+                        el('ol', { class: 'ranked' }, ranked.map((x) => el('li', {}, el('span', { class: 'size-name', text: x.size }), ` ${x.why}`))));
+                }
+                if (o.targetStage) box.append(el('p', { class: 'hint', text: `Lifecycle stage of ${o.targetSize}: ${o.targetStage.stage}.` }));
+            }
+            const notes = Object.entries(r.caveats || {}).filter(([, c]) => c.state);
+            if (o.supported && m.moveRequired === 'Yes' && notes.length) {
+                box.append(el('p', { class: 'label-small', text: 'Readiness signals' }),
+                    el('ul', { class: 'caveats' }, notes.map(([topic, c]) => el('li', { class: c.state === 'problem' ? 'action' : c.state }, el('span', { class: 'topic', text: `${topic}: ` }), c.text))));
             }
             grid.append(box);
         }
         td.append(grid);
-        if (m.outcome !== 'No move required' && m.outcome !== 'Must move - supported target') {
+        if (processorChange) td.append(el('p', { class: 'hint', text: PROCESSOR_NOTE }));
+        if (g === 'gate' || g === 'nopath') {
             td.append(el('p', { class: 'hint' }, 'Microsoft guidance: ', el('a', { href: GUIDANCE.endOfLife, target: '_blank', rel: 'noopener noreferrer', text: 'End of Life sizes' }), ', ',
                 el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
         }

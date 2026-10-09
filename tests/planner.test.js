@@ -205,7 +205,7 @@ test('every link points to a real Microsoft Learn or GitHub path', () => {
     const files = ['index.html', ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`), ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`)];
     for (const f of files) {
         for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
-            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/virtual-machines\/|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience)|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
         }
     }
 });
@@ -231,7 +231,7 @@ test('a network virtual appliance gets no target size; other VMs get no applianc
     const p = run(sample).plan;
     const fw = byName(p, 'contoso-fw01');
     assert.equal(fw.outcome, 'Must move - outside the scope of this tool');
-    assert.ok(F.warnings(fw).some((w) => w.startsWith('Network virtual appliance')));
+    assert.equal(F.groupOf(fw), 'gate', 'an appliance is a hard gate');
     for (const m of p.machines.filter((x) => x.read.name !== 'contoso-fw01' && x.vm)) {
         for (const r of m.rows) assert.equal(r.caveats['Network virtual appliance']?.state || '', '', m.read.name);
     }
@@ -240,7 +240,46 @@ test('a network virtual appliance gets no target size; other VMs get no applianc
 test('a fact that is fine shows no note', () => {
     const p = run(sample).plan;
     for (const m of p.machines) for (const r of m.rows) for (const c of Object.values(r.caveats || {})) {
-        assert.ok(['', 'problem', 'check'].includes(c.state), `${m.read.name}: ${c.state} ${c.text}`);
+        assert.ok(['', 'problem', 'attention', 'check'].includes(c.state), `${m.read.name}: ${c.state} ${c.text}`);
         if (!c.state) assert.equal(c.text, '');
+    }
+});
+
+// ---- 0.2.0: result groups, how to move, ranked sizes ----
+
+test('result groups: ready, do this first, hard gate, no supported size', () => {
+    const p = run(sample).plan;
+    assert.equal(F.groupOf(byName(p, 'contoso-sap01')), 'gate');
+    assert.equal(F.groupOf(byName(p, 'contoso-gpu01')), 'nopath');
+    assert.equal(F.groupOf(byName(p, 'contoso-web01')), 'first', 'temporary disk and identity are readiness signals');
+    assert.equal(F.groupOf(byName(p, 'contoso-app01')), 'modern');
+    const clean = run('Machine name,Current size,Generation,OS,NIC count,Data-disk count,Security type,Image publisher,Image offer,Image SKU,Accelerated NICs,Primary NIC accelerated,Azure Disk Encryption,Hibernation,Scale set,Azure Virtual Desktop,SAP,Unmanaged disks,Ephemeral OS disk,System-assigned identity,Availability set,Zone\n'
+        + 'contoso-ok,Standard_D4_v3,2,Linux,1,0,TrustedLaunch,Canonical,ubuntu-24_04-lts,server,1,Yes,No,No,No,No,No,No,No,No,No,1\n').plan;
+    assert.equal(F.groupOf(byName(clean, 'contoso-ok')), 'ready', JSON.stringify(F.signals(byName(clean, 'contoso-ok'))));
+});
+
+test('how to move: v5 resize, v6 and v7 deploy in parallel', async () => {
+    const { moveWords } = await import('../js/words.js');
+    assert.match(moveWords('v5', false, true), /^Resize the current VM/);
+    assert.match(moveWords('v5', true, true), /^Rebuild/);
+    assert.match(moveWords('v6', false, true), /^Deploy a new VM at this size in parallel/);
+    assert.match(moveWords('v7', false, true), /Microsoft highly recommends/);
+});
+
+test('ranked sizes: the best first, each one fits and passes the checks', async () => {
+    const { rankedSizes, targetSize } = await import('../js/lifecycle.js');
+    const p = run('Machine name,Current size,Generation,OS,NIC count,Data-disk count\ncontoso-r1,Standard_DS4_v2,2,Linux,1,0\n').plan;
+    const m = byName(p, 'contoso-r1');
+    const v6 = m.rows.find((r) => r.series === 'v6');
+    const ranked = rankedSizes(m.vm, table, v6.option, NOW);
+    assert.equal(ranked[0].size, v6.option.targetSize);
+    assert.ok(ranked.length >= 3 && ranked.length <= 5, ranked.map((x) => x.size).join(' '));
+    assert.ok(ranked.some((x) => x.why === 'processor'), 'an AMD or Intel equivalent');
+    const src = table.get('Standard_DS4_v2').caps;
+    for (const x of ranked) {
+        const c = table.get(x.size).caps;
+        assert.ok(Number(c.vCPUsAvailable || c.vCPUs) >= Number(src.vCPUs) && Number(c.MemoryGB) >= Number(src.MemoryGB), `${x.size} is not smaller`);
+        const t = targetSize({ sourceSize: 'Standard_DS4_v2', sizeMap: [{ source: 'Standard_DS4_v2', target: x.size }], table, targetGeneration: 'v6', hyperVGeneration: 'V2' });
+        assert.equal(t.target, x.size, `${x.size} passes the checks`);
     }
 });
