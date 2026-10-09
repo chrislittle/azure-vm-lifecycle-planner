@@ -1,0 +1,224 @@
+// Run: node --test
+// No network, nothing to install.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import sizes from '../data/sizes.js';
+import query from '../js/query.js';
+import sample from '../js/sample.js';
+import { SizeTable, lifecycleChange } from '../js/lifecycle.js';
+import { readList } from '../js/input.js';
+import { plan, toMachine } from '../js/planner.js';
+import { caveats, imageSupportsNvme } from '../js/extras.js';
+import * as F from '../js/files.js';
+
+const table = new SizeTable(sizes.sizes);
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const NOW = new Date('2026-10-09T12:00:00Z');
+
+function run(text) {
+    const list = readList(text);
+    const machines = list.rows.map((r, i) => toMachine(r, list.map, i + 2, table, NOW));
+    return { list, plan: plan(machines, table, NOW) };
+}
+const byName = (p, name) => p.machines.find((m) => m.read.name === name);
+
+// ---- Nothing leaves the page ----
+
+test('the page forbids every network request', () => {
+    const html = read('index.html');
+    const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html);
+    assert.ok(csp, 'a Content-Security-Policy is in the page');
+    assert.match(csp[1], /connect-src 'none'/);
+    assert.match(csp[1], /default-src 'none'/);
+    assert.match(csp[1], /script-src 'self'(;|$)/);
+    assert.match(csp[1], /form-action 'none'/);
+});
+
+test('no file can send data or load code from elsewhere', () => {
+    const files = [
+        'index.html', 'style.css',
+        ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`),
+        ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`),
+    ];
+    for (const f of files) {
+        const text = read(f);
+        for (const bad of [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /sendBeacon/, /EventSource/, /\bimport\s*\(/, /localStorage/, /sessionStorage/, /indexedDB/, /document\.cookie/]) {
+            assert.doesNotMatch(text, bad, `${f} must not use ${bad}`);
+        }
+        // Scripts and styles only from this site.
+        assert.doesNotMatch(text, /<script[^>]+src="(https?:)?\/\//i, `${f}: script from another site`);
+        assert.doesNotMatch(text, /<link[^>]+href="(https?:)?\/\//i, `${f}: stylesheet from another site`);
+        assert.doesNotMatch(text, /from\s+['"]https?:/, `${f}: module from another site`);
+    }
+});
+
+test('the query and the sample on the page match their files', () => {
+    assert.equal(query, read('query.kql').replace(/\r\n/g, '\n'));
+    assert.equal(sample, read('samples/contoso-from-azure.csv').replace(/\r\n/g, '\n'));
+});
+
+// ---- Same list, same answer ----
+
+test('the same list gives the same files twice', () => {
+    const files = () => {
+        const { plan: p, list } = run(sample);
+        return [F.toCsv(F.SUMMARY_COLUMNS, F.summaryRows(p)), F.toCsv(F.TARGET_COLUMNS, F.targetRows(p, table, NOW)),
+            F.toCsv(F.NOT_CHECKED_COLUMNS, F.notCheckedRows(p, table, NOW)), F.aboutText(p, list, 'sample', NOW)];
+    };
+    assert.deepEqual(files(), files());
+});
+
+// ---- Reading the list ----
+
+test('wrong columns stop, and say which', () => {
+    const { list } = run(read('samples/contoso-wrong-columns.csv'));
+    assert.deepEqual(list.stops, ['The list has no Machine name column.', 'The list has no Current size column.', 'The list has no Generation column.']);
+});
+
+test('a pasted (tab-separated) list reads the same as the CSV', () => {
+    const csv = run(read('samples/contoso-by-hand.csv')).plan;
+    const pasted = run(read('samples/contoso-by-hand.csv').replace(/,/g, '\t')).plan;
+    assert.deepEqual(pasted.machines.map((m) => [m.outcome, m.short]), csv.machines.map((m) => [m.outcome, m.short]));
+});
+
+test('a missing generation is not checked, and the other rows still run', () => {
+    const { plan: p } = run(sample);
+    const m = byName(p, 'contoso-nogen01');
+    assert.equal(m.vm, null);
+    assert.equal(m.outcome, 'Needs team review');
+    assert.equal(byName(p, 'contoso-web01').outcome, 'Must move - supported target');
+});
+
+// ---- Lifecycle ----
+
+test('v4 to v5 is the same stage, never shown as newer', () => {
+    assert.equal(lifecycleChange('Standard_D4s_v4', 'Standard_D4s_v5'), 'same');
+    assert.equal(lifecycleChange('Standard_D4s_v3', 'Standard_D4s_v6'), 'up');
+});
+
+test('an unknown size is not checked, never a guess', () => {
+    const m = byName(run(sample).plan, 'contoso-odd01');
+    assert.equal(m.moveRequired, 'Review');
+    assert.equal(m.stage.stage, null);
+});
+
+test('a current size needs no move', () => {
+    const m = byName(run(sample).plan, 'contoso-app02');
+    assert.equal(m.outcome, 'No move required');
+});
+
+// ---- The extra columns ----
+
+test('Azure Disk Encryption makes v6 and v7 a no, not v5', () => {
+    const m = byName(run(sample).plan, 'contoso-sql01');
+    assert.deepEqual([m.short.v6, m.short.v7], ['No - Azure Disk Encryption', 'No - Azure Disk Encryption']);
+    assert.notEqual(m.short.v5, 'No - Azure Disk Encryption');
+});
+
+test('SAP, unmanaged disks and an ephemeral OS disk: no suggestion', () => {
+    const p = run(sample).plan;
+    assert.equal(byName(p, 'contoso-sap01').outcome, 'Must move - outside the scope of this tool');
+    assert.equal(byName(p, 'contoso-old01').short.v5, 'No - unmanaged disks');
+    assert.equal(byName(p, 'contoso-b01').short.v5, 'No - ephemeral OS disk');
+});
+
+test('a blank column is "check", never a pass', () => {
+    const { plan: p } = run(read('samples/contoso-by-hand.csv'));
+    const row = byName(p, 'contoso-file01').rows.find((r) => r.series === 'v6');
+    for (const topic of ['NVMe', 'Disk encryption', 'Hibernation', 'SAP', 'Identity', 'Zone']) {
+        assert.equal(row.caveats[topic].state, 'check', topic);
+    }
+});
+
+test('NVMe support follows Microsoft\'s list; a custom image cannot tell', () => {
+    assert.equal(imageSupportsNvme('MicrosoftWindowsServer', 'WindowsServer', '2022-datacenter-g2'), true);
+    assert.equal(imageSupportsNvme('MicrosoftWindowsServer', 'WindowsServer', '2016-Datacenter'), false);
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '8_5'), false);
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '86-gen2'), true);
+    assert.equal(imageSupportsNvme('Canonical', 'ubuntu-24_04-lts', 'server'), true);
+    assert.equal(imageSupportsNvme('', '', ''), null);
+});
+
+// ---- Owner's first try, 2026-10-09 ----
+
+test('a machine that is not moving has no warnings', () => {
+    const p = run(sample).plan;
+    for (const m of p.machines.filter((x) => x.moveRequired === 'No')) assert.deepEqual(F.warnings(m), [], m.read.name);
+    assert.ok(F.warnings(byName(p, 'contoso-web01')).length, 'a machine that must move keeps its warnings');
+});
+
+test('a machine that is not moving says "Not needed", never a no', async () => {
+    const { answerWords } = await import('../js/words.js');
+    const m = byName(run('Machine name,Current size,Generation\ncontoso-b02,Standard_B2ls_v2,2\n').plan, 'contoso-b02');
+    assert.equal(m.outcome, 'No move required');
+    assert.deepEqual(['v5', 'v6', 'v7'].map((s) => answerWords(m, s)), ['Not needed', 'Not needed', 'Not needed']);
+    // A supported newer size is still shown, for reference.
+    assert.equal(answerWords(byName(run(sample).plan, 'contoso-app01'), 'v5'), 'Standard_D2ds_v5');
+});
+
+test('the results zip opens and holds the four files, unchanged', async () => {
+    const { makeZip } = await import('../js/zip.js');
+    const { execFileSync } = await import('node:child_process');
+    const { writeFileSync, mkdtempSync, readFileSync: rf } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const files = [{ name: 'vm-summary.csv', text: '﻿"a","b"\r\n"1","é"\r\n' }, { name: 'about-these-results.txt', text: 'hello' }];
+    const dir = mkdtempSync(join(tmpdir(), 'zip-'));
+    writeFileSync(join(dir, 'r.zip'), makeZip(files));
+    // Python's zipfile checks every CRC.
+    const out = execFileSync('python', ['-I', '-c', 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; sys.stdout.buffer.write(z.read("vm-summary.csv"))', join(dir, 'r.zip')]);
+    assert.equal(out.toString('utf8'), files[0].text);
+});
+
+test('every size in the table is recognised', async () => {
+    const { currentStage } = await import('../js/planner.js');
+    assert.deepEqual(table.keys().filter((n) => currentStage(n, table, NOW).stage === null), []);
+});
+
+test('no machine that must move is left "not checked" just because its family has no target', () => {
+    const p = run('Machine name,Current size,Generation\ncontoso-m01,Standard_M192ids_v2,2\ncontoso-dc01,Standard_DC4s_v3,2\n').plan;
+    assert.equal(byName(p, 'contoso-m01').outcome, 'Must move - outside the scope of this tool');
+    assert.equal(byName(p, 'contoso-dc01').outcome, 'Must move - outside the scope of this tool');
+});
+
+// ---- Microsoft's retired-sizes guide (owner, 2026-10-09: follow it) ----
+
+test('F, Fs and Fsv2 machines may choose Falsv6, which is Current', async () => {
+    const { sizeLifecycleStage } = await import('../js/lifecycle.js');
+    const m = byName(run('Machine name,Current size,Generation,OS\ncontoso-f02,Standard_F4s_v2,2,Linux\n').plan, 'contoso-f02');
+    const v6 = m.rows.find((r) => r.series === 'v6');
+    assert.ok(v6.otherSizes.includes('Standard_F4als_v6'), v6.otherSizes.join(', '));
+    assert.equal(sizeLifecycleStage('Standard_F4als_v6').stage, 'Current');
+});
+
+test('B v1 and Av2 machines get a burstable option (Bsv2 or Basv2)', async () => {
+    const { answerWords } = await import('../js/words.js');
+    const p = run('Machine name,Current size,Generation,OS\ncontoso-b02,Standard_B2ms,2,Linux\ncontoso-a02,Standard_A2m_v2,1,Linux\ncontoso-d02,Standard_D4s_v3,2,Linux\n').plan;
+    assert.equal(answerWords(byName(p, 'contoso-b02'), 'burstable'), 'Standard_B2s_v2');
+    assert.equal(answerWords(byName(p, 'contoso-a02'), 'burstable'), 'Standard_B4s_v2');
+    assert.equal(answerWords(byName(p, 'contoso-d02'), 'burstable'), '', 'only B v1 and Av2 machines');
+});
+
+test('every link points to a real Microsoft Learn or GitHub path', () => {
+    const files = ['index.html', ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`), ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`)];
+    for (const f of files) {
+        for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/virtual-machines\/|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+        }
+    }
+});
+
+test('every link from the page to its own files carries the release version', async () => {
+    const version = (await import('../js/version.js')).default;
+    const tag = `?v=${version}`;
+    for (const f of readdirSync(new URL('../js/', import.meta.url))) {
+        for (const [, spec] of read(`js/${f}`).matchAll(/from\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
+            assert.ok(spec.endsWith(tag), `js/${f} imports ${spec} without ${tag}`);
+        }
+    }
+    const html = read('index.html');
+    assert.ok(html.includes(`src="js/page.js${tag}"`), 'index.html: page.js');
+    assert.ok(html.includes(`href="style.css${tag}"`), 'index.html: style.css');
+});
