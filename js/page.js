@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.0-beta';
-import capacity from '../data/capacity.js?v=0.4.0-beta';
-import nvme from '../data/nvme-images.js?v=0.4.0-beta';
-import query from './query.js?v=0.4.0-beta';
-import sample from './sample.js?v=0.4.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.0-beta';
-import * as F from './files.js?v=0.4.0-beta';
-import { makeZip } from './zip.js?v=0.4.0-beta';
-import version from './version.js?v=0.4.0-beta';
+import sizes from '../data/sizes.js?v=0.4.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.1-beta';
+import capacity from '../data/capacity.js?v=0.4.1-beta';
+import nvme from '../data/nvme-images.js?v=0.4.1-beta';
+import query from './query.js?v=0.4.1-beta';
+import sample from './sample.js?v=0.4.1-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.1-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.1-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.1-beta';
+import * as F from './files.js?v=0.4.1-beta';
+import { makeZip } from './zip.js?v=0.4.1-beta';
+import version from './version.js?v=0.4.1-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -357,7 +357,7 @@ function todo(m, g) {
     if (g === 'pool') { const a = poolAdvice(m); return { main: a.todo, more: [a.more] }; }
     if (g === 'gate') {
         const sap = (m.vm.blockers || []).includes('sap-needs-a-certified-size');
-        return { main: sap ? 'Confirm which sizes SAP certifies before you change anything.' : 'Ask the vendor which sizes they certify before you change anything.', more: ['This is a hard gate. This tool gives no size.'] };
+        return { main: sap ? 'Ask SAP which sizes they certify. Do not change the VM before that.' : 'Ask the vendor which sizes they certify. Do not change the VM before that.', more: [`This tool gives no size. Only ${sap ? 'SAP' : 'the vendor'} can approve a size.`] };
     }
     if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
     const r = F.likelyRow(m);

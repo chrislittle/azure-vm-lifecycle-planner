@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.4.0-beta';
-import families from '../data/families.js?v=0.4.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.0-beta';
-import capacity from '../data/capacity.js?v=0.4.0-beta';
-import nvme from '../data/nvme-images.js?v=0.4.0-beta';
-import { capacityRestricted } from './planner.js?v=0.4.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.0-beta';
+import sizes from '../data/sizes.js?v=0.4.1-beta';
+import families from '../data/families.js?v=0.4.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.1-beta';
+import capacity from '../data/capacity.js?v=0.4.1-beta';
+import nvme from '../data/nvme-images.js?v=0.4.1-beta';
+import { capacityRestricted } from './planner.js?v=0.4.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.1-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.1-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -250,6 +250,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  about-these-results.txt  This file.',
         '',
         'RESULT GROUPS',
+        '  "Vendor approval first" is a "hard gate" in the Microsoft guide for the move to v6 and v7.',
         ...Object.values(GROUPS).map((g) => `  ${g.short}. ${g.long}`),
         '',
         'WHAT A RESULT MEANS',
