@@ -19,7 +19,10 @@ export const OUTCOME = {
 export const GROUPS = {
     modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
     ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and the list shows no readiness signal to act on.' },
-    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. First, do the recommended actions in the readiness signals.' },
+    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. Do the steps in "Before the move" first.' },
+    // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
+    // the pool or the service changes the size, not the VM (owner, 2026-10-10).
+    pool: { short: 'Move needed - change in the service or pool', long: 'Move needed. Change the size in the service or the pool, not on this VM.' },
     gate: { short: 'Move needed - hard gate', long: 'Move needed. A hard gate applies: SAP or the vendor of the appliance must certify the new size. See the reason.' },
     nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
     unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
@@ -69,8 +72,34 @@ export const PATTERNS = {
 // The patterns where the series advice ("resize", "deploy in parallel") does not apply.
 export const POOL_PATTERNS = ['A', 'B', 'C', 'D'];
 
+// A service that manages the VM, its image and its disks: AKS, ARO, or a
+// service in pattern C. Nothing on the VM itself is for the customer to change.
+export function serviceManaged(m) {
+    const by = String(m.extra?.managedBy ?? '').toLowerCase();
+    return m.pattern === 'C' || (m.pattern === 'A' && (by === 'aks' || by === 'aro'));
+}
+
+// What to do for a VM in a pool or a service, with the name of the service
+// when the list gives it (owner, 2026-10-10: not "for example").
+export function poolAdvice(m) {
+    const x = m.extra || {};
+    const by = String(x.managedBy ?? '');
+    if (m.pattern === 'C') {
+        if (/^databricks$/i.test(by)) return { todo: 'Change the node type in the Azure Databricks cluster.', more: 'Azure Databricks manages this VM. Do not change the VM.' };
+        return { todo: `Change the size in the service ${by}.`, more: `The service ${by} manages this VM. Do not change the VM.` };
+    }
+    if (m.pattern === 'A') {
+        if (/^aks$/i.test(by)) return { todo: 'Add a new AKS node pool at the new size.', more: 'This scale set is an AKS node pool. Move the workload to the new node pool, then remove the old node pool. Do not change the VMs.' };
+        if (/^aro$/i.test(by)) return { todo: 'Add new worker nodes at the new size in the Azure Red Hat OpenShift cluster.', more: 'Move the workload to the new nodes, then remove the old nodes. Do not change the VMs.' };
+        if (m.read?.resourceType === 'Scale set') return { todo: 'Make a new scale set at the new size.', more: 'Move the workload to the new scale set, then remove the old one. Do not change each VM.' };
+        return { todo: 'Change the size in the scale set.', more: 'This VM is in a scale set. Do not change the size of this VM alone.' };
+    }
+    if (m.pattern === 'B') return { todo: 'Make new session hosts at the new size from the image.', more: 'This VM is a session host in a pooled Azure Virtual Desktop host pool. Move the users to the new hosts, then remove the old hosts.' };
+    return { todo: PATTERNS[m.pattern || ''].advice, more: '' };
+}
+
 // What this tool cannot find. The customer must look for these.
-export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers (move one at a time), self-hosted CI agents on single VMs, and NoSQL or search clusters (move one node at a time). It also cannot find compute that is not in your subscription, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
+export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers and NoSQL or search clusters (move one VM at a time), and self-hosted CI agents on single VMs. It also cannot find compute that is not in your subscription, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
 
 // A short label for counts and filters.
 export const OUTCOME_SHORT = {

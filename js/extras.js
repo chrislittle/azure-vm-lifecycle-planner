@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.3.1-beta';
-import nvaImages from '../data/nva-images.js?v=0.3.1-beta';
-import nvme from '../data/nvme-images.js?v=0.3.1-beta';
-import { readCount } from './planner.js?v=0.3.1-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.4.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.4.0-beta';
+import nvme from '../data/nvme-images.js?v=0.4.0-beta';
+import { readCount } from './planner.js?v=0.4.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -219,8 +219,8 @@ export function caveats(vm, x, option) {
     // Temporary disk (from the size table).
     if (!hasTarget) out['Temporary disk'] = none;
     else if (vm.sourceTempDisks === 0) out['Temporary disk'] = fine('No temporary disk.');
-    else if (vm.sourceTempDisks > 0 && option.tempDisksTo === 0) out['Temporary disk'] = attention('The new size has no temporary disk. Data on the current temporary disk does not move.');
-    else if (vm.sourceTempDisks > 0) out['Temporary disk'] = attention('Data on the temporary disk does not move. Keep nothing there that you need.');
+    else if (vm.sourceTempDisks > 0 && option.tempDisksTo === 0) out['Temporary disk'] = attention('The new size has no temporary disk. The move deletes the data on the current temporary disk.');
+    else if (vm.sourceTempDisks > 0) out['Temporary disk'] = attention('The move deletes the data on the temporary disk. Keep nothing there that you need.');
     else out['Temporary disk'] = check('Check: the size table does not give the temporary disk. You lose the data on it when you move.');
 
     // Accelerated networking (from the target logic).
@@ -237,10 +237,12 @@ export function caveats(vm, x, option) {
 
     out['Hibernation'] = x.hibernation === false ? fine('Off.') : x.hibernation === true ? problem('Turn off hibernation before the move.') : check('Check: the list does not say if hibernation is on.');
 
-    out['Scale set / AKS / AVD'] = x.scaleSet === true ? problem('Change the size in the scale set or node pool, not on each VM. See the workload type.')
+    // A scale set and a pooled host: "What to do" gives the move, so no note here.
+    out['Scale set / AKS / AVD'] = x.scaleSet === true ? none
         // A personal desktop is the VM of one user: it moves as a normal VM.
         : x.virtualDesktop === true && /^personal$/i.test(x.hostPoolType || '') ? attention('A personal desktop. The user cannot use it during the move. Tell the user first.')
-        : x.virtualDesktop === true ? problem('Make new session hosts at the new size from the image. Then remove this host.')
+        : x.virtualDesktop === true && /^pooled$/i.test(x.hostPoolType || '') ? none
+        : x.virtualDesktop === true ? check('Check: the list does not say if the host pool is pooled or personal. For a pooled host pool, make new session hosts from the image.')
         : x.scaleSet === false && x.virtualDesktop === false ? fine('Not in a scale set.')
         : check('Check: the list does not say if this VM is in a scale set or in Azure Virtual Desktop.');
 
@@ -259,7 +261,7 @@ export function caveats(vm, x, option) {
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention('All the VMs in the availability set can need to stop for the move.') : check('Check: the list does not say if the VM is in an availability set.');
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention('If the hardware of the availability set does not have the new size, you must stop all the VMs in the set before the resize. Plan the downtime for all of them.') : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
     out['Network virtual appliance'] = isApplianceImage(x.imagePublisher, x.imageOffer)
         ? problem('Ask the vendor which sizes they certify.') : none;

@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.3.1-beta';
-import families from '../data/families.js?v=0.3.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.3.1-beta';
-import capacity from '../data/capacity.js?v=0.3.1-beta';
-import nvme from '../data/nvme-images.js?v=0.3.1-beta';
-import { capacityRestricted } from './planner.js?v=0.3.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.3.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.3.1-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.3.1-beta';
+import sizes from '../data/sizes.js?v=0.4.0-beta';
+import families from '../data/families.js?v=0.4.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.0-beta';
+import capacity from '../data/capacity.js?v=0.4.0-beta';
+import nvme from '../data/nvme-images.js?v=0.4.0-beta';
+import { capacityRestricted } from './planner.js?v=0.4.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.0-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.0-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -47,10 +47,12 @@ function base(m) {
 const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
     'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Storage or backup appliance', 'Zone'];
 
-// The option a VM would most likely take: its Current default, else its
-// Extended default, else any supported option.
-function likelyRow(m) {
-    return m.rows.find((r) => r.result === 'Supported' && m.advice && r.series === m.advice.start.current)
+// The option a VM would most likely take: a burstable size for a burstable VM
+// (Microsoft recommends Bsv2 and Basv2 as the replacement, and it is a resize),
+// else its Current default, else its Extended default, else any supported option.
+export function likelyRow(m) {
+    return m.rows.find((r) => r.result === 'Supported' && r.series === 'burstable')
+        || m.rows.find((r) => r.result === 'Supported' && m.advice && r.series === m.advice.start.current)
         || m.rows.find((r) => r.result === 'Supported') || null;
 }
 
@@ -62,10 +64,34 @@ function likelyRow(m) {
 export function signals(m) {
     const none = { actions: [], attention: [], checks: [] };
     if (!m.vm || m.moveRequired !== 'Yes') return none;
+    // The service manages the image and the disks: nothing on the VM to do.
+    if (serviceManaged(m)) return none;
     const r = likelyRow(m);
     if (!r || !r.caveats) return none;
     const pick = (state) => CAVEAT_TOPICS.filter((t) => r.caveats[t] && r.caveats[t].state === state).map((t) => ({ topic: t, text: r.caveats[t].text }));
     return { actions: pick('problem'), attention: pick('attention'), checks: pick('check') };
+}
+
+// The notes of every supported series, each once: { actions, attention, checks },
+// each [{ topic, text, series: [] }]. A note that applies to only some of the
+// supported series names them.
+export function allNotes(m) {
+    const out = { actions: [], attention: [], checks: [] };
+    if (!m.vm || m.moveRequired !== 'Yes' || serviceManaged(m)) return out;
+    const rows = m.rows.filter((r) => r.result === 'Supported' && r.caveats);
+    const key = { problem: 'actions', attention: 'attention', check: 'checks' };
+    for (const r of rows) {
+        for (const t of CAVEAT_TOPICS) {
+            const c = r.caveats[t];
+            if (!c || !key[c.state]) continue;
+            const list = out[key[c.state]];
+            const same = list.find((n) => n.topic === t && n.text === c.text);
+            if (same) same.series.push(r.series); else list.push({ topic: t, text: c.text, series: [r.series] });
+        }
+    }
+    const all = rows.length;
+    for (const list of Object.values(out)) for (const n of list) if (n.series.length === all) n.series = [];
+    return out;
 }
 
 // The recommended actions as text, 'Topic: action'.
@@ -81,6 +107,7 @@ export function groupOf(m) {
         case 'Must move - outside the scope of this tool':
             return (m.vm.blockers || []).some((b) => ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor'].includes(b)) ? 'gate' : 'nopath';
         default: {
+            if (POOL_PATTERNS.includes(m.pattern)) return 'pool';
             const s = signals(m);
             return s.actions.length || s.checks.length ? 'first' : 'ready';
         }
@@ -96,7 +123,7 @@ export function rankedFor(m, r, table, now = new Date()) {
 // How to move to one supported option: the pattern decides it for a pool or
 // a service; otherwise the series does.
 export function howToMove(m, r) {
-    if (POOL_PATTERNS.includes(m.pattern)) return PATTERNS[m.pattern || ''].advice;
+    if (POOL_PATTERNS.includes(m.pattern)) { const a = poolAdvice(m); return `${a.todo} ${a.more}`.trim(); }
     return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os));
 }
 
@@ -105,7 +132,7 @@ function stageText(m) {
 }
 
 export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
+    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Not checked', 'Notes'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -114,11 +141,11 @@ export function summaryRows(p) {
         'Move needed': MOVE_NEEDED[m.moveRequired],
         'Result': GROUPS[groupOf(m)].short,
         'Workload type': PATTERNS[m.pattern || ''].name,
-        'Workload type advice': PATTERNS[m.pattern || ''].advice,
+        'Workload type advice': POOL_PATTERNS.includes(m.pattern) ? howToMove(m) : PATTERNS[m.pattern || ''].advice,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
         'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
-        'Readiness signals': warnings(m).join('; '),
-        'Attention': signals(m).attention.map((a) => `${a.topic}: ${a.text}`).join('; '),
+        'Before the move': warnings(m).join('; '),
+        'Good to know': signals(m).attention.map((a) => `${a.topic}: ${a.text}`).join('; '),
         'To check': signals(m).checks.map((c) => c.topic).join(', '),
         'Not checked': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
@@ -210,8 +237,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '',
         'WORKLOAD TYPES',
         '  The workload type tells you how to move the VM.',
-        '  The types are the workload patterns A to G in the Microsoft guide for the move to v6 and v7.',
-        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name} (pattern ${k}): ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
+        '  The types come from the workload patterns in the Microsoft guide for the move to v6 and v7.',
+        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name}: ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
         `  ${PATTERNS[''].name}: ${p.machines.filter((m) => !m.pattern).length}. ${PATTERNS[''].advice}`,
         `  ${NOT_FOUND}`,
         '',
@@ -249,10 +276,13 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `  ${PROCESSOR_NOTE}`,
         '  https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience',
         '',
-        'READINESS SIGNALS',
-        '  A readiness signal is a recommended action: a step to do before the move. It does not block the move.',
-        '  Attention: a fact to know, with nothing to do first. A VM with only attention notes is ready.',
-        '  Check: the list does not give the fact.',
+        'BEFORE THE MOVE, GOOD TO KNOW, TO CHECK',
+        '  These notes are the readiness signals in the Microsoft guide for the move to v6 and v7.',
+        '  Before the move: a step to do before the move. It does not block the move.',
+        '  Good to know: a fact to know, with nothing to do first. A VM with only these notes is ready.',
+        '  To check: the list does not give the fact.',
+        '  A VM that a service manages (AKS, Azure Red Hat OpenShift, Azure Databricks) has no notes.',
+        '  The service manages its image and its disks.',
         '  A fact that is fine has no note.',
         '  This tool does not show an unknown fact as a pass.',
         '  If the list has no NIC count, this tool selects the size for 1 NIC.',

@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.3.1-beta';
-import { dateWords, stageWords } from './words.js?v=0.3.1-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.4.0-beta';
+import { dateWords, stageWords } from './words.js?v=0.4.0-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;

@@ -7,17 +7,20 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.3.1-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.0-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
 
 1. Get your VM list. In the Azure portal, open **Resource Graph Explorer**. Run the
-   query that the page shows (the same query is in [query.kql](query.kql)). Select
-   **Download as CSV**. The query only reads data. It does not change anything.
+   query that the page shows (the same query is in [query.kql](query.kql)). Copy the
+   query, paste it in the query box and select **Run query**. Then select
+   **Download results as CSV**. The query only reads data. It does not change anything.
    If you make the list yourself, use [template.csv](template.csv).
-2. Give the list to the tool. Paste the rows, or load the CSV file.
-3. Read the results. Select a VM to see the reason and the notes for each series.
+2. Give the list to the tool: select **Load the CSV file**, or drag the file onto the
+   page. For a list in Excel, you can also paste the rows.
+3. Read the results. Select a VM to see what to do, why, the sizes, and the steps
+   before the move.
    Select **Download results (.zip)** to get the results files.
 
 To try the tool without your own data, select **Try the sample** on the page.
@@ -34,7 +37,8 @@ For each VM:
   |---|---|
   | Modern size - no move needed | Microsoft fully supports the current size. |
   | Move needed - ready | A supported size is available, and there is no action to do first. |
-  | Move needed - do this first | A supported size is available. Do the recommended actions first. |
+  | Move needed - do this first | A supported size is available. Do the steps in "Before the move" first. |
+  | Move needed - change in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
   | Move needed - hard gate | SAP or the vendor of the appliance must certify the new size. |
   | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
   | Not checked | The tool cannot read the VM or its size. |
@@ -48,12 +52,15 @@ For each VM:
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
   A size with a different processor has an asterisk: test the application first.
-- Readiness signals (Microsoft's term). Each one is one of these:
-  - A **recommended action** to do before the move (amber).
-  - A fact that needs your **attention** (blue).
-  - "Check:", when the list does not give the fact (grey).
+- The details of each VM, in the same order for every VM: **What to do**, **Why**, the
+  **Sizes**, then the notes. The notes are the readiness signals in Microsoft's guide:
+  - **Before the move** (amber): a step to do first. It does not block the move.
+  - **Good to know** (blue): a fact to know, with nothing to do first.
+  - **To check** (grey): the list does not give the fact.
 
-  A readiness signal does not block the move. A fact that is fine has no note.
+  Each note shows once. A note for only some series names them, for example "(v5 only)".
+  A fact that is fine has no note. A VM that a service manages (AKS, Azure Red Hat
+  OpenShift, Azure Databricks) has no notes: the service manages its image and disks.
 - Network virtual appliances (NVAs). The tool finds them by their marketplace image.
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
   Appliances (NVAs) to add a MANA support tag". An appliance is a hard gate. Ask the
@@ -64,18 +71,18 @@ For each VM:
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
   Microsoft list. An appliance is a hard gate: ask the vendor which sizes they certify.
 
-- The workload type. It tells you how to move the VM. The types are the workload
-  patterns A to G in the Microsoft guide for the move to v6 and v7:
+- The workload type. It tells you how to move the VM. The types come from the workload
+  patterns in the Microsoft guide for the move to v6 and v7:
 
   | Workload type | How the tool finds it | How to move |
   |---|---|---|
-  | Node pool or scale set (A) | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
-  | Pooled AVD host (B) | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
-  | Managed by a service (C) | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
-  | Cluster in a service (D) | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
-  | Standalone VM (E) | Every other VM, AVD personal desktops included | Use the move for each series. |
-  | Cluster or database (F) | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
-  | Vendor appliance (G) | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
+  | Node pool or scale set | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
+  | Pooled AVD host | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
+  | Managed by a service | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
+  | Cluster in a service | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
+  | Standalone VM | Every other VM, AVD personal desktops included | Use the move for each series. |
+  | Cluster or database | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
+  | Vendor appliance | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
 
   The tool cannot find domain controllers, self-hosted CI agents on single VMs, or
   NoSQL and search clusters. Look for them yourself. A list without these

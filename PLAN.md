@@ -576,6 +576,33 @@ Pooled AVD host (B), Managed by a service (C), Cluster in a service (D), Standal
 only in about-these-results.txt, the README table and docs/workload-patterns.md, to
 match Microsoft's chart.
 
+## 0.4.0-beta (2026-10-10): a clear layout for each VM
+
+Owner: the details were "a mess": "First, do the recommended actions in the readiness
+signals" pointed at nothing labelled, and the workload advice had no heading.
+- **Details in a fixed order:** What to do (one main step, in bold), Why (lifecycle
+  stage; for a hard gate or no size, the reason once), Sizes (cards; not for a hard
+  gate or no size), Before the move, Good to know, To check. Each note shows once, with
+  "(v5 only)" when it applies to some series. These three are Microsoft's readiness
+  signals; the term stays in the about file.
+- **New group "Move needed - change in the service or pool"** for node pools, scale
+  sets, pooled AVD hosts and service-managed VMs. A service-managed VM (AKS, ARO, or a
+  managed resource group such as Databricks) has no VM notes, and its sizes say "Use a
+  size that the service offers".
+- **The service by name** (owner: not "for example"): Azure Databricks, AKS node pool,
+  ARO, a scale set, or the provider name from the list (for example Microsoft.Batch).
+- **Burstable first** for a B-series VM: Bsv2 and Basv2 are Microsoft's replacement,
+  and a resize. New sample VM contoso-b02 (B2s to B2ls_v2).
+- **Table:** the last column is "Before the move": the steps, plus "N good to know" and
+  "N to check".
+- **Notes rewritten:** the availability set note (all VMs in the set must stop when the
+  hardware does not have the new size), the temporary disk note ("the move deletes the
+  data").
+- **No pattern letters** in the README or the about file either (owner, 2026-10-10).
+  Only docs/workload-patterns.md keeps A to G, to match Microsoft's chart.
+- **Step 2:** "Load the CSV file" first. The portal has only "Download results as CSV":
+  no copy of the results (owner, 2026-10-10). Paste stays for lists in Excel.
+
 ## Next
 
 - Peer feedback, as GitHub issues.
