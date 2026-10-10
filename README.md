@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.2.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.2.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -35,7 +35,7 @@ For each VM:
   | Modern size - no move needed | Microsoft fully supports the current size. |
   | Move needed - ready | A supported size is available, and there is no action to do first. |
   | Move needed - do this first | A supported size is available. Do the recommended actions first. |
-  | Move needed - hard gate | SAP or the appliance vendor must certify the new size. |
+  | Move needed - hard gate | SAP or the vendor of the appliance must certify the new size. |
   | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
   | Not checked | The tool cannot read the VM or its size. |
 
@@ -58,6 +58,11 @@ For each VM:
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
   Appliances (NVAs) to add a MANA support tag". An appliance is a hard gate. Ask the
   vendor which sizes they certify. Then deploy a new appliance beside the old one.
+- Storage and backup appliances (for example NetApp Cloud Volumes ONTAP, Pure Storage,
+  Rubrik, Silk, Nasuni, Dell, Veeam, Commvault). The tool finds them by their
+  marketplace image, from a list that it reads from the Azure Marketplace catalog
+  ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
+  Microsoft list. An appliance is a hard gate: ask the vendor which sizes they certify.
 
 The zip file has these files:
 

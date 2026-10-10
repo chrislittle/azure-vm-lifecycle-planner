@@ -3,9 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import nvaImages from '../data/nva-images.js?v=0.2.0-beta';
-import nvme from '../data/nvme-images.js?v=0.2.0-beta';
-import { readCount } from './planner.js?v=0.2.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.2.1-beta';
+import nvaImages from '../data/nva-images.js?v=0.2.1-beta';
+import nvme from '../data/nvme-images.js?v=0.2.1-beta';
+import { readCount } from './planner.js?v=0.2.1-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -62,6 +63,13 @@ export function isApplianceImage(publisher, offer) {
     return likeAny(publisher, nvaImages.publishers) && likeAny(offer, nvaImages.offers);
 }
 
+// Is this marketplace image a storage or backup appliance? Our own list from the
+// Azure Marketplace catalog: the publisher, and one of that publisher's offers.
+export function isStorageApplianceImage(publisher, offer) {
+    if (!publisher || !offer) return false;
+    return storageImages.vendors.some((v) => v.publisher.toLowerCase() === String(publisher).toLowerCase() && likeAny(offer, v.offers));
+}
+
 // The reasons the extra facts give, as the target logic reads them. Each
 // applies to the series its rule names (data/series-rules.js).
 export function extraBlockers(x) {
@@ -73,6 +81,8 @@ export function extraBlockers(x) {
     // Traffic goes through an appliance: it is rebuilt beside the old one with
     // the vendor, never moved in place.
     if (isApplianceImage(x.imagePublisher, x.imageOffer)) out.push('nva-requires-parallel-deployment');
+    // A storage or backup appliance: vendor validation first (owner, 2026-10-10).
+    if (isStorageApplianceImage(x.imagePublisher, x.imageOffer)) out.push('storage-appliance-requires-vendor');
     return out;
 }
 
@@ -239,6 +249,9 @@ export function caveats(vm, x, option) {
     out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention('All the VMs in the availability set can need to stop for the move.') : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
     out['Network virtual appliance'] = isApplianceImage(x.imagePublisher, x.imageOffer)
+        ? problem('Ask the vendor which sizes they certify.') : none;
+    // Only on a storage or backup appliance.
+    out['Storage or backup appliance'] = isStorageApplianceImage(x.imagePublisher, x.imageOffer)
         ? problem('Ask the vendor which sizes they certify.') : none;
     out['Zone'] = x.zone ? fine(/^none$/i.test(x.zone) ? 'No zone.' : `Zone ${x.zone}.`) : check('Check: the list does not give the zone. The new size must be available in it.');
     return out;

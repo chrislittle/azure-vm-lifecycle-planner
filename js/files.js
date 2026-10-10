@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.2.0-beta';
-import families from '../data/families.js?v=0.2.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.2.0-beta';
-import capacity from '../data/capacity.js?v=0.2.0-beta';
-import nvme from '../data/nvme-images.js?v=0.2.0-beta';
-import { capacityRestricted } from './planner.js?v=0.2.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.2.0-beta';
-import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.2.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.2.0-beta';
+import sizes from '../data/sizes.js?v=0.2.1-beta';
+import families from '../data/families.js?v=0.2.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.2.1-beta';
+import capacity from '../data/capacity.js?v=0.2.1-beta';
+import nvme from '../data/nvme-images.js?v=0.2.1-beta';
+import { capacityRestricted } from './planner.js?v=0.2.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.2.1-beta';
+import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.2.1-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.2.1-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -45,7 +45,7 @@ function base(m) {
 }
 
 const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
-    'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Zone'];
+    'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Storage or backup appliance', 'Zone'];
 
 // The option a VM would most likely take: its Current default, else its
 // Extended default, else any supported option.
@@ -79,7 +79,7 @@ export function groupOf(m) {
         case 'No move required': return 'modern';
         case 'Needs team review': return 'unchecked';
         case 'Must move - outside the scope of this tool':
-            return (m.vm.blockers || []).some((b) => b === 'sap-needs-a-certified-size' || b === 'nva-requires-parallel-deployment') ? 'gate' : 'nopath';
+            return (m.vm.blockers || []).some((b) => ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor'].includes(b)) ? 'gate' : 'nopath';
         default: {
             const s = signals(m);
             return s.actions.length || s.checks.length ? 'first' : 'ready';

@@ -283,3 +283,14 @@ test('ranked sizes: the best first, each one fits and passes the checks', async 
         assert.equal(t.target, x.size, `${x.size} passes the checks`);
     }
 });
+
+test('a storage or backup appliance is a hard gate', async () => {
+    const { isStorageApplianceImage } = await import('../js/extras.js');
+    assert.equal(isStorageApplianceImage('veeam', 'veeam-backup-replication'), true);
+    assert.equal(isStorageApplianceImage('purestorageinc1578960262525', 'cloud_block_store_azure_beta_image'), true);
+    assert.equal(isStorageApplianceImage('veeam', 'office365backup'), false, 'only the appliance offers');
+    assert.equal(isStorageApplianceImage('', 'veeam-backup-replication'), false, 'a custom image cannot tell');
+    const m = byName(run(sample).plan, 'contoso-bkp01');
+    assert.equal(F.groupOf(m), 'gate');
+    assert.equal(m.short.v6, 'No - storage or backup appliance');
+});

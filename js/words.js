@@ -20,7 +20,7 @@ export const GROUPS = {
     modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
     ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and the list shows no readiness signal to act on.' },
     first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. First, do the recommended actions in the readiness signals.' },
-    gate: { short: 'Move needed - hard gate', long: 'Move needed. A hard gate applies: SAP or the appliance vendor must certify the new size. See the reason.' },
+    gate: { short: 'Move needed - hard gate', long: 'Move needed. A hard gate applies: SAP or the vendor of the appliance must certify the new size. See the reason.' },
     nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
     unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
 };
@@ -135,6 +135,7 @@ const SHORT = {
     'No - ephemeral OS disk': 'No - ephemeral OS disk not in this tool',
     'No - no size in this family': 'No size in this family',
     'No - network virtual appliance': 'No - network virtual appliance (ask the vendor)',
+    'No - storage or backup appliance': 'No - storage or backup appliance (ask the vendor)',
 };
 export const shortWords = (label) => (label in SHORT ? SHORT[label] : label);
 
