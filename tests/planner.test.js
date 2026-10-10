@@ -34,6 +34,38 @@ test('the page forbids every network request', () => {
     assert.match(csp[1], /default-src 'none'/);
     assert.match(csp[1], /script-src 'self'(;|$)/);
     assert.match(csp[1], /form-action 'none'/);
+    assert.match(csp[1], /base-uri 'none'/);
+    assert.match(csp[1], /img-src 'self' data:(;|$)/);
+});
+
+test('the report has its own policy: no scripts, nothing to load', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const html = reportHtml(run(sample).plan, table, 'sample', NOW);
+    const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html);
+    assert.ok(csp);
+    assert.match(csp[1], /default-src 'none'/);
+    assert.doesNotMatch(csp[1], /script-src/);
+});
+
+test('no real identifiers: the only GUIDs are all zeros, or public Azure policy IDs', () => {
+    // A public Azure built-in policy definition ID is not a tenant or a subscription.
+    const allowed = new Set(['00000000-0000-0000-0000-000000000000', 'e87a87f5-e6dd-4919-be21-abb0a4ea4630']);
+    const files = ['README.md', 'PLAN.md', 'template.csv', 'index.html', 'query.kql',
+        ...readdirSync(new URL('../samples/', import.meta.url)).map((f) => `samples/${f}`),
+        ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`),
+        ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`),
+        ...readdirSync(new URL('../docs/', import.meta.url)).map((f) => `docs/${f}`)];
+    for (const f of files) {
+        for (const g of read(f).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []) {
+            assert.ok(allowed.has(g.toLowerCase()), `${f}: ${g} is not an allowed GUID`);
+        }
+    }
+});
+
+test('the CSV files never carry a formula from the list', () => {
+    const csv = F.toCsv(['Machine'], [{ Machine: '=1+1' }, { Machine: '+cmd' }, { Machine: '@SUM(1)' }, { Machine: '-2+3' }, { Machine: '-' }, { Machine: 'contoso-web01' }]);
+    const cells = csv.replace(/^\uFEFF/, '').trim().split('\r\n').slice(1).map((l) => l.slice(1, -1));
+    assert.deepEqual(cells, ["'=1+1", "'+cmd", "'@SUM(1)", "'-2+3", '-', 'contoso-web01']);
 });
 
 test('no file can send data or load code from elsewhere', () => {
@@ -44,7 +76,9 @@ test('no file can send data or load code from elsewhere', () => {
     ];
     for (const f of files) {
         const text = read(f);
-        for (const bad of [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /sendBeacon/, /EventSource/, /\bimport\s*\(/, /localStorage/, /sessionStorage/, /indexedDB/, /document\.cookie/]) {
+        for (const bad of [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /sendBeacon/, /EventSource/, /\bimport\s*\(/, /localStorage/, /sessionStorage/, /indexedDB/, /document\.cookie/,
+            /RTCPeerConnection/, /window\.open\s*\(/, /(window|document)\.location(\.href)?\s*=[^=]|\blocation\.(assign|replace)\s*\(/, /new\s+Image\s*\(/, /new\s+(Shared)?Worker\s*\(/, /serviceWorker/, /\sping=/, /rel="(prefetch|preconnect|dns-prefetch|preload)"/,
+            /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\s*\(|new\s+Function\s*\(/]) {
             assert.doesNotMatch(text, bad, `${f} must not use ${bad}`);
         }
         // Scripts and styles only from this site.
@@ -74,7 +108,7 @@ test('the same list gives the same files twice', () => {
 
 test('wrong columns stop, and say which', () => {
     const { list } = run(read('samples/contoso-wrong-columns.csv'));
-    assert.deepEqual(list.stops, ['The list has no Machine name column.', 'The list has no Current size column.', 'The list has no Generation column.']);
+    assert.deepEqual(list.stops, ['The list has no VM name column.', 'The list has no Current size column.', 'The list has no Generation column.']);
 });
 
 test('a pasted (tab-separated) list reads the same as the CSV', () => {
@@ -341,10 +375,10 @@ contoso-ss1,Standard_D4s_v3,,Scale set,None,Yes,
 test('for a pool or a service, the pattern says how to move', () => {
     const p = run(sample).plan;
     const rows = F.targetRows(p, table, NOW);
-    const dbx = rows.filter((r) => r['Machine'] === 'contoso-dbx01' && r['Supported'] === 'Yes');
+    const dbx = rows.filter((r) => r['VM name'] === 'contoso-dbx01' && r['Supported'] === 'Yes');
     assert.ok(dbx.length);
     assert.ok(dbx.every((r) => r['How to move'].startsWith('Change the node type in the Azure Databricks cluster.')), 'not "resize the current VM"');
-    const api = rows.find((r) => r['Machine'] === 'contoso-api01' && r['Series'] === 'v5');
+    const api = rows.find((r) => r['VM name'] === 'contoso-api01' && r['Series'] === 'v5');
     assert.ok(api['How to move'].startsWith('Resize the current VM'));
 });
 
@@ -387,7 +421,13 @@ test('the availability set note says when all the VMs must stop', () => {
     const p = run(sample).plan;
     const m = byName(p, 'contoso-web02');
     const n = F.allNotes(m).attention.find((x) => x.topic === 'Availability set');
-    assert.match(n.text, /does not have the new size, you must stop all the VMs in the set/);
+    assert.match(n.text, /does not have the new size, stop all the VMs in the set before the resize/);
+    // v6 and v7 make a new VM: the note says how a new VM joins the set.
+    const head = 'Machine name,Current size,Generation,OS,Availability set';
+    const both = F.allNotes(byName(run(`${head}
+contoso-as1,Standard_D4s_v3,V2,Linux,Yes
+`).plan, 'contoso-as1')).attention.filter((x) => x.topic === 'Availability set');
+    assert.ok(both.some((x) => x.series.includes('v6') && /only when it creates the VM/.test(x.text)));
 });
 
 // ---- Same names in other groups or subscriptions (0.4.6-beta) ----
@@ -440,4 +480,65 @@ test('the report escapes the text of the list', async () => {
     const html = reportHtml(p, table, '<i>list</i>', NOW);
     assert.ok(!html.includes('<b>x</b>') && html.includes('&lt;b&gt;x&lt;/b&gt;'));
     assert.ok(!html.includes('<i>list</i>'));
+});
+
+// ---- Fixes from the review (0.5.1-beta) ----
+
+test('RHEL 10 and Oracle Linux 10 are newer than the NVMe list: check, not a fail', () => {
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '10-lvm-gen2'), null);
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '10_0'), null);
+    assert.equal(imageSupportsNvme('Oracle', 'Oracle-Linux', 'ol10-lvm-gen2'), null);
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '9_4'), true);
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '86-gen2'), true);
+    assert.equal(imageSupportsNvme('Oracle', 'Oracle-Linux', 'ol84'), false);
+});
+
+test('no size with the same name is not a "no": E16-4s_v3 on v7 is not checked', () => {
+    const m = byName(run('VM name,Current size,Generation\ncontoso-e1,Standard_E16-4s_v3,V2\n').plan, 'contoso-e1');
+    const v7 = m.rows.find((r) => r.series === 'v7');
+    assert.equal(v7.result, 'Needs team review');
+    assert.ok(table.has('Standard_E16s_v7'), 'another v7 size fits');
+});
+
+test('an unknown OS with Azure Disk Encryption is not checked, not a resize', () => {
+    const m = byName(run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-b3,Standard_B2s,V2,,Yes\n').plan, 'contoso-b3');
+    assert.equal(m.rows.find((r) => r.series === 'burstable').result, 'Needs team review');
+});
+
+test('a size in lower case gives the same answer', () => {
+    const p = run('VM name,Current size,Generation\ncontoso-a,Standard_A1,V2\ncontoso-b,standard_a1,V2\ncontoso-c,STANDARD_DS3_V2,V2\ncontoso-d,Standard_DS3_v2,V2\n').plan;
+    assert.equal(byName(p, 'contoso-a').outcome, byName(p, 'contoso-b').outcome);
+    assert.deepEqual(byName(p, 'contoso-c').short, byName(p, 'contoso-d').short);
+});
+
+test('accelerated networking is not "on" when the NIC count is unknown', () => {
+    const m = byName(run('VM name,Current size,Generation,OS,Accelerated NICs\ncontoso-n,Standard_D4s_v3,V2,Linux,1\n').plan, 'contoso-n');
+    const v5 = m.rows.find((r) => r.series === 'v5');
+    assert.equal(v5.option.acceleratedNetworking.turnsOn, null);
+});
+
+test('do this first says what is first: steps, or facts to check', async () => {
+    const { todo } = await import('../js/details.js');
+    const m = byName(run('VM name,Current size,Generation\ncontoso-z,Standard_D4s_v3,V2\n').plan, 'contoso-z');
+    assert.equal(F.groupOf(m), 'first');
+    assert.ok(todo(m, 'first').more.includes('Check the facts in "To check" first.'));
+});
+
+test('the report gives the reason for vendor approval', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const html = reportHtml(run(sample).plan, table, 'sample', NOW);
+    assert.match(html, /This VM is a network virtual appliance/);
+});
+
+test('the list reader takes a sep= line, spaces before quotes, and keeps line numbers', () => {
+    const list = readList('sep=,\nVM name,Current size,Generation\n\ncontoso-s1, "Standard_D2s_v3",V2\n');
+    assert.deepEqual(list.stops, []);
+    assert.equal(list.rows[0][1].trim(), 'Standard_D2s_v3');
+    assert.equal(list.rows[0].line, 4);
+});
+
+test('lists with the old "Machine name" column still work', () => {
+    const list = readList('Machine name,Current size,Generation\ncontoso-o1,Standard_D2s_v3,V2\n');
+    assert.deepEqual(list.stops, []);
+    assert.equal(list.map['VM name'], 0);
 });

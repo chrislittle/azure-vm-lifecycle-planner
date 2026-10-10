@@ -1,4 +1,4 @@
-Machine name,Region,Current size,Generation,OS,NIC count,Data-disk count,Security type,Image publisher,Image offer,Image SKU,Disk controller,Accelerated NICs,Primary NIC accelerated,Azure Disk Encryption,Hibernation,Scale set,Azure Virtual Desktop,SAP,Unmanaged disks,Ephemeral OS disk,System-assigned identity,Availability set,Zone
+VM name,Region,Current size,Generation,OS,NIC count,Data-disk count,Security type,Image publisher,Image offer,Image SKU,Disk controller,Accelerated NICs,Primary NIC accelerated,Azure Disk Encryption,Hibernation,Scale set,Azure Virtual Desktop,SAP,Unmanaged disks,Ephemeral OS disk,System-assigned identity,Availability set,Zone
 contoso-amv2,eastus,Standard_A2m_v2,V1,Linux,1,0,Standard,Canonical,0001-com-ubuntu-server-jammy,22_04-lts,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,None
 contoso-av2,eastus,Standard_A1_v2,V1,Linux,1,0,Standard,Canonical,0001-com-ubuntu-server-jammy,22_04-lts,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,None
 contoso-balsv2,eastus,Standard_B16als_v2,V2,Linux,1,0,TrustedLaunch,Canonical,ubuntu-24_04-lts,server,SCSI,1,Yes,No,No,No,No,No,No,No,No,No,None

@@ -2,13 +2,13 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.5.0-beta';
-import { capacityRestricted } from './planner.js?v=0.5.0-beta';
-import * as F from './files.js?v=0.5.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.5.0-beta';
-import { seriesList, todo } from './details.js?v=0.5.0-beta';
-import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.5.0-beta';
-import version from './version.js?v=0.5.0-beta';
+import capacity from '../data/capacity.js?v=0.5.1-beta';
+import { capacityRestricted } from './planner.js?v=0.5.1-beta';
+import * as F from './files.js?v=0.5.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.5.1-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.5.1-beta';
+import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.5.1-beta';
+import version from './version.js?v=0.5.1-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -29,7 +29,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     function vmCard(m) {
         const g = F.groupOf(m); const t = todo(m, g); const n = F.allNotes(m);
         const notes = (title, items, cls, strip) => items.length ? `<h4>${title}</h4><ul class="${cls}">${items.map((x) => `<li><b>${esc(x.topic)}:</b> ${esc(strip ? x.text.replace(/^Check: /, '') : x.text)}${x.series.length ? ` <span class="muted">(${seriesList(x.series)} only)</span>` : ''}</li>`).join('')}</ul>` : '';
-        const why = [m.stage ? stageWords(m.stage, capacityRestricted(m.vm?.sourceSize)) : '', ...(!m.vm ? m.problems.map((pr) => reasonFor(pr.why, { problem: pr })) : [])].filter((x) => x);
+        const why = whyLines(m, g, table, now);
         let sizesHtml = '';
         if (m.vm && !['gate', 'nopath'].includes(g)) {
             const rows = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => {
@@ -45,7 +45,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <header><h3>${esc(m.read.name)}</h3><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></header>
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
       <div class="todo"><b>What to do:</b> ${esc(t.main)} ${t.more.map(esc).join(' ')}</div>
-      ${why.length ? `<h4>Why</h4><p>${why.map(esc).join(' ')}</p>` : ''}
+      ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
       ${serviceManaged(m) && m.moveRequired === 'Yes' ? '<h4>Before the move</h4><p class="muted">Nothing to do on the VM. The service manages the image and the disks.</p>' : notes('Before the move', n.actions, 'act')}
       ${notes('Good to know', n.attention, 'att')}
       ${notes('To check', n.checks, 'chk', true)}
@@ -64,6 +64,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const modern = p.machines.filter((m) => F.groupOf(m) === 'modern');
     return `<!doctype html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
     <title>VM Lifecycle Report</title>
     <style>
     :root { --text:#1b1f24; --muted:#5b6573; --line:#dde2e8; --bg:#f6f7f9; --accent:#0b6bcb; --ok:#1a7f37; --ok-bg:#e6f4ea; --act:#8a5a00; --act-bg:#fff4dc; --no:#b42318; --no-bg:#fdecea; --pool:#4b3aa8; --pool-bg:#ece8fc; }
@@ -115,7 +116,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     <h3 class="grp"><span class="tag ok">${modern.length}</span> ${esc(GROUPS.modern.short)}</h3>
     <p class="muted">${modern.map((m) => esc(m.read.name)).join(', ')}</p>
 
-    <h2>3. Each VM that needs a move</h2>
+    <h2>3. Each VM to act on</h2>
     ${p.machines.filter((m) => F.groupOf(m) !== 'modern').map((m) => vmCard(m).replace('<section class="vm">', `<section class="vm" id="vm-${m.read.row}">`)).join('\n')}
     <p class="muted">${esc(PROCESSOR_NOTE)}</p>
 

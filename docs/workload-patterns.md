@@ -193,7 +193,7 @@ query (`query.kql`) reads all of them.
 | Accelerated networking | `properties.enableAcceleratedNetworking` on each NIC. Azure leaves the field out when it is off: on a NIC that the query can read, no field means off. | Tested, on and off (9 October 2026) |
 | Azure Disk Encryption | The `AzureDiskEncryption` or `AzureDiskEncryptionForLinux` extension, or `osDisk.encryptionSettings.enabled` | Tested, on and off (9 October 2026) |
 | AVD session host | `desktopvirtualizationresources`, `properties.resourceId` | Tested (9 and 10 October 2026) |
-| Security type (Trusted Launch, confidential VM) | `properties.securityProfile.securityType`; empty means Standard | Tested, Standard only |
+| Security type (Trusted launch, confidential VM) | `properties.securityProfile.securityType`; empty means Standard | Tested, Standard only |
 | System-assigned identity | `identity.type` contains `SystemAssigned` | Tested, on (9 October 2026) |
 | Hibernation | `properties.additionalCapabilities.hibernationEnabled` | Tested, "No" only |
 | Unmanaged disks | `osDisk.vhd.uri`, or a `vhd` on a data disk | Tested, "No" only |

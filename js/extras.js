@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.5.0-beta';
-import nvaImages from '../data/nva-images.js?v=0.5.0-beta';
-import nvme from '../data/nvme-images.js?v=0.5.0-beta';
-import { readCount } from './planner.js?v=0.5.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.5.1-beta';
+import nvaImages from '../data/nva-images.js?v=0.5.1-beta';
+import nvme from '../data/nvme-images.js?v=0.5.1-beta';
+import { readCount } from './planner.js?v=0.5.1-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -142,7 +142,8 @@ export function imageSupportsNvme(publisher, offer, sku) {
             return nvme.linux.ubuntu.supported.some(([maj]) => maj === major) ? true : null;
         }
         case 'redhat': {
-            m = /^(\d)(?:[._]?(\d{1,2}))?(?:[^\d]|$)/.exec(s);
+            // RHEL 10 and later: a two-digit major (10-lvm-gen2, 10_0). Version 1.0 does not exist.
+            m = /^(1\d)(?:[._](\d{1,2}))?(?:[^\d._]|$)/.exec(s) || /^(\d)(?:[._]?(\d{1,2}))?(?:[^\d]|$)/.exec(s);
             return m ? onList('rhel', parseInt(m[1], 10), m[2] !== undefined ? parseInt(m[2], 10) : null) : null;
         }
         case 'suse': {
@@ -154,7 +155,8 @@ export function imageSupportsNvme(publisher, offer, sku) {
             return m ? onList('debian', parseInt(m[1], 10), 0) : null;
         }
         case 'oracle': {
-            m = /ol(\d)(\d{0,2})/.exec(s);
+            // Oracle Linux 10 and later: ol10, ol100 (10.0). Version 1.x does not exist.
+            m = /ol(1\d)(\d?)(?!\d)/.exec(s) || /ol(\d)(\d{0,2})/.exec(s);
             return m ? onList('oracle', parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : null) : null;
         }
         case 'almalinux': {
@@ -213,7 +215,11 @@ export function caveats(vm, x, option) {
 
     // Azure Disk Encryption.
     out['Disk encryption'] = x.diskEncryption === false ? fine('No Azure Disk Encryption.')
-        : x.diskEncryption === true ? problem(isNvme ? 'v6 and v7 do not support Azure Disk Encryption. Decrypt the disks, or use encryption at host on the new VM.' : 'Use a resize: a resize keeps Azure Disk Encryption, and a rebuild removes it.')
+        // Microsoft: Azure Disk Encryption retires on 15 September 2028; the move to
+        // encryption at host makes new disks and a new VM (disk-encryption-migrate page,
+        // read 2026-10-10).
+        : x.diskEncryption === true ? problem(isNvme ? 'v6 and v7 do not support Azure Disk Encryption. Move to encryption at host with the Microsoft migration steps. They make new disks and a new VM.'
+            : 'Use a resize: a resize keeps Azure Disk Encryption. Microsoft retires Azure Disk Encryption on 15 September 2028, so also plan the move to encryption at host.')
         : check('Check: the list does not say if the VM uses Azure Disk Encryption.');
 
     // Temporary disk (from the size table).
@@ -248,7 +254,7 @@ export function caveats(vm, x, option) {
 
     out['SAP'] = x.sap === false ? fine('Not SAP.') : x.sap === true ? problem('Confirm that SAP certifies the new size (SAP Note 1928533).') : check('Check: the list does not say if this VM runs SAP.');
     out['Unmanaged disks'] = x.unmanagedDisks === false ? fine('Managed disks.') : x.unmanagedDisks === true ? problem('Convert the unmanaged disks to managed disks first.') : check('Check: the list does not say if the disks are managed disks.');
-    out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem('Confirm that the new size has space for the ephemeral OS disk.') : check('Check: the list does not say if the OS disk is ephemeral.');
+    out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem('The data on an ephemeral OS disk does not stay when the VM moves. Deploy a new VM at the new size.') : check('Check: the list does not say if the OS disk is ephemeral.');
 
     // A system-assigned identity is kept on a resize and lost on a rebuild.
     if (x.systemIdentity === false) out['Identity'] = fine('No system-assigned identity.');
@@ -261,7 +267,10 @@ export function caveats(vm, x, option) {
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention('If the hardware of the availability set does not have the new size, you must stop all the VMs in the set before the resize. Plan the downtime for all of them.') : check('Check: the list does not say if the VM is in an availability set.');
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(isNvme || option.rebuild
+            // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
+            ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
+            : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.') : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
     out['Network virtual appliance'] = isApplianceImage(x.imagePublisher, x.imageOffer)
         ? problem('Ask the vendor which sizes they certify.') : none;

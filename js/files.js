@@ -5,19 +5,23 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.5.0-beta';
-import families from '../data/families.js?v=0.5.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.5.0-beta';
-import capacity from '../data/capacity.js?v=0.5.0-beta';
-import nvme from '../data/nvme-images.js?v=0.5.0-beta';
-import { capacityRestricted } from './planner.js?v=0.5.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.5.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.5.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.5.0-beta';
+import sizes from '../data/sizes.js?v=0.5.1-beta';
+import families from '../data/families.js?v=0.5.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.5.1-beta';
+import capacity from '../data/capacity.js?v=0.5.1-beta';
+import nvme from '../data/nvme-images.js?v=0.5.1-beta';
+import { capacityRestricted } from './planner.js?v=0.5.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.5.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.5.1-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.5.1-beta';
 
-// CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
+// CSV as Excel opens it: a byte order mark, every field quoted, CRLF. A cell that
+// starts with = + - @ (or a tab or CR) and is longer than one character gets a ' in
+// front, so Excel shows it as text and never runs it as a formula. Azure names
+// cannot start so, but a hand-made list can (review, 2026-10-10).
 export function toCsv(columns, rows) {
-    const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const safe = (t) => (t.length > 1 && /^[=+\-@\t\r]/.test(t) ? `'${t}` : t);
+    const q = (v) => '"' + safe(String(v ?? '')).replace(/"/g, '""') + '"';
     return '﻿' + [columns.map(q).join(','), ...rows.map((r) => columns.map((c) => q(r[c])).join(','))].join('\r\n') + '\r\n';
 }
 
@@ -29,20 +33,20 @@ const RESULT = {
 };
 const MOVE_NEEDED = { Yes: 'Yes', No: 'No', Review: 'Not checked' };
 const CHANGE = { up: 'Newer stage', same: 'Same stage', down: 'Older stage', unknown: 'Not checked' };
-const SECURITY = { TrustedLaunch: 'Trusted Launch', ConfidentialVM: 'Confidential VM', Standard: 'Standard' };
+const SECURITY = { TrustedLaunch: 'Trusted launch', ConfidentialVM: 'Confidential VM', Standard: 'Standard' };
 const SERIES = (s) => (s === 'gen1Route' ? 'Generation 1 to 2' : s === 'burstable' ? 'Burstable (Bsv2, Basv2)' : s);
 
 // The columns every file starts with: the VM as the list gave it.
 function base(m) {
     const r = m.read;
     return {
-        'Machine': r.name,
+        'VM name': r.name,
         'Region': r.region || '',
         'Subscription ID': r.subscriptionId || '',
         'Resource group': r.resourceGroup || '',
         'Resource ID': r.resourceId || '',
         'Current size': r.size || r.sizeAsWritten,
-        'Generation': r.generation ? r.generation.replace('V', 'Gen') : r.generationAsWritten,
+        'Generation': r.generation ? r.generation.replace('V', 'Generation ') : r.generationAsWritten,
         'OS': r.os || 'Not checked',
         'Security type': SECURITY[r.securityType] || 'Not checked',
     };
@@ -135,15 +139,15 @@ function stageText(m) {
     return m.stage ? stageWords(m.stage, capacityRestricted(m.vm.sourceSize)) : '';
 }
 
-export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Not checked', 'Notes', 'Resource ID'];
+export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
+    'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Needs review', 'Notes', 'Resource ID'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
         ...base(m),
         'Current stage': stageText(m),
         'Move needed': MOVE_NEEDED[m.moveRequired],
-        'Result': GROUPS[groupOf(m)].short,
+        'Result group': GROUPS[groupOf(m)].short,
         'Workload type': PATTERNS[m.pattern || ''].name,
         'Workload type advice': POOL_PATTERNS.includes(m.pattern) ? howToMove(m) : PATTERNS[m.pattern || ''].advice,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
@@ -151,20 +155,20 @@ export function summaryRows(p) {
         'Before the move': warnings(m).join('; '),
         'Good to know': signals(m).attention.map((a) => `${a.topic}: ${a.text}`).join('; '),
         'To check': signals(m).checks.map((c) => c.topic).join(', '),
-        'Not checked': m.needsReview ? 'Yes' : 'No',
+        'Needs review': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
     }));
 }
 
-export const TARGET_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Workload type', 'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
+export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
+    'Workload type', 'Series', 'Target size', 'Series result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
     'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
     for (const m of p.machines) {
         if (!m.vm) {
-            out.push({ ...base(m), 'Workload type': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Result': 'Not checked', 'Supported': 'Not checked',
+            out.push({ ...base(m), 'Workload type': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Series result': 'Not checked', 'Supported': 'Not checked',
                 'Reason': m.problems.map((pr) => reasonFor(pr.why, { problem: pr })).join(' '), 'Notes': m.notes.join('; ') });
             continue;
         }
@@ -179,7 +183,7 @@ export function targetRows(p, table, now = new Date()) {
                 'Series': SERIES(r.series),
                 // A size only where it is supported: a blocked option shows no size.
                 'Target size': o.supported ? o.targetSize : '',
-                'Result': m.moveRequired === 'No' && r.result !== 'Supported' ? 'Not needed' : RESULT[r.result],
+                'Series result': m.moveRequired === 'No' && r.result !== 'Supported' ? 'Not needed' : RESULT[r.result],
                 'Supported': r.result === 'Supported' ? 'Yes' : r.result === 'Needs team review' ? 'Not checked' : 'No',
                 'Reason': optionReason(r, table, now),
                 'Target stage': o.targetStage ? o.targetStage.stage : '',
@@ -200,7 +204,7 @@ export function targetRows(p, table, now = new Date()) {
     return out;
 }
 
-export const NOT_CHECKED_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Series', 'What', 'Why', 'Resource ID'];
+export const NOT_CHECKED_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Series', 'What', 'Why', 'Resource ID'];
 
 export function notCheckedRows(p, table, now = new Date()) {
     // By row, not by name: two VMs can have the same name.
@@ -213,7 +217,7 @@ export function notCheckedRows(p, table, now = new Date()) {
             const problem = m && m.problems.find((pr) => pr.why === code);
             return reasonFor(code, { vm, series: row ? row.series : '', table, now, option: row ? row.option : null, stage: m && m.stage, problem });
         }).join(' ');
-        return { 'Machine': r.machine, 'Region': r.region, 'Subscription ID': m ? m.read.subscriptionId : '', 'Resource group': m ? m.read.resourceGroup : '', 'Resource ID': m ? m.read.resourceId : '', 'Current size': r.size, 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
+        return { 'VM name': r.machine, 'Region': r.region, 'Subscription ID': m ? m.read.subscriptionId : '', 'Resource group': m ? m.read.resourceGroup : '', 'Resource ID': m ? m.read.resourceId : '', 'Current size': r.size, 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
     });
 }
 
@@ -272,7 +276,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         'HOW TO MOVE',
         '  v5:        Resize the current VM, when Azure supports a resize to the new size.',
         '             A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.',
-        '  v6 and v7: Deploy a new VM in parallel, move the workload, then retire the old VM.',
+        '  v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM.',
         '             Microsoft highly recommends this. A move to v6 or v7 is not a normal resize.',
         '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
         '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
@@ -304,6 +308,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `  ${GUIDANCE.lifecycle}`,
         `  ${GUIDANCE.endOfLife}`,
         `  ${GUIDANCE.retirements}`,
+        `  Azure Disk Encryption to encryption at host: ${GUIDANCE.diskEncryption}`,
         '',
     ].join('\r\n');
 }

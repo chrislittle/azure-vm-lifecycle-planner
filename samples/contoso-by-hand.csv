@@ -1,4 +1,4 @@
-Machine name,Region,Current size,Generation,OS,NIC count,Data-disk count
+VM name,Region,Current size,Generation,OS,NIC count,Data-disk count
 contoso-file01,uksouth,Standard_D4s_v3,2,Windows,1,3
 contoso-file02,uksouth,Standard_D2_v2,1,Windows,,
 contoso-dc01,uksouth,Standard_B1s,Gen2,Windows,1,0
