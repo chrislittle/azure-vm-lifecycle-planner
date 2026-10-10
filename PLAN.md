@@ -603,6 +603,20 @@ signals" pointed at nothing labelled, and the workload advice had no heading.
 - **Step 2:** "Load the CSV file" first. The portal has only "Download results as CSV":
   no copy of the results (owner, 2026-10-10). Paste stays for lists in Excel.
 
+## 0.4.1-beta (2026-10-10): no "hard gate" in customer text
+
+"Gate" is not an STE word, and "This is a hard gate" told the reader nothing (owner).
+The group is now "Move needed - vendor approval first". What to do: "Ask the vendor (or
+SAP) which sizes they certify. Do not change the VM before that." Microsoft's term
+"hard gate" stays only in the README group table, the about file and the pattern doc.
+Also: "readiness signal" and "in place" removed from customer sentences.
+
+**Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
+source changes and opens an issue. It must also read Azure (the size table, the
+Marketplace images, the policy definition), not only Microsoft Learn: plan it with the
+owner first (for example a GitHub OIDC federated credential with Reader access, no
+stored secret).
+
 ## Next
 
 - Peer feedback, as GitHub issues.

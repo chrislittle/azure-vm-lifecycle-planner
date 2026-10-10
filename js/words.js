@@ -18,12 +18,13 @@ export const OUTCOME = {
 // readiness signal must not read as an unsolvable blocker.
 export const GROUPS = {
     modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
-    ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and the list shows no readiness signal to act on.' },
+    ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and there is nothing to do first.' },
     first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. Do the steps in "Before the move" first.' },
     // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).
     pool: { short: 'Move needed - change in the service or pool', long: 'Move needed. Change the size in the service or the pool, not on this VM.' },
-    gate: { short: 'Move needed - hard gate', long: 'Move needed. A hard gate applies: SAP or the vendor of the appliance must certify the new size. See the reason.' },
+    // Microsoft's term is "hard gate"; "gate" is not an STE word (owner, 2026-10-10).
+    gate: { short: 'Move needed - vendor approval first', long: 'Move needed. SAP or the vendor of the appliance must approve the new size first.' },
     nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
     unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
 };
@@ -66,7 +67,7 @@ export const PATTERNS = {
     D: { name: 'Cluster in a service', advice: 'Make a new cluster at the new size in the service. Then remove the old cluster.' },
     E: { name: 'Standalone VM', advice: 'You manage this VM. Use the move that this tool gives for each series.' },
     F: { name: 'Cluster or database', advice: 'This VM holds state or is part of a cluster (SQL Server, a failover cluster or SAP). Move one node at a time. First move the role away from the node (fail over or drain). For v5, resize the node. For v6 and v7, add a new node at the new size and remove the old node. Check the health of the cluster before the next node.' },
-    G: { name: 'Vendor appliance', advice: 'This VM is a vendor appliance. Do not change the size in place. Ask the vendor which sizes they certify. Deploy a new appliance beside this one, then move the traffic.' },
+    G: { name: 'Vendor appliance', advice: 'This VM is a vendor appliance. Do not change the size of this VM. Ask the vendor which sizes they certify. Deploy a new appliance beside this one, then move the traffic.' },
     '': { name: 'Type not checked', advice: 'The list does not give the facts that find the workload type. Run the Azure Resource Graph query in step 1 to get them.' },
 };
 // The patterns where the series advice ("resize", "deploy in parallel") does not apply.

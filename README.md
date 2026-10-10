@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -39,7 +39,7 @@ For each VM:
   | Move needed - ready | A supported size is available, and there is no action to do first. |
   | Move needed - do this first | A supported size is available. Do the steps in "Before the move" first. |
   | Move needed - change in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
-  | Move needed - hard gate | SAP or the vendor of the appliance must certify the new size. |
+  | Move needed - vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
   | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
   | Not checked | The tool cannot read the VM or its size. |
 
@@ -63,13 +63,13 @@ For each VM:
   OpenShift, Azure Databricks) has no notes: the service manages its image and disks.
 - Network virtual appliances (NVAs). The tool finds them by their marketplace image.
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
-  Appliances (NVAs) to add a MANA support tag". An appliance is a hard gate. Ask the
+  Appliances (NVAs) to add a MANA support tag". Ask the
   vendor which sizes they certify. Then deploy a new appliance beside the old one.
 - Storage and backup appliances (for example NetApp Cloud Volumes ONTAP, Pure Storage,
   Rubrik, Silk, Nasuni, Dell, Veeam, Commvault). The tool finds them by their
   marketplace image, from a list that it reads from the Azure Marketplace catalog
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
-  Microsoft list. An appliance is a hard gate: ask the vendor which sizes they certify.
+  Microsoft list. Ask the vendor which sizes they certify before a move.
 
 - The workload type. It tells you how to move the VM. The types come from the workload
   patterns in the Microsoft guide for the move to v6 and v7:
@@ -82,7 +82,7 @@ For each VM:
   | Cluster in a service | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
   | Standalone VM | Every other VM, AVD personal desktops included | Use the move for each series. |
   | Cluster or database | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
-  | Vendor appliance | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
+  | Vendor appliance | A network virtual appliance, or a storage or backup appliance | Ask the vendor which sizes they certify. |
 
   The tool cannot find domain controllers, self-hosted CI agents on single VMs, or
   NoSQL and search clusters. Look for them yourself. A list without these
