@@ -630,6 +630,12 @@ node's hyperVGeneration (docs/workload-patterns.md); the full raw data is saved 
 so that no rebuild is needed for these fields. A name match in the query was tried and
 dropped (owner: fragile, and not needed).
 
+## 0.4.4-beta (2026-10-10): a theme menu
+
+Owner: a light and dark choice, as in the owner's other tool. A "Theme" menu at the top
+right: Follow the system (the start), Light, Dark. The page keeps no data, so the
+choice is not stored: it lasts until the page closes.
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the
