@@ -71,18 +71,18 @@ For each VM:
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
   Microsoft list. An appliance is a hard gate: ask the vendor which sizes they certify.
 
-- The workload type. It tells you how to move the VM. The types are the workload
-  patterns A to G in the Microsoft guide for the move to v6 and v7:
+- The workload type. It tells you how to move the VM. The types come from the workload
+  patterns in the Microsoft guide for the move to v6 and v7:
 
   | Workload type | How the tool finds it | How to move |
   |---|---|---|
-  | Node pool or scale set (A) | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
-  | Pooled AVD host (B) | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
-  | Managed by a service (C) | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
-  | Cluster in a service (D) | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
-  | Standalone VM (E) | Every other VM, AVD personal desktops included | Use the move for each series. |
-  | Cluster or database (F) | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
-  | Vendor appliance (G) | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
+  | Node pool or scale set | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
+  | Pooled AVD host | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
+  | Managed by a service | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
+  | Cluster in a service | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
+  | Standalone VM | Every other VM, AVD personal desktops included | Use the move for each series. |
+  | Cluster or database | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
+  | Vendor appliance | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
 
   The tool cannot find domain controllers, self-hosted CI agents on single VMs, or
   NoSQL and search clusters. Look for them yourself. A list without these

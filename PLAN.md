@@ -598,6 +598,8 @@ signals" pointed at nothing labelled, and the workload advice had no heading.
 - **Notes rewritten:** the availability set note (all VMs in the set must stop when the
   hardware does not have the new size), the temporary disk note ("the move deletes the
   data").
+- **No pattern letters** in the README or the about file either (owner, 2026-10-10).
+  Only docs/workload-patterns.md keeps A to G, to match Microsoft's chart.
 - **Step 2:** "Load the CSV file" first. The portal has only "Download results as CSV":
   no copy of the results (owner, 2026-10-10). Paste stays for lists in Excel.
 
