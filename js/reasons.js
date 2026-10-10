@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.2.1-beta';
-import { dateWords, stageWords } from './words.js?v=0.2.1-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.3.0-beta';
+import { dateWords, stageWords } from './words.js?v=0.3.0-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -64,6 +64,7 @@ export const REASONS = {
     'size-empty': () => 'The current size is empty.',
     'size-unreadable': () => 'This tool cannot read the current size. Use the Azure name, for example Standard_D4s_v3.',
     'generation-missing': () => 'The generation is empty or not valid. Run the Azure Resource Graph query in step 1 again, or type the generation (1 or 2) for this VM.',
+    'scale-set-generation-missing': () => 'Azure Resource Graph does not give the generation of a scale set. Type the generation (1 or 2) of the scale set image in the Generation column.',
     'generation-conflicts-with-security-type': ({ problem }) => `The list gives Generation 1, but ${problem?.securityWords || 'this security type'} needs Generation 2. Check the two values.`,
 
     // ---- Supported, but this tool does not know a fact that it needs ----

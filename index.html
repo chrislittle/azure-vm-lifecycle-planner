@@ -9,9 +9,9 @@
 <meta name="referrer" content="no-referrer">
 <title>VM Lifecycle Planner for Azure</title>
 <meta name="description" content="Give this tool your Azure VM list. It shows the lifecycle stage of each VM and the supported v5, v6 and v7 sizes. It runs only in your browser.">
-<link rel="stylesheet" href="style.css?v=0.2.1-beta">
+<link rel="stylesheet" href="style.css?v=0.3.0-beta">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b6bcb'/%3E%3Cpath d='M8 22V10h4v12zm6 0V6h4v16zm6 0v-8h4v8z' fill='white'/%3E%3C/svg%3E">
-<script type="module" src="js/page.js?v=0.2.1-beta"></script>
+<script type="module" src="js/page.js?v=0.3.0-beta"></script>
 </head>
 <body>
 <header class="top">
@@ -75,6 +75,7 @@
     </div>
     <div class="filters">
       <label>Show <select id="filter"></select></label>
+      <label>Pattern <select id="pattern-filter"></select></label>
       <label>Find <input type="search" id="find" placeholder="VM or size"></label>
       <span id="shown" class="hint"></span>
     </div>
@@ -90,7 +91,8 @@
       <li>"Supported" means that Azure lets you move this VM to the new size. It does not mean that the VM is ready to move.</li>
       <li>A move is a resize or a rebuild. In a resize, Azure changes the size of the same VM. In a rebuild, you make a new VM with the same disks. A rebuild removes a system-assigned identity and Azure Disk Encryption.</li>
       <li>This tool does not check if a size is available in your region.</li>
-      <li>AKS nodes are not in the VM list. To change their size, change the AKS node pool.</li>
+      <li>The workload pattern (A to G) under each VM name is from Microsoft's guide for the move to v6 and v7. It tells you how to move the VM. The query gives each scale set and AKS node pool as one row.</li>
+      <li id="not-found"></li>
     </ul>
   </section>
 

@@ -110,7 +110,8 @@ tbody tr.machine { cursor: pointer; }
 tbody tr.machine:hover { background: var(--bg); }
 td.stage { min-width: 150px; }
 td.stage strong { display: block; font-weight: 600; }
-td.stage .sub { display: block; color: var(--muted); font-size: 12px; }
+td.stage .sub, td.vm .sub { display: block; color: var(--muted); font-size: 12px; }
+td.vm { min-width: 150px; }
 .tag-limit { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--check-bg); color: var(--check); white-space: nowrap; }
 td.warn { min-width: 140px; }
 .tags { display: flex; flex-wrap: wrap; min-width: 0; }
@@ -165,6 +166,9 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
     #table tr.machine td:first-child { font-weight: 600; font-size: 14px; }
     #table td.stage { display: flex; flex-wrap: wrap; column-gap: 8px; }
     #table td.stage strong, #table td.stage .sub { display: inline; }
+    #table td.vm { flex-wrap: wrap; row-gap: 0; }
+    #table td.vm .name { flex: 1 1 0; min-width: 0; }
+    #table td.vm .sub { flex: 1 1 100%; padding-left: 120px; font-weight: 400; }
     #table tr.details { display: block; }
     #table tr.details > td { display: block; }
     .results-wrap { overflow-x: visible; }

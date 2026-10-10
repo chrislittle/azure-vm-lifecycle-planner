@@ -29,6 +29,14 @@ export const COLUMNS = [
     { name: 'System-assigned identity' },
     { name: 'Availability set' },
     { name: 'Zone' },
+    // The workload pattern (query 0.3.0-beta and later).
+    { name: 'Resource type' },
+    { name: 'Instances' },
+    { name: 'Managed by' },
+    { name: 'AVD host pool type' },
+    { name: 'SQL Server' },
+    { name: 'SQL availability group' },
+    { name: 'Shared disk' },
 ];
 
 // A header as it is compared: case, spaces, dashes, underscores and dots ignored.

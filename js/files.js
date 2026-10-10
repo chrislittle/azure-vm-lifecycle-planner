@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.2.1-beta';
-import families from '../data/families.js?v=0.2.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.2.1-beta';
-import capacity from '../data/capacity.js?v=0.2.1-beta';
-import nvme from '../data/nvme-images.js?v=0.2.1-beta';
-import { capacityRestricted } from './planner.js?v=0.2.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.2.1-beta';
-import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.2.1-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.2.1-beta';
+import sizes from '../data/sizes.js?v=0.3.0-beta';
+import families from '../data/families.js?v=0.3.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.3.0-beta';
+import capacity from '../data/capacity.js?v=0.3.0-beta';
+import nvme from '../data/nvme-images.js?v=0.3.0-beta';
+import { capacityRestricted } from './planner.js?v=0.3.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.3.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.3.0-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.3.0-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -93,12 +93,19 @@ export function rankedFor(m, r, table, now = new Date()) {
     return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel') }));
 }
 
+// How to move to one supported option: the pattern decides it for a pool or
+// a service; otherwise the series does.
+export function howToMove(m, r) {
+    if (POOL_PATTERNS.includes(m.pattern)) return PATTERNS[m.pattern || ''].advice;
+    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os));
+}
+
 function stageText(m) {
     return m.stage ? stageWords(m.stage, capacityRestricted(m.vm.sourceSize)) : '';
 }
 
 export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
+    'Result', 'Workload pattern', 'Pattern advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -106,6 +113,8 @@ export function summaryRows(p) {
         'Current stage': stageText(m),
         'Move needed': MOVE_NEEDED[m.moveRequired],
         'Result': GROUPS[groupOf(m)].short,
+        'Workload pattern': PATTERNS[m.pattern || ''].name,
+        'Pattern advice': PATTERNS[m.pattern || ''].advice,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
         'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
         'Readiness signals': warnings(m).join('; '),
@@ -117,14 +126,14 @@ export function summaryRows(p) {
 }
 
 export const TARGET_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
+    'Workload pattern', 'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
     'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
     for (const m of p.machines) {
         if (!m.vm) {
-            out.push({ ...base(m), 'Move needed': 'Not checked', 'Result': 'Not checked', 'Supported': 'Not checked',
+            out.push({ ...base(m), 'Workload pattern': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Result': 'Not checked', 'Supported': 'Not checked',
                 'Reason': m.problems.map((pr) => reasonFor(pr.why, { problem: pr })).join(' '), 'Notes': m.notes.join('; ') });
             continue;
         }
@@ -135,6 +144,7 @@ export function targetRows(p, table, now = new Date()) {
                 ...base(m),
                 'Current stage': stageText(m),
                 'Move needed': MOVE_NEEDED[m.moveRequired],
+                'Workload pattern': PATTERNS[m.pattern || ''].name,
                 'Series': SERIES(r.series),
                 // A size only where it is supported: a blocked option shows no size.
                 'Target size': o.supported ? o.targetSize : '',
@@ -144,7 +154,7 @@ export function targetRows(p, table, now = new Date()) {
                 'Target stage': o.targetStage ? o.targetStage.stage : '',
                 'Lifecycle change': has ? CHANGE[o.stageChange] : '',
                 'Suggested': r.isDefault.map((d) => (d === 'Current default' ? 'Current stage' : 'Extended stage')).join(', '),
-                'How to move': o.supported ? moveWords(r.series, o.rebuild, Boolean(m.vm.os)) : '',
+                'How to move': o.supported ? howToMove(m, r) : '',
                 'Ranked sizes': o.supported ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
                 'Rebuild': !has ? '' : !m.vm.os ? 'Not checked. This tool does not know the OS.' : o.rebuild ? 'Yes' : 'No',
                 'Premium SSD on target': !has ? '' : o.premiumDisks === null ? 'Not checked' : o.premiumDisks ? 'Yes' : 'No',
@@ -197,6 +207,13 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         'VMS',
         `  This tool read ${p.machines.length} ${p.machines.length === 1 ? 'VM' : 'VMs'}.`,
         ...Object.keys(GROUPS).map((g) => `  ${GROUPS[g].short}: ${counts(g)}`),
+        '',
+        'WORKLOAD PATTERNS',
+        '  Microsoft sorts workloads into seven patterns (A to G) for the move to v6 and v7.',
+        '  The pattern tells you how to move the VM.',
+        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name}: ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
+        `  Not checked: ${p.machines.filter((m) => !m.pattern).length}. ${PATTERNS[''].advice}`,
+        `  ${NOT_FOUND}`,
         '',
         'FILES',
         '  vm-summary.csv         One row for each VM. Start with this file.',

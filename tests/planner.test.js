@@ -294,3 +294,49 @@ test('a storage or backup appliance is a hard gate', async () => {
     assert.equal(F.groupOf(m), 'gate');
     assert.equal(m.short.v6, 'No - storage or backup appliance');
 });
+
+// ---- Workload patterns ----
+
+test('each VM gets the workload pattern of its signals', () => {
+    const p = run(sample).plan;
+    const expect = {
+        'contoso-aks-np1': 'A', 'contoso-vmss01': 'A', 'contoso-avd01': 'B', 'contoso-dbx01': 'C', 'contoso-api01': 'E',
+        'contoso-avd02': 'E', 'contoso-sql01': 'F', 'contoso-fc01': 'F', 'contoso-sap01': 'F', 'contoso-fw01': 'G', 'contoso-bkp01': 'G',
+    };
+    for (const [name, pattern] of Object.entries(expect)) assert.equal(byName(p, name).pattern, pattern, name);
+});
+
+test('a list without the pattern columns gives no pattern: unknown is not pattern E', () => {
+    const p = run(read('samples/contoso-every-series.csv')).plan;
+    assert.ok(p.machines.every((m) => m.pattern !== 'E'));
+    const rows = F.summaryRows(p);
+    assert.ok(rows.every((r) => r['Workload pattern'] === 'Not checked' || /^[A-G]\. /.test(r['Workload pattern'])));
+});
+
+test('an AVD session host with no host pool type is not checked, not pattern E', () => {
+    const head = 'Machine name,Current size,Generation,Scale set,Azure Virtual Desktop,SAP,Managed by,AVD host pool type,SQL Server,Shared disk';
+    const p = run(`${head}\ncontoso-vd1,Standard_D4s_v3,V2,No,Yes,No,None,,No,No\ncontoso-vd2,Standard_D4s_v3,V2,No,Yes,No,None,Personal,No,No\n`).plan;
+    assert.equal(byName(p, 'contoso-vd1').pattern, '');
+    assert.equal(byName(p, 'contoso-vd2').pattern, 'E');
+});
+
+test('a scale set without a generation: a Generation 2 image SKU tells, else not checked', () => {
+    const p = run(sample).plan;
+    const aks = byName(p, 'contoso-aks-np1');
+    assert.equal(aks.vm, null);
+    assert.deepEqual(aks.problems.map((x) => x.why), ['scale-set-generation-missing']);
+    assert.equal(F.groupOf(aks), 'unchecked');
+    const vmss = byName(p, 'contoso-vmss01');
+    assert.equal(vmss.vm.gen, 'V2');
+    assert.ok(vmss.notes.some((n) => n.includes('22_04-lts-gen2')));
+});
+
+test('for a pool or a service, the pattern says how to move', () => {
+    const p = run(sample).plan;
+    const rows = F.targetRows(p, table, NOW);
+    const dbx = rows.filter((r) => r['Machine'] === 'contoso-dbx01' && r['Supported'] === 'Yes');
+    assert.ok(dbx.length);
+    assert.ok(dbx.every((r) => r['How to move'].startsWith('A service')), 'not "resize the current VM"');
+    const api = rows.find((r) => r['Machine'] === 'contoso-api01' && r['Series'] === 'v5');
+    assert.ok(api['How to move'].startsWith('Resize the current VM'));
+});
