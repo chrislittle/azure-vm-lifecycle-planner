@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.5.0-beta';
-import seriesRules from '../data/series-rules.js?v=0.5.0-beta';
+import families from '../data/families.js?v=0.5.1-beta';
+import seriesRules from '../data/series-rules.js?v=0.5.1-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -762,6 +762,13 @@ function entryTarget(vm, table, targetGeneration, chosenSize, now) {
         diskArch = null;
         tempDisks = null;
     }
+    // The OS is not known: on Windows this move is a rebuild, which removes Azure
+    // Disk Encryption. Unknown is never a pass: a person must check (review, 2026-10-10).
+    if (path === 'A' && !vm.os && diskArch && vm.sourceDiskArch && !eqI(vm.sourceDiskArch, diskArch) && hasI(vm.blockers, 'disk-encryption-present')) {
+        blockers.push('os-unknown-encryption');
+        classification = 'Blocked';
+        path = 'MANUAL';
+    }
 
     const retiredScope = retiredScopeDetail(String(vm.sourceSize ?? ''), now);
     if ((retiredScope || hasI(blockers, 'size-retired')) && classification !== 'Excluded') {
@@ -836,7 +843,8 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         if (required === false) turnsOn = false;
         else if (required === true && primary !== null) turnsOn = !primary;
         else if (required === true && count !== null && count === 0) turnsOn = true;
-        else if (required === true && count !== null && nics === 1) turnsOn = false;
+        // On only when the list says the VM has exactly one NIC: an unknown count is not 1.
+        else if (required === true && count !== null && count >= 1 && vm.nicCount === 1) turnsOn = false;
         else turnsOn = null;
         option.acceleratedNetworking = { required, mayUseMana: targetMayUseMana(size), turnsOn };
         if (turnsOn === true) option.stops = ['acceleratedNetworkingRequired'];
@@ -947,6 +955,8 @@ export function burstableOption(vm, table, now = new Date()) {
     const rebuild = eqI(vm.os, 'Windows') && !eqI(vm.sourceDiskArch, targetArch);
     // A rebuild loses Azure Disk Encryption: refused, as on v5.
     if (rebuild && hasI(vm.blockers, 'disk-encryption-present')) { option.notSupported = ['disk-encryption-rebuild']; option.rebuild = true; return option; }
+    // The OS is not known, and on Windows this is a rebuild: a person must check.
+    if (!vm.os && !eqI(vm.sourceDiskArch, targetArch) && hasI(vm.blockers, 'disk-encryption-present')) { option.notSupported = ['os-unknown-encryption']; return option; }
     option.targetSize = best.size;
     option.path = rebuild ? 'B' : 'A';
     option.rebuild = rebuild;
@@ -992,10 +1002,17 @@ export function rankedSizes(vm, table, option, now = new Date()) {
         if (fam === 'D' && letters.includes('l')) candidates.push({ size: name('D', letters.replace('l', '')), why: 'more-memory' });
         else if (fam === 'D') candidates.push({ size: name('E', letters), why: 'more-memory' });
     }
+    const bestShape = skuShape(table.has(best) ? table.get(best) : null);
     for (const c of option.sizeChoices || []) {
         if (c.size === best) continue;
         // The burstable choices are the same shape on the other processor.
-        candidates.push({ size: c.size, why: option.option === 'burstable' ? 'processor' : 'other-shape' });
+        if (option.option === 'burstable') { candidates.push({ size: c.size, why: 'processor' }); continue; }
+        // Same vCPUs and memory in another family (for example Falsv6 for an F VM):
+        // say so, and say when the processor changes (review, 2026-10-10).
+        const shape = skuShape(table.has(c.size) ? table.get(c.size) : null);
+        const same = shape.vcpus !== null && shape.vcpus === bestShape.vcpus && shape.memoryGB === bestShape.memoryGB;
+        const why = !same ? 'other-shape' : sizeProcessor(c.size) !== sizeProcessor(best) ? 'processor' : 'same-shape';
+        candidates.push({ size: c.size, why });
     }
 
     const source = skuShape(table.has(vm.sourceSize) ? table.get(vm.sourceSize) : null);

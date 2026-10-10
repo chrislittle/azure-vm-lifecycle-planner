@@ -5,7 +5,8 @@
 
 // The columns, in the order the template and the query write them.
 export const COLUMNS = [
-    { name: 'Machine name', required: true },
+    // "Machine name" is the name in lists from 0.5.0-beta and earlier.
+    { name: 'VM name', required: true, aliases: ['Machine name'] },
     { name: 'Region' },
     { name: 'Current size', required: true },
     { name: 'Generation', required: true },
@@ -48,25 +49,35 @@ export const headerKey = (text) => String(text ?? '').toLowerCase().replace(/[^a
 // whichever the first line has more of. Quotes as in CSV. Empty rows skipped.
 export function parseTable(text) {
     text = String(text ?? '').replace(/^﻿/, '');
-    const firstLine = text.split(/\r?\n/, 1)[0] || '';
+    let firstLine = text.split(/\r?\n/, 1)[0] || '';
+    // Excel can write a first line "sep=," that names the delimiter.
+    const sep = /^sep=(.)\s*$/i.exec(firstLine);
+    let line = 1;
+    if (sep) { text = text.slice(firstLine.length).replace(/^\r?\n/, ''); line = 2; firstLine = text.split(/\r?\n/, 1)[0] || ''; }
     const count = (ch) => firstLine.split(ch).length - 1;
-    const delim = count('\t') > 0 ? '\t' : count(';') > count(',') ? ';' : ',';
+    const delim = sep ? sep[1] : count('\t') > 0 ? '\t' : count(';') > count(',') ? ';' : ',';
     const rows = [];
-    let row = [], cell = '', quoted = false;
+    // Each row keeps the line of the file where it starts, for the messages.
+    let row = [], cell = '', quoted = false, start = line;
+    const end = () => { row.line = start; rows.push(row); row = []; cell = ''; };
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (quoted) {
             if (ch === '"') {
                 if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false;
-            } else cell += ch;
-        } else if (ch === '"' && cell === '') quoted = true;
+            } else {
+                if (ch === '\n') line++;
+                cell += ch;
+            }
+        } else if (ch === '"' && cell.trim() === '') { cell = ''; quoted = true; }   // spaces before a quote do not count
         else if (ch === delim) { row.push(cell); cell = ''; }
         else if (ch === '\n' || ch === '\r') {
             if (ch === '\r' && text[i + 1] === '\n') i++;
-            row.push(cell); rows.push(row); row = []; cell = '';
+            row.push(cell); end();
+            line++; start = line;
         } else cell += ch;
     }
-    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    if (cell !== '' || row.length) { row.push(cell); end(); }
     return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
 }
 
@@ -80,7 +91,7 @@ export function readList(text) {
     const headers = all[0].map((h) => String(h).trim());
     const rows = all.slice(1);
     const map = {};
-    const known = new Map(COLUMNS.map((c) => [headerKey(c.name), c.name]));
+    const known = new Map(COLUMNS.flatMap((c) => [c.name, ...(c.aliases || [])].map((n) => [headerKey(n), c.name])));
     const unknown = [];
     headers.forEach((h, i) => {
         const column = known.get(headerKey(h));

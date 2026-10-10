@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.5.0-beta';
-import capacity from '../data/capacity.js?v=0.5.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.5.1-beta';
+import capacity from '../data/capacity.js?v=0.5.1-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.5.0-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.5.0-beta';
-import { patternOf } from './patterns.js?v=0.5.0-beta';
+} from './lifecycle.js?v=0.5.1-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.5.1-beta';
+import { patternOf } from './patterns.js?v=0.5.1-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -84,7 +84,18 @@ export function readSizeName(text, table) {
     }
     if (!/^(Standard|Basic)_[A-Za-z]+\d/.test(t)) return { size: null, note: null };
     if (table && table.has(t)) t = table.get(t).name;
+    else t = sizeCase(t);
     return { size: t, note };
+}
+
+// A size name in Azure's letter case, for a size that is not in the table (a
+// retired size, for example): the family in capitals, the letters after the number
+// in lower case, a version as v2. Same size, same answer, whatever the case.
+function sizeCase(name) {
+    const m = /^(Standard|Basic)_([A-Za-z]+)(\d+(?:-\d+)?)([A-Za-z]*)((?:_[A-Za-z0-9]+)*)$/.exec(name);
+    if (!m) return name;
+    const parts = m[5].split('_').filter((x) => x).map((x) => (/^v\d+$/i.test(x) ? x.toLowerCase() : x.toUpperCase()));
+    return `${m[1]}_${m[2].toUpperCase()}${m[3]}${m[4].toLowerCase()}${parts.map((x) => `_${x}`).join('')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,8 +122,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     const problems = [];
     const notes = [];
 
-    let name = cell('Machine name');
-    if (!name) { name = `(row ${rowNumber})`; problems.push({ what: 'Machine name', why: 'machine-name-empty' }); }
+    let name = cell('VM name');
+    if (!name) { name = `(row ${rowNumber})`; problems.push({ what: 'VM name', why: 'machine-name-empty' }); }
     const region = readRegion(cell('Region'));
 
     const sizeText = cell('Current size');
@@ -125,7 +136,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     if (securityText && !security) notes.push(`This tool cannot identify the security type '${securityText}'. It does not check it.`);
     // Trusted launch and confidential VMs run on Generation 2 only.
     const needsGen2 = security === 'TrustedLaunch' || security === 'ConfidentialVM';
-    const securityWords = security === 'TrustedLaunch' ? 'Trusted Launch' : 'a confidential VM';
+    const securityWords = security === 'TrustedLaunch' ? 'Trusted launch' : 'a confidential VM';
 
     // The facts the query adds, and the workload pattern: also for a row that
     // cannot be planned, because the pattern says how to move it.
@@ -143,8 +154,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     } else if (!gen && gen2Image) {
         gen = 'V2';
         notes.push(`The generation is empty. The image SKU '${extra.imageSku}' is a Generation 2 image, so this tool uses Generation 2.`);
-    } else if (!gen && (pattern === 'C' || (pattern === 'A' && /^(aks|aro)$/i.test(extra.managedBy || '')))) {
-        // A service (AKS, ARO, Databricks) makes the new nodes from its own image:
+    } else if (!gen && /^(aks|aro|databricks)$/i.test(extra.managedBy || '') && (pattern === 'A' || pattern === 'C')) {
+        // A known service (AKS, ARO, Databricks) makes the new nodes from its own image:
         // the generation of the current nodes does not change the move (owner,
         // 2026-10-10). The sizes are for Generation 2, as on every v6 and v7 size.
         gen = 'V2';
@@ -302,7 +313,10 @@ export const BY_DESIGN = [
     'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor',
 ];
 // The logic could not judge these: a person must.
-const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone'];
+// not-in-region: no size with the same name. Another size of the series can fit
+// (for example E16-4s_v3 on v7: no E16-4s_v7, but E16s_v7 and E16-4as_v7), so this
+// is not a "no" (review, 2026-10-10).
+const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone', 'not-in-region', 'os-unknown-encryption'];
 // Codes that are a plain fact (no fitting size), with the label for the review list.
 export const FACT_LABELS = {
     'not-in-region': 'New size not in the size table', 'family-not-in-region': 'No size of this family in the size table',
@@ -310,6 +324,7 @@ export const FACT_LABELS = {
     'smaller-than-source': 'New size smaller than the current size', 'shape-unknown': 'vCPUs and memory not known',
     'processor-unreadable': 'Processor type not known', 'gen1-no-size': 'No size takes Generation 1', 'mapped-unverified': 'New size not in the size table',
     'disk-encryption-rebuild': 'Rebuild with Azure Disk Encryption',
+    'os-unknown-encryption': 'OS not known, with Azure Disk Encryption',
     'no-burstable-fit': 'No burstable size of this shape',
 };
 

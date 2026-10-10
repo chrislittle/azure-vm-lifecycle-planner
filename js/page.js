@@ -2,22 +2,22 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.5.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.5.0-beta';
-import capacity from '../data/capacity.js?v=0.5.0-beta';
-import nvme from '../data/nvme-images.js?v=0.5.0-beta';
-import query from './query.js?v=0.5.0-beta';
-import sample from './sample.js?v=0.5.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.5.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.5.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.5.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.5.0-beta';
-import { gateReasons, seriesList, todo } from './details.js?v=0.5.0-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.5.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.5.0-beta';
-import * as F from './files.js?v=0.5.0-beta';
-import { makeZip } from './zip.js?v=0.5.0-beta';
-import version from './version.js?v=0.5.0-beta';
+import sizes from '../data/sizes.js?v=0.5.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.5.1-beta';
+import capacity from '../data/capacity.js?v=0.5.1-beta';
+import nvme from '../data/nvme-images.js?v=0.5.1-beta';
+import query from './query.js?v=0.5.1-beta';
+import sample from './sample.js?v=0.5.1-beta';
+import { SizeTable } from './lifecycle.js?v=0.5.1-beta';
+import { COLUMNS, readList } from './input.js?v=0.5.1-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.5.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.5.1-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.5.1-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.5.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.5.1-beta';
+import * as F from './files.js?v=0.5.1-beta';
+import { makeZip } from './zip.js?v=0.5.1-beta';
+import version from './version.js?v=0.5.1-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -38,6 +38,17 @@ function el(tag, attrs = {}, ...children) {
     return e;
 }
 
+// The tool runs only in its own tab, never inside another site's page: another
+// site could put its own controls over this page (review, 2026-10-10). A meta
+// Content-Security-Policy cannot set frame-ancestors, so the page checks itself.
+if (window.top !== window.self) {
+    document.body.replaceChildren(el('main', { class: 'wrap' },
+        el('h1', { text: 'VM Lifecycle Planner for Azure' }),
+        el('p', { text: 'This tool runs only in its own browser tab. Open it from its own address: ' }),
+        el('p', { text: String(document.location.href).split('#')[0] })));
+    throw new Error('This tool does not run inside another page.');
+}
+
 // ---------------------------------------------------------------------------
 // Step 1: the query
 // ---------------------------------------------------------------------------
@@ -52,7 +63,7 @@ $('copy-query').addEventListener('click', async () => {
         // Clipboard not allowed: select the text so it can be copied by hand.
         const r = document.createRange(); r.selectNodeContents($('query'));
         const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-        b.textContent = 'Push Ctrl+C';
+        b.textContent = 'Press Ctrl+C (Cmd+C on a Mac)';
     }
     setTimeout(() => { b.textContent = 'Copy query'; }, 2500);
 });
@@ -115,14 +126,14 @@ function run() {
     // Let the message paint before the work starts.
     setTimeout(() => {
         const now = new Date();
-        const machines = list.rows.map((r, i) => toMachine(r, list.map, i + 2, table, now));
+        const machines = list.rows.map((r, i) => toMachine(r, list.map, r.line ?? i + 2, table, now));
         current = { list, plan: plan(machines, table, now), now };
         const msgs = [message('ok', `This tool made the results for ${vms(machines.length)} in your browser. It sent no data.`)];
         if (list.notes.length) msgs.push(message('note', 'Note:', list.notes));
         const missing = COLUMNS.map((c) => c.name).filter((c) => !(c in list.map));
         if (missing.length) msgs.push(message('note', 'Your list does not have all the columns that the Azure Resource Graph query in step 1 gives.', [
             `Columns not in your list: ${missing.join(', ')}.`,
-            'For these facts, the notes show "Check:".',
+            'The details of each VM show these facts under "To check".',
             'To get all the facts, run the query in step 1 and load its CSV file.',
         ]));
         box.replaceChildren(...msgs);
@@ -277,30 +288,8 @@ function details(m) {
     section('What to do', el('p', { class: 'todo', text: t.main }), ...t.more.filter((x) => x).map((x) => el('p', { class: 'todo-sub', text: x })));
 
     // Why.
-    const why = [];
-    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm.sourceSize)));
-    if (!m.vm) why.push(...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })));
-    if (g === 'gate') why.push(...gateReasons(m));
-    // No supported size: the reasons go here, each once, not in size cards.
+    const why = whyLines(m, g, table, now);
     const noSize = g === 'nopath';
-    if (noSize) {
-        // The sentences that every series gives show once; then what is left for
-        // each series, with the series that give the same words.
-        const split = (text) => text.split(/(?<=\.)\s+(?=[A-Z])/);
-        const series = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => ({ name: r.series === 'burstable' ? 'Burstable' : r.series, sentences: split(optionReason(r, table, now)) }));
-        const common = series.length ? series[0].sentences.filter((x) => series.every((r) => r.sentences.includes(x))) : [];
-        if (common.length) why.push(common.join(' '));
-        const rest = new Map();
-        for (const r of series) {
-            const text = r.sentences.filter((x) => !common.includes(x)).join(' ');
-            if (!text) continue;
-            if (!rest.has(text)) rest.set(text, []);
-            rest.get(text).push(r.name);
-        }
-        for (const [text, names] of rest) why.push(`${seriesList(names)}: ${text}`);
-        const gen1 = m.rows.find((r) => r.series === 'gen1Route');
-        if (gen1) why.push(`Generation 1 to 2: ${optionReason(gen1, table, now)}`);
-    }
     if (why.length) section('Why', ...why.map((w) => el('p', { class: 'why', text: w })));
     if (m.vm && (g === 'gate' || g === 'nopath')) {
         box.append(el('p', { class: 'hint' }, 'Microsoft guidance: ', el('a', { href: GUIDANCE.endOfLife, target: '_blank', rel: 'noopener noreferrer', text: 'End of Life sizes' }), ', ',

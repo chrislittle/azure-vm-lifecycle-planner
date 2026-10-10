@@ -669,6 +669,36 @@ for each VM that needs a move (the page's order), notes and sources. The "What t
 words moved to js/details.js, so the page and the report say the same. The CSV files
 stay for Excel. Owner approved a mockup first.
 
+## 0.5.1-beta (2026-10-10): fixes from a review of the whole repo
+
+Three review agents (logic, privacy and security, customer text); each finding was
+checked by running code before a fix. Owner: fix them all.
+- **Wrong answers fixed:** RHEL 10 and Oracle Linux 10 read as 1.0 (false NVMe fail; now
+  "check"); no size with the same name (E16-4s_v3 on v7) said "No size fits" (now "Not
+  checked": other sizes can change the processor or active vCPUs); an unknown OS with
+  Azure Disk Encryption said "Resize" (now "Not checked"); the report had no reason for
+  vendor approval or no size (the page's "Why" is now shared); "Do the steps in Before
+  the move" with only facts to check (now says which); the query read no disk encryption,
+  SAP or unmanaged disks for scale sets (now from the scale set model; the field path
+  proved from saved build data); a size in lower case gave another answer.
+- **Security:** CSV cells that start with = + - @ get a ' (Excel formula guard); the report
+  has its own Content-Security-Policy; the workflow gives write access only to the publish
+  job and keeps no credentials; the page will not run inside another site's frame; more
+  "no network" test patterns; a test that only all-zero GUIDs (and the public NVA policy
+  ID) are in the repo; js/query.js and js/sample.js are readable (tools/copy-files.mjs).
+- **Text:** Azure Disk Encryption retires on 15 September 2028 and the move to
+  encryption at host makes new disks and a new VM (Microsoft's migration page); the
+  availability set note differs for a resize and a new VM; ephemeral OS disk; "Check:"
+  wording; "VM name" everywhere ("Machine name" still read); "Result group", "Series
+  result", "Needs review"; "delete the old VM"; "Trusted launch"; "Generation 2"; the
+  F-series table; same-shape sizes in another family are labelled as such.
+- **Small:** Excel's sep= line, spaces before a quote, row numbers are file lines, an
+  unknown NIC count is not one NIC, the generation is skipped only for AKS, ARO and
+  Databricks.
+- **Checked and not changed:** v5 Intel D and E sizes do require accelerated networking
+  (Microsoft's Ddsv5 page); the query runs at tenant scope (run many times); "Azure
+  approves no more quota" matches Microsoft's page.
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the

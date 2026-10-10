@@ -65,7 +65,10 @@ Resources
     hibernation = anyif(tobool(properties.additionalCapabilities.hibernationEnabled), (isVm) and tolower(id) == key),
     scaleSet = anyif(tostring(properties.virtualMachineScaleSet.id), (isVm) and tolower(id) == key),
     licenseType = anyif(tostring(vmp.licenseType), (isVm or isVmss) and tolower(id) == key),
-    osDiskVhd = anyif(tostring(vmp.storageProfile.osDisk.vhd.uri), (isVm or isVmss) and tolower(id) == key),
+    // A scale set keeps unmanaged OS disks in vhdContainers, not vhd.uri.
+    osDiskVhd = anyif(iff(isVmss, iff(array_length(vmp.storageProfile.osDisk.vhdContainers) > 0, 'vhd', ''), tostring(vmp.storageProfile.osDisk.vhd.uri)), (isVm or isVmss) and tolower(id) == key),
+    // A scale set's extensions are in its model, not separate resources.
+    vmssExtensions = anyif(tostring(vmp.extensionProfile.extensions), isVmss and tolower(id) == key),
     dataDisks = anyif(tostring(vmp.storageProfile.dataDisks), (isVm or isVmss) and tolower(id) == key),
     osDiskOption = anyif(tostring(vmp.storageProfile.osDisk.diffDiskSettings.option), (isVm or isVmss) and tolower(id) == key),
     identityType = anyif(tostring(identity.type), (isVm or isVmss) and tolower(id) == key),
@@ -109,6 +112,7 @@ Resources
     scaleSet = take_anyif(scaleSet, self == 1),
     licenseType = take_anyif(licenseType, self == 1),
     osDiskVhd = take_anyif(osDiskVhd, self == 1),
+    vmssExtensions = take_anyif(vmssExtensions, self == 1),
     dataDisks = take_anyif(dataDisks, self == 1),
     osDiskOption = take_anyif(osDiskOption, self == 1),
     identityType = take_anyif(identityType, self == 1),
@@ -138,7 +142,7 @@ Resources
   ) on rgKey
 | extend managedByType = tostring(split(managedBy, '/providers/')[1])
 | project
-    ['Machine name'] = name,
+    ['VM name'] = name,
     Region = location,
     ['Current size'] = size,
     Generation = generation,
@@ -153,13 +157,15 @@ Resources
     // Blank when a NIC could not be read: unknown, never "off".
     ['Accelerated NICs'] = case(isVmss == 1, tostring(vmssAcceleratedNics), nicsRead == nicCount, tostring(acceleratedNics), ''),
     ['Primary NIC accelerated'] = case(isVmss == 1, '', nicsRead == nicCount, iff(primaryAccelerated > 0, 'Yes', 'No'), ''),
-    ['Azure Disk Encryption'] = iff(adeExtension > 0 or adeOsDisk =~ 'true', 'Yes', 'No'),
+    ['Azure Disk Encryption'] = iff(adeExtension > 0 or adeOsDisk =~ 'true'
+        or vmssExtensions matches regex @'"type":"AzureDiskEncryption(ForLinux)?"', 'Yes', 'No'),
     Hibernation = iff(hibernation == true, 'Yes', 'No'),
     ['Scale set'] = iff(isVmss == 1 or isnotempty(scaleSet), 'Yes', 'No'),
     ['Azure Virtual Desktop'] = iff(isnotempty(hostPoolId), 'Yes', 'No'),
     // SAP: the extension for SAP solutions, a licence type that puts the machine on SAP
     // repositories, or an SAP marketplace image (Microsoft's Azure Hybrid Benefit page).
     SAP = iff(sapExtension > 0
+              or vmssExtensions matches regex @'"type":"(MonitorX64Linux|MonitorX64Windows|AzureEnhancedMonitorForLinux)"'
               or licenseType in~ ('RHEL_SAPAPPS', 'RHEL_SAPHA', 'RHEL_BASESAPAPPS', 'RHEL_BASESAPHA', 'SLES_SAP')
               or (imagePublisher =~ 'RedHat' and imageOffer in~ ('rhel-sap-apps', 'rhel-sap-ha'))
               or (imagePublisher =~ 'SUSE' and tolower(imageOffer) startswith 'sles-sap'), 'Yes', 'No'),
@@ -183,4 +189,4 @@ Resources
     ['Shared disk'] = iff(sharedDisk > 0, 'Yes', 'No'),
     // Azure's unique key: two VMs can have the same name in other groups or subscriptions.
     ['Resource ID'] = rid
-| order by ['Machine name'] asc
+| order by ['VM name'] asc

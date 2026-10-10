@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.5.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.5.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -41,7 +41,7 @@ For each VM:
   |---|---|
   | Modern size - no move needed | Microsoft fully supports the current size. |
   | Move needed - ready | A supported size is available, and there is no action to do first. |
-  | Move needed - do this first | A supported size is available. Do the steps in "Before the move" first. |
+  | Move needed - do this first | A supported size is available. First, do the steps in "Before the move", or check the facts in "To check". |
   | Move needed - change in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
   | Move needed - vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
   | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
@@ -119,8 +119,9 @@ browser:
 
 - There is no server. GitHub Pages sends the page as plain HTML, CSS and JavaScript.
   There is no build step, no minified code and no code from other sites.
-- A Content-Security-Policy in [index.html](index.html) stops all network requests
-  (`connect-src 'none'`). The page cannot send your list anywhere.
+- A Content-Security-Policy in [index.html](index.html) stops scripts from other sites,
+  and it stops the page when it tries to send data to a server (`connect-src 'none'`). The code of
+  the page has no other way to send data. Anyone can read the code to make sure.
 - The tool does not keep your list. When you close the tab, the list is gone.
 - Your browser makes the results files. The download saves them on your computer.
 
@@ -129,10 +130,12 @@ browser:
 1. Open the tool.
 2. Open the developer tools of your browser (F12). Select the **Network** tab.
 3. Load your list and show the results.
-4. Look at the Network tab. The page sends no request.
+4. Look at the Network tab. The page sends no request when it reads the list or makes
+   the results. (A link that you select, for example to the template or to Microsoft
+   documentation, opens a page as usual.)
 
 You can also disconnect from the internet after the page opens. The tool continues to
-work.
+work in that open tab. (It does not load again while you are offline.)
 
 ## What the tool does not check
 
@@ -175,6 +178,9 @@ generation only, for example "Standard_D4s_v3, Generation 2".
 - Local preview: `python -m http.server 8000` in this folder, then open
   http://localhost:8000/. The page does not work from a `file://` address, because
   browsers do not load modules from files.
+- After a change to `query.kql` or `samples/contoso-from-azure.csv`: `node tools/copy-files.mjs`.
+  The page cannot read files over the network, so `js/query.js` and `js/sample.js` hold
+  the same text. A test checks that they match.
 - New release: `node tools/set-version.mjs <version>`. This puts the version on each
   link from the page to its own files, so a browser does not mix old and new files.
 

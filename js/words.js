@@ -4,14 +4,6 @@
 // All customer text follows ASD-STE100 Simplified Technical English (owner,
 // 2026-10-09): short sentences, one idea in each, active voice, no contractions.
 
-// The headline result for a machine.
-export const OUTCOME = {
-    'No move required': 'No move needed. Microsoft supports this size.',
-    'Must move - supported target': 'Move needed. The table shows the supported sizes.',
-    'Must move - outside the scope of this tool': 'Move needed. This tool has no size to suggest. See the reason.',
-    'Needs team review': 'Not checked. This tool cannot read this VM or its size.',
-};
-
 // The result groups, in Microsoft's terms where Microsoft has them (lifecycle
 // overview: "modern sizes"; v6/v7 Assess page: "hard gates", "readiness
 // signals"). Peer feedback (2026-10-09): ready and "do this first" apart, and a
@@ -19,7 +11,7 @@ export const OUTCOME = {
 export const GROUPS = {
     modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
     ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and there is nothing to do first.' },
-    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. Do the steps in "Before the move" first.' },
+    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. First, do the steps in "Before the move", or check the facts in "To check".' },
     // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).
     pool: { short: 'Move needed - change in the service or pool', long: 'Move needed. Change the size in the service or the pool, not on this VM.' },
@@ -37,6 +29,7 @@ export function rankWords(why, processor) {
         'temp-disk-removed': 'Same shape, no temporary disk',
         'temp-disk-added': 'Same shape, with a temporary disk',
         'more-memory': 'More memory for each vCPU',
+        'same-shape': 'Same shape, other family',
         'other-shape': 'Other shape that fits',
     }[why] || why;
 }
@@ -48,7 +41,7 @@ export const PROCESSOR_NOTE = '* A processor change. Test the application, and c
 // (v6/v7 FAQ and Plan page).
 export function moveWords(series, rebuild, osKnown) {
     if (series === 'v6' || series === 'v7') {
-        return 'Deploy a new VM at this size in parallel, move the workload, then retire the old VM. Microsoft highly recommends this for v6 and v7. An in-place upgrade is possible, but it has more steps and more risk.';
+        return 'Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.';
     }
     if (rebuild) return 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
     if (!osKnown) return 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.';
@@ -100,15 +93,7 @@ export function poolAdvice(m) {
 }
 
 // What this tool cannot find. The customer must look for these.
-export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers and NoSQL or search clusters (move one VM at a time), and self-hosted CI agents on single VMs. It also cannot find compute that is not in your subscription, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
-
-// A short label for counts and filters.
-export const OUTCOME_SHORT = {
-    'No move required': 'No move needed',
-    'Must move - supported target': 'Move needed',
-    'Must move - outside the scope of this tool': 'Move needed - no suggestion',
-    'Needs team review': 'Not checked',
-};
+export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers and NoSQL or search clusters (move one VM at a time), and self-hosted CI agents on single VMs. It also cannot find compute that is not in the VM list, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -211,4 +196,5 @@ export const GUIDANCE = {
     lifecycle: 'https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/lifecycle-overview',
     endOfLife: 'https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/end-of-life-sizes-list',
     retirements: 'https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions',
+    diskEncryption: 'https://learn.microsoft.com/azure/virtual-machines/disk-encryption-migrate',
 };
