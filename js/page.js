@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.5-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.5-beta';
-import capacity from '../data/capacity.js?v=0.4.5-beta';
-import nvme from '../data/nvme-images.js?v=0.4.5-beta';
-import query from './query.js?v=0.4.5-beta';
-import sample from './sample.js?v=0.4.5-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.5-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.5-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.5-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.5-beta';
-import * as F from './files.js?v=0.4.5-beta';
-import { makeZip } from './zip.js?v=0.4.5-beta';
-import version from './version.js?v=0.4.5-beta';
+import sizes from '../data/sizes.js?v=0.4.6-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.6-beta';
+import capacity from '../data/capacity.js?v=0.4.6-beta';
+import nvme from '../data/nvme-images.js?v=0.4.6-beta';
+import query from './query.js?v=0.4.6-beta';
+import sample from './sample.js?v=0.4.6-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.6-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.6-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.6-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.6-beta';
+import * as F from './files.js?v=0.4.6-beta';
+import { makeZip } from './zip.js?v=0.4.6-beta';
+import version from './version.js?v=0.4.6-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -189,9 +189,13 @@ function renderTable() {
     const rows = p.machines.filter((m) => {
         if (filter !== 'all' && F.groupOf(m) !== filter) return false;
         if (patternFilter !== 'all' && (m.pattern || '') !== patternFilter) return false;
-        if (q && !`${m.read.name} ${m.read.size || m.read.sizeAsWritten}`.toLowerCase().includes(q)) return false;
+        if (q && !`${m.read.name} ${m.read.size || m.read.sizeAsWritten} ${m.read.resourceId || ''}`.toLowerCase().includes(q)) return false;
         return true;
     });
+    // Names that are in the list more than once: only those rows say where the VM is.
+    const seen = new Map();
+    for (const m of p.machines) { const k = m.read.name.toLowerCase(); seen.set(k, (seen.get(k) || 0) + 1); }
+    const twins = new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
     const tbody = $('table').tBodies[0];
     tbody.replaceChildren();
     for (const m of rows.slice(0, limit)) {
@@ -203,7 +207,9 @@ function renderTable() {
         };
         const g = F.groupOf(m);
         tr.append(
-            el('td', { class: 'vm' }, el('span', { class: 'name', text: m.read.name }), el('span', { class: 'sub', text: vmSub(m) })),
+            el('td', { class: 'vm' }, el('span', { class: 'name', text: m.read.name }),
+                twins.has(m.read.name.toLowerCase()) ? el('span', { class: 'sub where', text: whereWords(m, p.machines) }) : null,
+                el('span', { class: 'sub', text: vmSub(m) })),
             el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
             stageCell(m),
             el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
@@ -223,6 +229,17 @@ function renderTable() {
     }
     $('shown').textContent = rows.length === p.machines.length ? '' : `The table shows ${rows.length} of ${vms(p.machines.length)}.`;
     $('more').hidden = rows.length <= limit;
+}
+
+// For a VM whose name is in the list more than once: what tells it apart. The
+// resource group, else the subscription, else the region, else the row.
+function whereWords(m, all) {
+    const same = all.filter((x) => x !== m && x.read.name.toLowerCase() === m.read.name.toLowerCase());
+    const r = m.read;
+    if (r.resourceGroup && same.every((x) => (x.read.resourceGroup || '').toLowerCase() !== r.resourceGroup.toLowerCase())) return r.resourceGroup;
+    if (r.subscriptionId && same.every((x) => x.read.subscriptionId !== r.subscriptionId)) return `Subscription ${r.subscriptionId}`;
+    if (r.region && same.every((x) => x.read.region !== r.region)) return r.region;
+    return `Row ${r.row} of the list`;
 }
 
 // Under the VM name: a scale set and its instances, and the workload type.
@@ -250,6 +267,8 @@ function details(m) {
     const g = F.groupOf(m);
     const section = (title, ...content) => box.append(el('h4', { class: 'sec', text: title }), ...content);
     const pool = POOL_PATTERNS.includes(m.pattern);
+
+    if (m.read.resourceId) box.append(el('p', { class: 'hint rid', text: `Resource ID: ${m.read.resourceId}` }));
 
     // What to do.
     const t = todo(m, g);

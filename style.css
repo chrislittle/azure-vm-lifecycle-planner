@@ -182,7 +182,9 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 .series .no { color: var(--muted); }
 /* The details of a VM: what to do, why, sizes, then the notes. */
 .d h4.sec { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.d h4.sec:first-child { margin-top: 0; }
+.d h4.sec:first-child, .d .rid + h4.sec { margin-top: 0; }
+.d .rid { margin: 0 0 10px; overflow-wrap: anywhere; user-select: all; }
+td.vm .sub.where { color: var(--text); }
 .d .todo { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
 .d .todo-sub, .d .why { margin: 0 0 4px; }
 .d .none { color: var(--muted); margin: 0; }

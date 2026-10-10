@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.4.5-beta';
-import families from '../data/families.js?v=0.4.5-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.5-beta';
-import capacity from '../data/capacity.js?v=0.4.5-beta';
-import nvme from '../data/nvme-images.js?v=0.4.5-beta';
-import { capacityRestricted } from './planner.js?v=0.4.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.5-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.5-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.5-beta';
+import sizes from '../data/sizes.js?v=0.4.6-beta';
+import families from '../data/families.js?v=0.4.6-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.6-beta';
+import capacity from '../data/capacity.js?v=0.4.6-beta';
+import nvme from '../data/nvme-images.js?v=0.4.6-beta';
+import { capacityRestricted } from './planner.js?v=0.4.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.6-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.6-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.6-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -37,6 +37,9 @@ function base(m) {
     return {
         'Machine': r.name,
         'Region': r.region || '',
+        'Subscription ID': r.subscriptionId || '',
+        'Resource group': r.resourceGroup || '',
+        'Resource ID': r.resourceId || '',
         'Current size': r.size || r.sizeAsWritten,
         'Generation': r.generation ? r.generation.replace('V', 'Gen') : r.generationAsWritten,
         'OS': r.os || 'Not checked',
@@ -131,8 +134,8 @@ function stageText(m) {
     return m.stage ? stageWords(m.stage, capacityRestricted(m.vm.sourceSize)) : '';
 }
 
-export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Not checked', 'Notes'];
+export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
+    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Not checked', 'Notes', 'Resource ID'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -152,9 +155,9 @@ export function summaryRows(p) {
     }));
 }
 
-export const TARGET_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
+export const TARGET_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
     'Workload type', 'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
-    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes'];
+    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
@@ -196,19 +199,20 @@ export function targetRows(p, table, now = new Date()) {
     return out;
 }
 
-export const NOT_CHECKED_COLUMNS = ['Machine', 'Region', 'Current size', 'Series', 'What', 'Why'];
+export const NOT_CHECKED_COLUMNS = ['Machine', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Series', 'What', 'Why', 'Resource ID'];
 
 export function notCheckedRows(p, table, now = new Date()) {
-    const byName = new Map(p.machines.map((m) => [m.read.name, m]));
+    // By row, not by name: two VMs can have the same name.
+    const byRow = new Map(p.machines.map((m) => [m.read.row, m]));
     return p.review.map((r) => {
-        const m = byName.get(r.machine);
+        const m = byRow.get(r.row);
         const vm = m && m.vm;
         const row = m && m.rows.find((x) => SERIES(x.series) === r.series || x.series === r.series);
         const why = r.why.split(' ').map((code) => {
             const problem = m && m.problems.find((pr) => pr.why === code);
             return reasonFor(code, { vm, series: row ? row.series : '', table, now, option: row ? row.option : null, stage: m && m.stage, problem });
         }).join(' ');
-        return { 'Machine': r.machine, 'Region': r.region, 'Current size': r.size, 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
+        return { 'Machine': r.machine, 'Region': r.region, 'Subscription ID': m ? m.read.subscriptionId : '', 'Resource group': m ? m.read.resourceGroup : '', 'Resource ID': m ? m.read.resourceId : '', 'Current size': r.size, 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
     });
 }
 
