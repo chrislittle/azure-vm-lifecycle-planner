@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.3.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.3.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -64,22 +64,22 @@ For each VM:
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
   Microsoft list. An appliance is a hard gate: ask the vendor which sizes they certify.
 
-- The workload pattern (A to G). Microsoft sorts workloads into seven patterns for the
-  move to v6 and v7. The pattern tells you how to move the VM:
+- The workload type. It tells you how to move the VM. The types are the workload
+  patterns A to G in the Microsoft guide for the move to v6 and v7:
 
-  | Pattern | How the tool finds it | How to move |
+  | Workload type | How the tool finds it | How to move |
   |---|---|---|
-  | A. Compute pool | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
-  | B. Image-based desktop | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
-  | C. Service-managed compute | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
-  | D. Cluster re-creation | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
-  | E. Customer-managed VM | Every other VM, AVD personal desktops included | Use the move for each series. |
-  | F. Stateful or clustered | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
-  | G. ISV appliance | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
+  | Node pool or scale set (A) | AKS, Azure Red Hat OpenShift, a scale set | Add a new node pool or scale set at the new size. Then remove the old one. |
+  | Pooled AVD host (B) | An AVD session host in a pooled host pool | Make new session hosts from the image. Then remove the old hosts. |
+  | Managed by a service (C) | A resource group that a service manages, for example Azure Databricks | Change the node type or size in the service. |
+  | Cluster in a service (D) | Not in the VM list (for example Azure Machine Learning, HDInsight) | Make a new cluster at the new size. |
+  | Standalone VM (E) | Every other VM, AVD personal desktops included | Use the move for each series. |
+  | Cluster or database (F) | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
+  | Vendor appliance (G) | A network virtual appliance, or a storage or backup appliance | A hard gate. Ask the vendor. |
 
   The tool cannot find domain controllers, self-hosted CI agents on single VMs, or
-  NoSQL and search clusters. Look for them yourself. A list without the pattern
-  columns (from an earlier query, or made by hand) shows "Pattern not checked".
+  NoSQL and search clusters. Look for them yourself. A list without these
+  columns (from an earlier query, or made by hand) shows "Type not checked".
   [docs/workload-patterns.md](docs/workload-patterns.md) gives the signal for each
   pattern, and how a test build proved it.
 

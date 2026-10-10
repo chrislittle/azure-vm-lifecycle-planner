@@ -4,15 +4,15 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.3.0-beta';
-import families from '../data/families.js?v=0.3.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.3.0-beta';
-import capacity from '../data/capacity.js?v=0.3.0-beta';
-import nvme from '../data/nvme-images.js?v=0.3.0-beta';
-import { capacityRestricted } from './planner.js?v=0.3.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.3.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.3.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.3.0-beta';
+import sizes from '../data/sizes.js?v=0.3.1-beta';
+import families from '../data/families.js?v=0.3.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.3.1-beta';
+import capacity from '../data/capacity.js?v=0.3.1-beta';
+import nvme from '../data/nvme-images.js?v=0.3.1-beta';
+import { capacityRestricted } from './planner.js?v=0.3.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.3.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.3.1-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.3.1-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -105,7 +105,7 @@ function stageText(m) {
 }
 
 export const SUMMARY_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result', 'Workload pattern', 'Pattern advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
+    'Result', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Readiness signals', 'Attention', 'To check', 'Not checked', 'Notes'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -113,8 +113,8 @@ export function summaryRows(p) {
         'Current stage': stageText(m),
         'Move needed': MOVE_NEEDED[m.moveRequired],
         'Result': GROUPS[groupOf(m)].short,
-        'Workload pattern': PATTERNS[m.pattern || ''].name,
-        'Pattern advice': PATTERNS[m.pattern || ''].advice,
+        'Workload type': PATTERNS[m.pattern || ''].name,
+        'Workload type advice': PATTERNS[m.pattern || ''].advice,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
         'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
         'Readiness signals': warnings(m).join('; '),
@@ -126,14 +126,14 @@ export function summaryRows(p) {
 }
 
 export const TARGET_COLUMNS = ['Machine', 'Region', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Workload pattern', 'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
+    'Workload type', 'Series', 'Target size', 'Result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
     'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
     for (const m of p.machines) {
         if (!m.vm) {
-            out.push({ ...base(m), 'Workload pattern': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Result': 'Not checked', 'Supported': 'Not checked',
+            out.push({ ...base(m), 'Workload type': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Result': 'Not checked', 'Supported': 'Not checked',
                 'Reason': m.problems.map((pr) => reasonFor(pr.why, { problem: pr })).join(' '), 'Notes': m.notes.join('; ') });
             continue;
         }
@@ -144,7 +144,7 @@ export function targetRows(p, table, now = new Date()) {
                 ...base(m),
                 'Current stage': stageText(m),
                 'Move needed': MOVE_NEEDED[m.moveRequired],
-                'Workload pattern': PATTERNS[m.pattern || ''].name,
+                'Workload type': PATTERNS[m.pattern || ''].name,
                 'Series': SERIES(r.series),
                 // A size only where it is supported: a blocked option shows no size.
                 'Target size': o.supported ? o.targetSize : '',
@@ -208,11 +208,11 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `  This tool read ${p.machines.length} ${p.machines.length === 1 ? 'VM' : 'VMs'}.`,
         ...Object.keys(GROUPS).map((g) => `  ${GROUPS[g].short}: ${counts(g)}`),
         '',
-        'WORKLOAD PATTERNS',
-        '  Microsoft sorts workloads into seven patterns (A to G) for the move to v6 and v7.',
-        '  The pattern tells you how to move the VM.',
-        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name}: ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
-        `  Not checked: ${p.machines.filter((m) => !m.pattern).length}. ${PATTERNS[''].advice}`,
+        'WORKLOAD TYPES',
+        '  The workload type tells you how to move the VM.',
+        '  The types are the workload patterns A to G in the Microsoft guide for the move to v6 and v7.',
+        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name} (pattern ${k}): ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
+        `  ${PATTERNS[''].name}: ${p.machines.filter((m) => !m.pattern).length}. ${PATTERNS[''].advice}`,
         `  ${NOT_FOUND}`,
         '',
         'FILES',

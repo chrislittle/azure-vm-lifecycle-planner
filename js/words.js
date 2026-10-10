@@ -54,22 +54,23 @@ export function moveWords(series, rebuild, osKnown) {
 // Microsoft's workload patterns (v6/v7 modernization guide, "Discover"). The
 // advice: A to D - replace the pool, or change the size in the service; E and F -
 // resize v5 in place, deploy v6 and v7 in parallel; F one node at a time; G - a
-// hard gate (owner, 2026-10-10).
+// hard gate (owner, 2026-10-10). The page shows plain names, not the letters
+// (owner, 2026-10-10: a quick user does not know what "pattern A" means).
 export const PATTERNS = {
-    A: { name: 'A. Compute pool', advice: 'This VM is part of a pool (AKS, Azure Red Hat OpenShift or a scale set). Do not change the size of each VM. Add a new node pool or scale set at the new size, move the workload to it, then remove the old one.' },
-    B: { name: 'B. Image-based desktop', advice: 'This VM is a session host in a pooled Azure Virtual Desktop host pool. Do not change the size of the host. Make new session hosts at the new size from the image. Move the users to them, then remove the old hosts.' },
-    C: { name: 'C. Service-managed compute', advice: 'A service (for example Azure Databricks) manages this VM. Do not change the VM. Change the node type or size in the service.' },
-    D: { name: 'D. Cluster re-creation', advice: 'Make a new cluster at the new size in the service. Then remove the old cluster.' },
-    E: { name: 'E. Customer-managed VM', advice: 'You manage this VM. Use the move that this tool gives for each series.' },
-    F: { name: 'F. Stateful or clustered', advice: 'This VM holds state or is part of a cluster (SQL Server, a failover cluster or SAP). Move one node at a time. First move the role away from the node (fail over or drain). For v5, resize the node. For v6 and v7, add a new node at the new size and remove the old node. Check the health of the cluster before the next node.' },
-    G: { name: 'G. ISV appliance', advice: 'This VM is a vendor appliance. Do not change the size in place. Ask the vendor which sizes they certify. Deploy a new appliance beside this one, then move the traffic.' },
-    '': { name: 'Not checked', advice: 'The list does not give the facts that find the workload pattern. Run the Azure Resource Graph query in step 1 to get them.' },
+    A: { name: 'Node pool or scale set', advice: 'This VM is part of a pool (AKS, Azure Red Hat OpenShift or a scale set). Do not change the size of each VM. Add a new node pool or scale set at the new size, move the workload to it, then remove the old one.' },
+    B: { name: 'Pooled AVD host', advice: 'This VM is a session host in a pooled Azure Virtual Desktop host pool. Do not change the size of the host. Make new session hosts at the new size from the image. Move the users to them, then remove the old hosts.' },
+    C: { name: 'Managed by a service', advice: 'A service (for example Azure Databricks) manages this VM. Do not change the VM. Change the node type or size in the service.' },
+    D: { name: 'Cluster in a service', advice: 'Make a new cluster at the new size in the service. Then remove the old cluster.' },
+    E: { name: 'Standalone VM', advice: 'You manage this VM. Use the move that this tool gives for each series.' },
+    F: { name: 'Cluster or database', advice: 'This VM holds state or is part of a cluster (SQL Server, a failover cluster or SAP). Move one node at a time. First move the role away from the node (fail over or drain). For v5, resize the node. For v6 and v7, add a new node at the new size and remove the old node. Check the health of the cluster before the next node.' },
+    G: { name: 'Vendor appliance', advice: 'This VM is a vendor appliance. Do not change the size in place. Ask the vendor which sizes they certify. Deploy a new appliance beside this one, then move the traffic.' },
+    '': { name: 'Type not checked', advice: 'The list does not give the facts that find the workload type. Run the Azure Resource Graph query in step 1 to get them.' },
 };
 // The patterns where the series advice ("resize", "deploy in parallel") does not apply.
 export const POOL_PATTERNS = ['A', 'B', 'C', 'D'];
 
 // What this tool cannot find. The customer must look for these.
-export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers (move one at a time), self-hosted CI agents on single VMs, and NoSQL or search clusters (pattern F). It also cannot find compute that is not in your subscription, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
+export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers (move one at a time), self-hosted CI agents on single VMs, and NoSQL or search clusters (move one node at a time). It also cannot find compute that is not in your subscription, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
 
 // A short label for counts and filters.
 export const OUTCOME_SHORT = {

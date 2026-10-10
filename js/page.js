@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.3.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.3.0-beta';
-import capacity from '../data/capacity.js?v=0.3.0-beta';
-import nvme from '../data/nvme-images.js?v=0.3.0-beta';
-import query from './query.js?v=0.3.0-beta';
-import sample from './sample.js?v=0.3.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.3.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.3.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.3.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.3.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.3.0-beta';
-import * as F from './files.js?v=0.3.0-beta';
-import { makeZip } from './zip.js?v=0.3.0-beta';
-import version from './version.js?v=0.3.0-beta';
+import sizes from '../data/sizes.js?v=0.3.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.3.1-beta';
+import capacity from '../data/capacity.js?v=0.3.1-beta';
+import nvme from '../data/nvme-images.js?v=0.3.1-beta';
+import query from './query.js?v=0.3.1-beta';
+import sample from './sample.js?v=0.3.1-beta';
+import { SizeTable } from './lifecycle.js?v=0.3.1-beta';
+import { COLUMNS, readList } from './input.js?v=0.3.1-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.3.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.3.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.3.1-beta';
+import * as F from './files.js?v=0.3.1-beta';
+import { makeZip } from './zip.js?v=0.3.1-beta';
+import version from './version.js?v=0.3.1-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -162,7 +162,7 @@ function showResults() {
     const pf = $('pattern-filter');
     const found = Object.keys(PATTERNS).filter((k) => p.machines.some((m) => (m.pattern || '') === k));
     if (patternFilter !== 'all' && !found.includes(patternFilter)) patternFilter = 'all';
-    pf.replaceChildren(el('option', { value: 'all', text: 'All patterns' }),
+    pf.replaceChildren(el('option', { value: 'all', text: 'All types' }),
         ...found.map((k) => el('option', { value: k, text: `${PATTERNS[k].name} (${p.machines.filter((m) => (m.pattern || '') === k).length})` })));
     pf.value = patternFilter;
     renderTable();
@@ -229,10 +229,10 @@ function renderTable() {
     $('more').hidden = rows.length <= limit;
 }
 
-// Under the VM name: a scale set and its instances, and the workload pattern.
+// Under the VM name: a scale set and its instances, and the workload type.
 function vmSub(m) {
     const set = m.read.resourceType === 'Scale set' ? `Scale set${m.read.instances !== null && m.read.instances !== undefined ? `, ${m.read.instances} instance${m.read.instances === 1 ? '' : 's'}` : ''}. ` : '';
-    return `${set}${m.pattern ? PATTERNS[m.pattern].name : 'Pattern not checked'}`;
+    return `${set}${m.pattern ? PATTERNS[m.pattern].name : PATTERNS[''].name}`;
 }
 
 // The stage, short: the name, the date, and a tag when Microsoft limits capacity.
@@ -252,7 +252,7 @@ function details(m) {
     td.append(el('p', {}, el('strong', { text: GROUPS[g].long })));
     const pat = PATTERNS[m.pattern || ''];
     // The advice only for a VM that must move, or when the pattern is not known.
-    td.append(el('p', {}, el('strong', { text: `Workload pattern: ${m.pattern ? pat.name : 'not checked'}. ` }), m.moveRequired === 'Yes' || !m.pattern ? pat.advice : ''));
+    td.append(el('p', {}, el('strong', { text: `Workload type: ${pat.name}. ` }), m.moveRequired === 'Yes' || !m.pattern ? pat.advice : ''));
     if (m.stage) td.append(el('p', { text: `Lifecycle stage: ${stageWords(m.stage, capacityRestricted(m.vm.sourceSize))}` }));
     if (!m.vm) {
         td.append(el('ul', {}, m.problems.map((pr) => el('li', { text: reasonFor(pr.why, { problem: pr }) }))));
