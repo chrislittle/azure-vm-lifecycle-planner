@@ -79,6 +79,7 @@
       <label>Find <input type="search" id="find" placeholder="VM or size"></label>
       <span id="shown" class="hint"></span>
     </div>
+    <p class="hint open-hint">Select a VM to see how to move it, the ranked sizes and the readiness signals.</p>
     <div class="table-wrap results-wrap">
       <table id="table">
         <thead><tr><th>VM</th><th>Current size</th><th>Lifecycle stage</th><th>Result</th><th>v5</th><th>v6</th><th>v7</th><th>Burstable</th><th>Readiness signals</th></tr></thead>
@@ -87,7 +88,7 @@
     </div>
     <p><button type="button" id="more" class="secondary" hidden>Show more</button></p>
     <ul class="hint">
-      <li>Select a VM to see the reason and the notes for each series. The table shows size names without "Standard_". The details and the download files show the full names.</li>
+      <li>The table shows size names without "Standard_". The details and the download files show the full names.</li>
       <li>"Supported" means that Azure lets you move this VM to the new size. It does not mean that the VM is ready to move.</li>
       <li>A move is a resize or a rebuild. In a resize, Azure changes the size of the same VM. In a rebuild, you make a new VM with the same disks. A rebuild removes a system-assigned identity and Azure Disk Encryption.</li>
       <li>This tool does not check if a size is available in your region.</li>
