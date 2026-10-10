@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.2-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.3-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -126,8 +126,11 @@ work.
 - If a size is available in your region. The tool uses one table for all regions.
 - If a VM is ready to move. For example, the tool does not look inside the VM.
 - The VMs in a scale set or an AKS node pool, one by one. The query gives each scale set
-  as one row. Azure Resource Graph does not give the generation of a scale set. The tool
-  reads it from a Generation 2 image SKU. If it cannot, type the generation in the list.
+  as one row. Azure Resource Graph does not give the generation of a scale set. For an
+  AKS or Azure Red Hat OpenShift node pool, or a VM that a service manages, the tool does
+  not need it: the service makes the new nodes from its own image. For a scale set of
+  your own, the tool reads it from a Generation 2 image SKU. If it cannot, type the
+  generation in the list.
 
 ## Sources
 

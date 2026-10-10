@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.2-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.2-beta';
-import capacity from '../data/capacity.js?v=0.4.2-beta';
-import nvme from '../data/nvme-images.js?v=0.4.2-beta';
-import query from './query.js?v=0.4.2-beta';
-import sample from './sample.js?v=0.4.2-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.2-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.2-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.2-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.2-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.2-beta';
-import * as F from './files.js?v=0.4.2-beta';
-import { makeZip } from './zip.js?v=0.4.2-beta';
-import version from './version.js?v=0.4.2-beta';
+import sizes from '../data/sizes.js?v=0.4.3-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.3-beta';
+import capacity from '../data/capacity.js?v=0.4.3-beta';
+import nvme from '../data/nvme-images.js?v=0.4.3-beta';
+import query from './query.js?v=0.4.3-beta';
+import sample from './sample.js?v=0.4.3-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.3-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.3-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.3-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.3-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.3-beta';
+import * as F from './files.js?v=0.4.3-beta';
+import { makeZip } from './zip.js?v=0.4.3-beta';
+import version from './version.js?v=0.4.3-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
