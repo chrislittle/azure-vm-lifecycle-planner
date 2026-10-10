@@ -222,7 +222,22 @@ subscriptions.
 
 A scale set has no generation in Resource Graph (`instanceView` is only on a VM). The
 image SKU tells for most marketplace images (`-gen2`, `-g2`). An AKS node image is
-not a marketplace image.
+not a marketplace image. A third test build (10 October 2026, one AKS node pool)
+showed:
+
+- The scale set's `virtualMachineProfile.storageProfile.imageReference.id` is a
+  Microsoft gallery image whose name gives the generation, for example
+  `.../galleries/AKSUbuntu/images/2404gen2containerd/versions/202609.15.0`. The AKS
+  cluster's `agentPoolProfiles[].nodeImageVersion` gives the same name
+  (`AKSUbuntu-2404gen2containerd-202609.15.0`).
+- Each running node, in the `computeresources` table
+  (`microsoft.compute/virtualmachinescalesets/virtualmachines`), has
+  `properties.extended.instanceView.hyperVGeneration` (`V2`). A stopped cluster or a
+  pool with 0 nodes has no rows there.
+
+The VM Lifecycle Planner does not use either: for a node pool that a service manages,
+the service makes the new nodes from its own image, so the current generation does not
+change the move.
 
 ## The test build
 

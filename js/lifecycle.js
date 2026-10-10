@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.4.2-beta';
-import seriesRules from '../data/series-rules.js?v=0.4.2-beta';
+import families from '../data/families.js?v=0.4.3-beta';
+import seriesRules from '../data/series-rules.js?v=0.4.3-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers

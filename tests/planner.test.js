@@ -322,10 +322,17 @@ test('an AVD session host with no host pool type is not checked, not pattern E',
 
 test('a scale set without a generation: a Generation 2 image SKU tells, else not checked', () => {
     const p = run(sample).plan;
+    // AKS makes the new nodes from its own image: the generation does not matter.
     const aks = byName(p, 'contoso-aks-np1');
-    assert.equal(aks.vm, null);
-    assert.deepEqual(aks.problems.map((x) => x.why), ['scale-set-generation-missing']);
-    assert.equal(F.groupOf(aks), 'unchecked');
+    assert.ok(aks.vm, 'AKS is planned without the generation');
+    assert.equal(F.groupOf(aks), 'pool');
+    assert.equal(aks.read.generation, null, 'the files still show the generation as the list gave it');
+    const head = 'Machine name,Current size,Generation,Resource type,Managed by,Scale set,Image publisher';
+    const own = byName(run(`${head}
+contoso-ss1,Standard_D4s_v3,,Scale set,None,Yes,
+`).plan, 'contoso-ss1');
+    assert.deepEqual(own.problems.map((x) => x.why), ['scale-set-generation-missing'], 'a scale set of your own still needs it');
+    assert.equal(F.groupOf(own), 'unchecked');
     const vmss = byName(p, 'contoso-vmss01');
     assert.equal(vmss.vm.gen, 'V2');
     assert.ok(vmss.notes.some((n) => n.includes('22_04-lts-gen2')));

@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.4.2-beta';
-import capacity from '../data/capacity.js?v=0.4.2-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.3-beta';
+import capacity from '../data/capacity.js?v=0.4.3-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.4.2-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.4.2-beta';
-import { patternOf } from './patterns.js?v=0.4.2-beta';
+} from './lifecycle.js?v=0.4.3-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.4.3-beta';
+import { patternOf } from './patterns.js?v=0.4.3-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -126,6 +126,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
 
     const genText = cell('Generation');
     let gen = readGeneration(genText);
+    let genNotNeeded = false;
     // A Generation 2 marketplace image says so in its SKU (for example 22_04-lts-gen2).
     const gen2Image = /(^|[-_])(gen2|g2)($|[-_])|gensecond/i.test(extra.imageSku || '');
     if (!gen && needsGen2) {
@@ -134,6 +135,13 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     } else if (!gen && gen2Image) {
         gen = 'V2';
         notes.push(`The generation is empty. The image SKU '${extra.imageSku}' is a Generation 2 image, so this tool uses Generation 2.`);
+    } else if (!gen && (pattern === 'C' || (pattern === 'A' && /^(aks|aro)$/i.test(extra.managedBy || '')))) {
+        // A service (AKS, ARO, Databricks) makes the new nodes from its own image:
+        // the generation of the current nodes does not change the move (owner,
+        // 2026-10-10). The sizes are for Generation 2, as on every v6 and v7 size.
+        gen = 'V2';
+        genNotNeeded = true;
+        notes.push('The generation is empty. The service makes the new nodes from its own image, so this tool does not need the generation.');
     } else if (!gen) {
         // Azure Resource Graph does not give the generation of a scale set.
         problems.push({ what: `Generation '${genText}'`, why: extra.resourceType === 'Scale set' ? 'scale-set-generation-missing' : 'generation-missing' });
@@ -152,7 +160,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
 
     const read = {
         row: rowNumber, name, region, regionAsWritten: cell('Region'), sizeAsWritten: sizeText, size: size.size,
-        generation: gen, generationAsWritten: genText, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
+        generation: genNotNeeded ? null : gen, generationAsWritten: genText, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
         resourceType: extra.resourceType, instances: extra.instances,
     };
     if (problems.length) return { vm: null, read, extra, pattern, problems, notes };

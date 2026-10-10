@@ -1,2 +1,2 @@
 // The release version. Set it with tools/set-version.mjs.
-export default '0.4.2-beta';
+export default '0.4.3-beta';

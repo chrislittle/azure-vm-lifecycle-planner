@@ -618,6 +618,18 @@ What to do, Why, Before the move, Good to know, To check, Sizes. The table colum
 "Before the move" is gone: the Result column says "do this first", and the details
 and the download files give the steps.
 
+## 0.4.3-beta (2026-10-10): AKS node pools are not "Not checked"
+
+The sample's AKS node pool showed "Not checked", because Resource Graph gives no
+generation for a scale set. Owner: the goal is to find AKS nodes and send the customer
+to AKS. For AKS, ARO and other service-managed VMs, the tool now plans without the
+generation (the service makes the new nodes from its own image), so they show
+"Move needed - change in the service or pool". A scale set of the customer's own still
+needs the generation. Test build 3 (one AKS node pool) proved the image name and the
+node's hyperVGeneration (docs/workload-patterns.md); the full raw data is saved locally
+so that no rebuild is needed for these fields. A name match in the query was tried and
+dropped (owner: fragile, and not needed).
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the
