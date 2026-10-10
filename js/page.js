@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.1-beta';
-import capacity from '../data/capacity.js?v=0.4.1-beta';
-import nvme from '../data/nvme-images.js?v=0.4.1-beta';
-import query from './query.js?v=0.4.1-beta';
-import sample from './sample.js?v=0.4.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.1-beta';
-import * as F from './files.js?v=0.4.1-beta';
-import { makeZip } from './zip.js?v=0.4.1-beta';
-import version from './version.js?v=0.4.1-beta';
+import sizes from '../data/sizes.js?v=0.4.2-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.2-beta';
+import capacity from '../data/capacity.js?v=0.4.2-beta';
+import nvme from '../data/nvme-images.js?v=0.4.2-beta';
+import query from './query.js?v=0.4.2-beta';
+import sample from './sample.js?v=0.4.2-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.2-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.2-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.2-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.2-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.2-beta';
+import * as F from './files.js?v=0.4.2-beta';
+import { makeZip } from './zip.js?v=0.4.2-beta';
+import version from './version.js?v=0.4.2-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -176,17 +176,6 @@ $('more').addEventListener('click', () => { limit += PAGE; renderTable(); });
 
 const HEADERS = [...document.querySelectorAll('#table thead th')].map((th) => th.textContent);
 
-// The readiness signals of a VM, as small tags: an amber tag for each recommended
-// action, a blue tag for each fact to know, and one grey tag for the facts to check.
-function signalsCell(m) {
-    if (m.moveRequired === 'Yes' && serviceManaged(m)) return el('td', { class: 'warn' }, el('span', { class: 'hint', text: 'Nothing on the VM' }));
-    const s = F.signals(m);
-    const tags = s.actions.map((a) => el('span', { class: 'tag-action', title: a.text, text: a.topic }));
-    if (s.attention.length) tags.push(el('span', { class: 'tag-note', title: s.attention.map((a) => a.text).join('\n'), text: `${s.attention.length} good to know` }));
-    if (s.checks.length) tags.push(el('span', { class: 'tag-check', title: s.checks.map((c) => c.text).join('\n'), text: `${s.checks.length} to check` }));
-    return el('td', { class: 'warn' }, tags.length ? el('span', { class: 'tags' }, tags) : null);
-}
-
 function renderTable() {
     const p = current.plan;
     const q = $('find').value.trim().toLowerCase();
@@ -212,7 +201,6 @@ function renderTable() {
             stageCell(m),
             el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
             answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
-            signalsCell(m),
         );
         // On a narrow screen each row shows as a card; each cell gets its column name.
         [...tr.children].forEach((td, i) => { td.dataset.label = HEADERS[i]; });
@@ -245,11 +233,11 @@ function stageCell(m) {
 }
 
 // The details of one VM, in the same order for every VM (owner, 2026-10-10):
-// what to do, why, the sizes, then the notes - before the move, good to know,
-// to check. Each note shows once, with the series it applies to.
+// what to do, why, the notes - before the move, good to know, to check - and
+// last the sizes, which are long. Each note shows once, with its series.
 function details(m) {
     const { now } = current;
-    const td = el('td', { colspan: '9' });
+    const td = el('td', { colspan: '8' });
     const box = el('div', { class: 'd' });
     td.append(box);
     const g = F.groupOf(m);
@@ -291,6 +279,17 @@ function details(m) {
             el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
     }
 
+    // The notes.
+    if (m.vm && m.moveRequired === 'Yes') {
+        const n = F.allNotes(m);
+        const only = (x) => (x.series.length ? ` (${seriesList(x.series)} only)` : '');
+        const list = (cls, items, strip) => el('ul', { class: `list ${cls}` }, items.map((x) => el('li', {},
+            el('span', { class: 'topic', text: `${x.topic}: ` }), strip ? x.text.replace(/^Check: /, '') : x.text, el('span', { class: 'only', text: only(x) }))));
+        if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
+        else if (n.actions.length) section('Before the move', list('act', n.actions));
+        if (n.attention.length) section('Good to know', list('att', n.attention));
+        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts.' }), list('chk', n.checks, true));
+    }
     // Sizes.
     // A hard gate has no size: "Why" gives the reason once.
     if (m.vm && m.rows.length && g !== 'gate' && !noSize) {
@@ -318,17 +317,6 @@ function details(m) {
         if (hints.length) box.append(el('p', { class: 'hint', text: hints.join(' ') }));
     }
 
-    // The notes.
-    if (m.vm && m.moveRequired === 'Yes') {
-        const n = F.allNotes(m);
-        const only = (x) => (x.series.length ? ` (${seriesList(x.series)} only)` : '');
-        const list = (cls, items, strip) => el('ul', { class: `list ${cls}` }, items.map((x) => el('li', {},
-            el('span', { class: 'topic', text: `${x.topic}: ` }), strip ? x.text.replace(/^Check: /, '') : x.text, el('span', { class: 'only', text: only(x) }))));
-        if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
-        else if (n.actions.length) section('Before the move', list('act', n.actions));
-        if (n.attention.length) section('Good to know', list('att', n.attention));
-        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts.' }), list('chk', n.checks, true));
-    }
     if (m.notes.length) box.append(el('p', { class: 'hint', text: `Notes about the list: ${m.notes.join(' ')}` }));
     return el('tr', { class: 'details' }, td);
 }

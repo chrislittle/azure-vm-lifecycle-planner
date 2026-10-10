@@ -611,6 +611,13 @@ SAP) which sizes they certify. Do not change the VM before that." Microsoft's te
 "hard gate" stays only in the README group table, the about file and the pattern doc.
 Also: "readiness signal" and "in place" removed from customer sentences.
 
+## 0.4.2-beta (2026-10-10): the details in reading order
+
+Owner: the sizes are long, so the notes after them were easy to miss. The order is now
+What to do, Why, Before the move, Good to know, To check, Sizes. The table column
+"Before the move" is gone: the Result column says "do this first", and the details
+and the download files give the steps.
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the
