@@ -636,6 +636,16 @@ Owner: a light and dark choice, as in the owner's other tool. A "Theme" menu at 
 right: Follow the system (the start), Light, Dark. The page keeps no data, so the
 choice is not stored: it lasts until the page closes.
 
+## 0.4.5-beta (2026-10-10): capacity words as Microsoft says them
+
+Owner: "is this really from MS docs?" The series list was right (Dsv2 is on Microsoft's
+"Impacted VM series" list, read again 2026-10-10), but "Microsoft limits new capacity"
+was our own loose summary. All capacity and quota text now follows Microsoft's page:
+"capacity growth restrictions"; a new subscription cannot deploy these series; an
+existing one can deploy in its approved quota if the region has capacity; Azure
+approves no more quota; running VMs are not affected; it is not a retirement. The
+series names now match Microsoft's table exactly (B and Bs, not "B v1").
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the

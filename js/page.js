@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.4-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.4-beta';
-import capacity from '../data/capacity.js?v=0.4.4-beta';
-import nvme from '../data/nvme-images.js?v=0.4.4-beta';
-import query from './query.js?v=0.4.4-beta';
-import sample from './sample.js?v=0.4.4-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.4-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.4-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.4-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.4-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.4-beta';
-import * as F from './files.js?v=0.4.4-beta';
-import { makeZip } from './zip.js?v=0.4.4-beta';
-import version from './version.js?v=0.4.4-beta';
+import sizes from '../data/sizes.js?v=0.4.5-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.5-beta';
+import capacity from '../data/capacity.js?v=0.4.5-beta';
+import nvme from '../data/nvme-images.js?v=0.4.5-beta';
+import query from './query.js?v=0.4.5-beta';
+import sample from './sample.js?v=0.4.5-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.5-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.5-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.5-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.5-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.5-beta';
+import * as F from './files.js?v=0.4.5-beta';
+import { makeZip } from './zip.js?v=0.4.5-beta';
+import version from './version.js?v=0.4.5-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -231,12 +231,12 @@ function vmSub(m) {
     return `${set}${m.pattern ? PATTERNS[m.pattern].name : PATTERNS[''].name}`;
 }
 
-// The stage, short: the name, the date, and a tag when Microsoft limits capacity.
+// The stage, short: the name, the date, and a tag when Microsoft restricts capacity growth.
 function stageCell(m) {
     if (!m.stage) return el('td', {});
     const s = stageShort(m.stage, capacityRestricted(m.vm.sourceSize));
     return el('td', { class: 'stage' }, el('strong', { text: s.name }), s.detail ? el('span', { class: 'sub', text: s.detail }) : null,
-        s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity limited', title: 'Microsoft limits new capacity for this series. Select the VM to read more.' }) : null);
+        s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity growth restricted', title: 'Microsoft restricts capacity growth for this series. Select the VM to read more.' }) : null);
 }
 
 // The details of one VM, in the same order for every VM (owner, 2026-10-10):
@@ -399,8 +399,8 @@ $('version').textContent = `Version ${version}.`;
 $('sources').replaceChildren(
     el('li', {}, `Size facts: this tool has a table of ${sizes.sizeCount} Azure VM sizes. It read the table from Azure on ${dateWords(sizes.readUtc)}. The page does not connect to Azure.`),
     el('li', {}, 'Lifecycle stages and retirement dates: the Microsoft ', link(GUIDANCE.lifecycle, 'lifecycle overview'), ', ',
-        link(GUIDANCE.endOfLife, 'End of Life list'), ' and ', link(GUIDANCE.retirements, 'retirements and capacity restrictions'),
+        link(GUIDANCE.endOfLife, 'End of Life list'), ' and ', link(GUIDANCE.retirements, 'retirements and capacity growth restrictions'),
         `. This tool read them on ${dateWords(endOfLife.sources[0].readUtc)}.`),
     el('li', {}, 'NVMe support of the OS: the Microsoft ', link(nvme.source, 'list of OS images that support NVMe'), `. This tool read it on ${dateWords(nvme.readUtc)}.`),
-    el('li', {}, 'Capacity restrictions: ', capacityWords(capacity).join(' ')),
+    el('li', {}, 'Capacity growth restrictions: ', capacityWords(capacity).join(' ')),
 );
