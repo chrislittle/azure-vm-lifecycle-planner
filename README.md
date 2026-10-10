@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.1-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.2-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -53,7 +53,7 @@ For each VM:
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
   A size with a different processor has an asterisk: test the application first.
 - The details of each VM, in the same order for every VM: **What to do**, **Why**, the
-  **Sizes**, then the notes. The notes are the readiness signals in Microsoft's guide:
+  notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
   - **Before the move** (amber): a step to do first. It does not block the move.
   - **Good to know** (blue): a fact to know, with nothing to do first.
   - **To check** (grey): the list does not give the fact.
