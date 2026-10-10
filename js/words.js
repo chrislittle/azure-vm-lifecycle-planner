@@ -133,7 +133,9 @@ export function stageWords(stage, capacity) {
         case null: case undefined: return 'Not checked. This tool cannot identify this size.';
         default: w = String(stage.stage);
     }
-    if (capacity) w += ` From ${capacity.since}, Microsoft limits new capacity for this series.`;
+    // Microsoft's term: "capacity growth restrictions" (owner, 2026-10-10: say only
+    // what the Microsoft page says).
+    if (capacity) w += ` From ${capacity.since}, Microsoft restricts capacity growth for this series: a new subscription cannot deploy it, and Azure approves no more quota.`;
     return w;
 }
 
@@ -153,11 +155,12 @@ export function stageShort(stage, capacity) {
 // What the capacity restrictions mean, with the series they apply to.
 export function capacityWords(capacity) {
     return [
-        `From ${capacity.since}, Microsoft limits these old series: ${capacity.names.join(', ')}.`,
-        'A new subscription cannot create a VM of these series.',
-        'A subscription that you already have can create a VM of these series only in its current quota.',
-        'It can do this only when Azure has capacity.',
-        'Microsoft does not approve more quota for these series.',
+        `From ${capacity.since}, Microsoft restricts capacity growth for these series: ${capacity.names.join(', ')}.`,
+        'A new subscription cannot deploy these series.',
+        'A subscription that you have now can deploy them in its approved quota, if the region has capacity.',
+        'A deployment can fail if the region does not have capacity, also when quota is available.',
+        'Azure approves no more quota for these series.',
+        'The restrictions do not stop VMs that run now. They are not a retirement.',
     ];
 }
 

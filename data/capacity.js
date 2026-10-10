@@ -1,13 +1,13 @@
 // Microsoft's capacity growth restrictions on old size series.
 export default {
-  "why": "Microsoft's capacity growth restrictions on old size series, began July 2026. Separate from the lifecycle stage and from a retirement date. Microsoft removed the v4 series from this list on 2026-09-19.",
+  "why": "Microsoft's capacity growth restrictions on old size series, began July 2026. Separate from the lifecycle stage and from a retirement date. Microsoft removed the v4 series from this list on 2026-09-19. Checked again 2026-10-10: the same 19 series.",
   "source": "https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions#impacted-vm-series",
-  "readUtc": "2026-10-09",
+  "readUtc": "2026-10-10",
   "pageUpdatedUtc": "2026-09-27",
   "since": "July 2026",
   "says": "New subscriptions can't deploy these series. Existing subscriptions can deploy within already-approved quota, subject to capacity; additional quota isn't approved.",
   "seriesNote": "Microsoft's names: F, Fs, Fsv2, D, Ds, Dv2, Dsv2, Dv3, Dsv3, B, Bs, Av2, Amv2, Ev3, Esv3, G, Gs, Ls, Lsv2. sizeSeries is how a size name reads (family, the letters after the size number, the version), the same reading as lifecycle.retirements: Standard_B2ms reads Bms, Standard_E64is_v3 reads Eisv3.",
-  "names": ["F", "Fs", "Fsv2", "D", "Ds", "Dv2", "Dsv2", "Dv3", "Dsv3", "B v1", "Av2", "Amv2", "Ev3", "Esv3", "G", "Gs", "Ls", "Lsv2"],
+  "names": ["F", "Fs", "Fsv2", "D", "Ds", "Dv2", "Dsv2", "Dv3", "Dsv3", "B", "Bs", "Av2", "Amv2", "Ev3", "Esv3", "G", "Gs", "Ls", "Lsv2"],
   "sizeSeries": [
     "F",
     "Fs",
