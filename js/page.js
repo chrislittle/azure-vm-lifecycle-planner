@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.3.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.3.1-beta';
-import capacity from '../data/capacity.js?v=0.3.1-beta';
-import nvme from '../data/nvme-images.js?v=0.3.1-beta';
-import query from './query.js?v=0.3.1-beta';
-import sample from './sample.js?v=0.3.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.3.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.3.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.3.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.3.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.3.1-beta';
-import * as F from './files.js?v=0.3.1-beta';
-import { makeZip } from './zip.js?v=0.3.1-beta';
-import version from './version.js?v=0.3.1-beta';
+import sizes from '../data/sizes.js?v=0.4.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.0-beta';
+import capacity from '../data/capacity.js?v=0.4.0-beta';
+import nvme from '../data/nvme-images.js?v=0.4.0-beta';
+import query from './query.js?v=0.4.0-beta';
+import sample from './sample.js?v=0.4.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.4.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.4.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.4.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.0-beta';
+import * as F from './files.js?v=0.4.0-beta';
+import { makeZip } from './zip.js?v=0.4.0-beta';
+import version from './version.js?v=0.4.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -139,7 +139,7 @@ let patternFilter = 'all';
 let limit = PAGE;
 // The colour of each result group. Red only for no supported size; a hard gate
 // and "do this first" are amber: they are steps, not dead ends (peer, 2026-10-09).
-const PILL = { modern: 'no-move', ready: 'ready', first: 'move', gate: 'move', nopath: 'no-suggestion', unchecked: 'not-checked' };
+const PILL = { modern: 'no-move', ready: 'ready', first: 'move', pool: 'pool', gate: 'move', nopath: 'no-suggestion', unchecked: 'not-checked' };
 
 function showResults() {
     const p = current.plan;
@@ -179,9 +179,10 @@ const HEADERS = [...document.querySelectorAll('#table thead th')].map((th) => th
 // The readiness signals of a VM, as small tags: an amber tag for each recommended
 // action, a blue tag for each fact to know, and one grey tag for the facts to check.
 function signalsCell(m) {
+    if (m.moveRequired === 'Yes' && serviceManaged(m)) return el('td', { class: 'warn' }, el('span', { class: 'hint', text: 'Nothing on the VM' }));
     const s = F.signals(m);
     const tags = s.actions.map((a) => el('span', { class: 'tag-action', title: a.text, text: a.topic }));
-    for (const a of s.attention) tags.push(el('span', { class: 'tag-note', title: a.text, text: a.topic }));
+    if (s.attention.length) tags.push(el('span', { class: 'tag-note', title: s.attention.map((a) => a.text).join('\n'), text: `${s.attention.length} good to know` }));
     if (s.checks.length) tags.push(el('span', { class: 'tag-check', title: s.checks.map((c) => c.text).join('\n'), text: `${s.checks.length} to check` }));
     return el('td', { class: 'warn' }, tags.length ? el('span', { class: 'tags' }, tags) : null);
 }
@@ -243,55 +244,132 @@ function stageCell(m) {
         s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity limited', title: 'Microsoft limits new capacity for this series. Select the VM to read more.' }) : null);
 }
 
-// The reason, how to move, the ranked sizes and the readiness signals for each
-// series of one VM.
+// The details of one VM, in the same order for every VM (owner, 2026-10-10):
+// what to do, why, the sizes, then the notes - before the move, good to know,
+// to check. Each note shows once, with the series it applies to.
 function details(m) {
     const { now } = current;
     const td = el('td', { colspan: '9' });
+    const box = el('div', { class: 'd' });
+    td.append(box);
     const g = F.groupOf(m);
-    td.append(el('p', {}, el('strong', { text: GROUPS[g].long })));
-    const pat = PATTERNS[m.pattern || ''];
-    // The advice only for a VM that must move, or when the pattern is not known.
-    td.append(el('p', {}, el('strong', { text: `Workload type: ${pat.name}. ` }), m.moveRequired === 'Yes' || !m.pattern ? pat.advice : ''));
-    if (m.stage) td.append(el('p', { text: `Lifecycle stage: ${stageWords(m.stage, capacityRestricted(m.vm.sourceSize))}` }));
-    if (!m.vm) {
-        td.append(el('ul', {}, m.problems.map((pr) => el('li', { text: reasonFor(pr.why, { problem: pr }) }))));
-    } else {
+    const section = (title, ...content) => box.append(el('h4', { class: 'sec', text: title }), ...content);
+    const pool = POOL_PATTERNS.includes(m.pattern);
+
+    // What to do.
+    const t = todo(m, g);
+    section('What to do', el('p', { class: 'todo', text: t.main }), ...t.more.filter((x) => x).map((x) => el('p', { class: 'todo-sub', text: x })));
+
+    // Why.
+    const why = [];
+    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm.sourceSize)));
+    if (!m.vm) why.push(...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })));
+    if (g === 'gate') why.push(...gateReasons(m));
+    // No supported size: the reasons go here, each once, not in size cards.
+    const noSize = g === 'nopath';
+    if (noSize) {
+        // The sentences that every series gives show once; then what is left for
+        // each series, with the series that give the same words.
+        const split = (text) => text.split(/(?<=\.)\s+(?=[A-Z])/);
+        const series = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => ({ name: r.series === 'burstable' ? 'Burstable' : r.series, sentences: split(optionReason(r, table, now)) }));
+        const common = series.length ? series[0].sentences.filter((x) => series.every((r) => r.sentences.includes(x))) : [];
+        if (common.length) why.push(common.join(' '));
+        const rest = new Map();
+        for (const r of series) {
+            const text = r.sentences.filter((x) => !common.includes(x)).join(' ');
+            if (!text) continue;
+            if (!rest.has(text)) rest.set(text, []);
+            rest.get(text).push(r.name);
+        }
+        for (const [text, names] of rest) why.push(`${seriesList(names)}: ${text}`);
+        const gen1 = m.rows.find((r) => r.series === 'gen1Route');
+        if (gen1) why.push(`Generation 1 to 2: ${optionReason(gen1, table, now)}`);
+    }
+    if (why.length) section('Why', ...why.map((w) => el('p', { class: 'why', text: w })));
+    if (m.vm && (g === 'gate' || g === 'nopath')) {
+        box.append(el('p', { class: 'hint' }, 'Microsoft guidance: ', el('a', { href: GUIDANCE.endOfLife, target: '_blank', rel: 'noopener noreferrer', text: 'End of Life sizes' }), ', ',
+            el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
+    }
+
+    // Sizes.
+    // A hard gate has no size: "Why" gives the reason once.
+    if (m.vm && m.rows.length && g !== 'gate' && !noSize) {
         const grid = el('div', { class: 'series' });
         let processorChange = false;
         for (const r of m.rows) {
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
-            const box = el('div', {},
-                el('h4', { text: o.supported ? `${name}: ${o.targetSize}` : name }),
-                el('p', { text: optionReason(r, table, now) }));
-            // For a pool or a service, the pattern above says how to move.
-            if (o.supported && m.moveRequired === 'Yes' && !POOL_PATTERNS.includes(m.pattern)) box.append(el('p', {}, el('strong', { text: 'How to move: ' }), moveWords(r.series, o.rebuild, Boolean(m.vm.os))));
+            const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
+            const card = el('div', {}, el('h5', { class: o.supported ? '' : 'no', text: title }));
+            if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no', text: optionReason(r, table, now) }));
+            if (o.supported && m.moveRequired === 'Yes' && !pool) card.append(el('p', { class: 'hint', text: moveWords(r.series, o.rebuild, Boolean(m.vm.os)) }));
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;
-                if (ranked.length > 1) {
-                    box.append(el('p', { class: 'label-small', text: 'Ranked sizes' }),
-                        el('ol', { class: 'ranked' }, ranked.map((x) => el('li', {}, el('span', { class: 'size-name', text: x.size }), ` ${x.why}`))));
-                }
-                if (o.targetStage) box.append(el('p', { class: 'hint', text: `Lifecycle stage of ${o.targetSize}: ${o.targetStage.stage}.` }));
+                if (ranked.length > 1) card.append(el('ol', { class: 'ranked' }, ranked.map((x) => el('li', {}, el('span', { class: 'size-name', text: x.size }), ` ${x.why}`))));
+                if (o.targetStage) card.append(el('p', { class: 'hint', text: `Lifecycle stage of ${o.targetSize}: ${o.targetStage.stage}.` }));
             }
-            const notes = Object.entries(r.caveats || {}).filter(([, c]) => c.state);
-            if (o.supported && m.moveRequired === 'Yes' && notes.length) {
-                box.append(el('p', { class: 'label-small', text: 'Readiness signals' }),
-                    el('ul', { class: 'caveats' }, notes.map(([topic, c]) => el('li', { class: c.state === 'problem' ? 'action' : c.state }, el('span', { class: 'topic', text: `${topic}: ` }), c.text))));
-            }
-            grid.append(box);
+            grid.append(card);
         }
-        td.append(grid);
-        if (processorChange) td.append(el('p', { class: 'hint', text: PROCESSOR_NOTE }));
-        if (g === 'gate' || g === 'nopath') {
-            td.append(el('p', { class: 'hint' }, 'Microsoft guidance: ', el('a', { href: GUIDANCE.endOfLife, target: '_blank', rel: 'noopener noreferrer', text: 'End of Life sizes' }), ', ',
-                el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
-        }
+        section(g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes', grid);
+        const hints = [];
+        if (g === 'pool' && serviceManaged(m)) hints.push('Use a size that the service offers.');
+        if (processorChange) hints.push(PROCESSOR_NOTE);
+        if (hints.length) box.append(el('p', { class: 'hint', text: hints.join(' ') }));
     }
-    if (m.notes.length) td.append(el('p', { class: 'hint', text: `Notes: ${m.notes.join('; ')}` }));
+
+    // The notes.
+    if (m.vm && m.moveRequired === 'Yes') {
+        const n = F.allNotes(m);
+        const only = (x) => (x.series.length ? ` (${seriesList(x.series)} only)` : '');
+        const list = (cls, items, strip) => el('ul', { class: `list ${cls}` }, items.map((x) => el('li', {},
+            el('span', { class: 'topic', text: `${x.topic}: ` }), strip ? x.text.replace(/^Check: /, '') : x.text, el('span', { class: 'only', text: only(x) }))));
+        if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
+        else if (n.actions.length) section('Before the move', list('act', n.actions));
+        if (n.attention.length) section('Good to know', list('att', n.attention));
+        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts.' }), list('chk', n.checks, true));
+    }
+    if (m.notes.length) box.append(el('p', { class: 'hint', text: `Notes about the list: ${m.notes.join(' ')}` }));
     return el('tr', { class: 'details' }, td);
+}
+
+// 'v6', 'v7' -> 'v6 and v7'.
+function seriesList(list) {
+    const names = list.map((s) => (s === 'burstable' ? 'Burstable' : s));
+    return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+// The hard gate, in words: SAP, or the vendor of an appliance.
+function gateReasons(m) {
+    const codes = ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor'];
+    return (m.vm.blockers || []).filter((b) => codes.includes(b)).map((b) => reasonFor(b, {}));
+}
+
+// The main thing to do for a VM: { main, more: [] }.
+function todo(m, g) {
+    const pool = POOL_PATTERNS.includes(m.pattern);
+    if (!m.vm) {
+        if (pool) { const a = poolAdvice(m); return { main: a.todo, more: [a.more, 'This tool cannot check the sizes. See "Why".'] }; }
+        return { main: 'This tool cannot check this VM.', more: ['See "Why". Correct the list, then load it again.'] };
+    }
+    if (g === 'modern') return { main: 'No move needed.', more: ['This is a modern size: Microsoft fully supports it.'] };
+    if (g === 'unchecked') return { main: 'This tool cannot check this VM.', more: ['See "Why" and "Sizes".'] };
+    if (g === 'pool') { const a = poolAdvice(m); return { main: a.todo, more: [a.more] }; }
+    if (g === 'gate') {
+        const sap = (m.vm.blockers || []).includes('sap-needs-a-certified-size');
+        return { main: sap ? 'Confirm which sizes SAP certifies before you change anything.' : 'Ask the vendor which sizes they certify before you change anything.', more: ['This is a hard gate. This tool gives no size.'] };
+    }
+    if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
+    const r = F.likelyRow(m);
+    const o = r.option;
+    const main = r.series === 'v6' || r.series === 'v7' ? `Deploy a new VM at ${o.targetSize} in parallel. Then move the workload.`
+        : o.rebuild ? `Rebuild at ${o.targetSize} from a current image.` : `Resize to ${o.targetSize}.`;
+    const more = [];
+    if (g === 'first') more.push('Do the steps in "Before the move" first.');
+    if (m.pattern === 'F') more.push(PATTERNS.F.advice);
+    const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
+    if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);
+    return { main, more };
 }
 
 // ---------------------------------------------------------------------------

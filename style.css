@@ -15,6 +15,8 @@
     --check: #8a5a00;
     --check-bg: #fff4dc;
     --none-bg: #eef1f4;
+    --pool: #4b3aa8;
+    --pool-bg: #ece8fc;
 }
 @media (prefers-color-scheme: dark) {
     :root {
@@ -34,6 +36,8 @@
         --check: #f3c45b;
         --check-bg: #33290f;
         --none-bg: #232a31;
+        --pool: #c3b8ff;
+        --pool-bg: #2a2447;
     }
 }
 
@@ -94,7 +98,7 @@ textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--te
 .msg.ok { background: var(--fine-bg); border-left: 4px solid var(--fine); }
 .msg ul { margin: 6px 0 0; padding-left: 20px; }
 
-.counts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.counts { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .count { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; text-align: left; color: var(--text); font-weight: 400; }
 .count .n { font-size: 26px; font-weight: 700; display: block; line-height: 1.1; }
 .count .t { font-size: 13px; color: var(--muted); }
@@ -137,6 +141,7 @@ td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consol
 .pill.move { background: var(--check-bg); color: var(--check); }
 .pill.no-suggestion { background: var(--problem-bg); color: var(--problem); }
 .pill.not-checked { background: var(--none-bg); color: var(--muted); }
+.pill.pool { background: var(--pool-bg); color: var(--pool); }
 .ans-ok { color: var(--fine); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; white-space: nowrap; }
 .ans-no { color: var(--muted); }
 .warn { color: var(--problem); }
@@ -144,7 +149,22 @@ td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consol
 tr.details > td { background: var(--bg); padding: 12px 14px; }
 .series { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px; }
 .series > div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
-.series h4 { margin: 0 0 4px; font-size: 14px; }
+.series h4, .series h5 { margin: 0 0 4px; font-size: 14px; }
+.series .no { color: var(--muted); }
+/* The details of a VM: what to do, why, sizes, then the notes. */
+.d h4.sec { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.d h4.sec:first-child { margin-top: 0; }
+.d .todo { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+.d .todo-sub, .d .why { margin: 0 0 4px; }
+.d .none { color: var(--muted); margin: 0; }
+.d ul.list { margin: 0; padding-left: 0; list-style: none; }
+.d ul.list li { padding: 2px 0 2px 18px; position: relative; }
+.d ul.list li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; }
+.d ul.list.act li::before { background: var(--check); }
+.d ul.list.att li::before { background: var(--accent); }
+.d ul.list.chk li::before { background: var(--muted); }
+.d ul.list .topic { font-weight: 600; }
+.d ul.list .only { color: var(--muted); }
 .series p { margin: 0 0 8px; }
 .caveats { list-style: none; margin: 0; padding: 0; }
 .caveats li { padding: 2px 0 2px 18px; position: relative; }
@@ -161,7 +181,7 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 
 /* Narrow screens: each VM is a card with a label on each line, not a wide table row. */
 @media (max-width: 1000px) {
-    .counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .counts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #table thead { display: none; }
     #table, #table tbody { display: block; }
     #table tr.machine { display: block; padding: 8px 4px; border-bottom: 1px solid var(--line); }

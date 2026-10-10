@@ -336,7 +336,49 @@ test('for a pool or a service, the pattern says how to move', () => {
     const rows = F.targetRows(p, table, NOW);
     const dbx = rows.filter((r) => r['Machine'] === 'contoso-dbx01' && r['Supported'] === 'Yes');
     assert.ok(dbx.length);
-    assert.ok(dbx.every((r) => r['How to move'].startsWith('A service')), 'not "resize the current VM"');
+    assert.ok(dbx.every((r) => r['How to move'].startsWith('Change the node type in the Azure Databricks cluster.')), 'not "resize the current VM"');
     const api = rows.find((r) => r['Machine'] === 'contoso-api01' && r['Series'] === 'v5');
     assert.ok(api['How to move'].startsWith('Resize the current VM'));
+});
+
+// ---- The service or pool group, and the notes (0.4.0-beta) ----
+
+test('a VM in a service or pool has its own group, and a service-managed VM has no notes', () => {
+    const p = run(sample).plan;
+    const dbx = byName(p, 'contoso-dbx01');
+    assert.equal(F.groupOf(dbx), 'pool');
+    assert.deepEqual(F.signals(dbx), { actions: [], attention: [], checks: [] }, 'the service manages the image and the disks');
+    assert.equal(F.groupOf(byName(p, 'contoso-vmss01')), 'pool');
+    assert.equal(F.groupOf(byName(p, 'contoso-api01')), 'ready', 'a standalone VM keeps its group');
+});
+
+test('the advice names the service that the list gives', async () => {
+    const { poolAdvice } = await import('../js/words.js');
+    const p = run(sample).plan;
+    assert.match(poolAdvice(byName(p, 'contoso-dbx01')).todo, /Azure Databricks/);
+    assert.match(poolAdvice(byName(p, 'contoso-aks-np1')).todo, /AKS node pool/);
+    assert.match(poolAdvice(byName(p, 'contoso-vmss01')).todo, /new scale set/);
+    const head = 'Machine name,Current size,Generation,Managed by';
+    const batch = byName(run(`${head}
+contoso-x1,Standard_D4s_v3,V2,Microsoft.Batch
+`).plan, 'contoso-x1');
+    assert.equal(batch.pattern, 'C');
+    assert.match(poolAdvice(batch).todo, /Microsoft\.Batch/);
+    for (const m of p.machines) assert.ok(!/for example Azure Databricks/.test(poolAdvice(m).todo + poolAdvice(m).more), m.read.name);
+});
+
+test('each note shows once, with the series it applies to', () => {
+    const m = byName(run(sample).plan, 'contoso-web01');
+    const n = F.allNotes(m);
+    const all = [...n.actions, ...n.attention, ...n.checks];
+    const keys = all.map((x) => `${x.topic}|${x.text}`);
+    assert.equal(new Set(keys).size, keys.length, 'no note twice');
+    for (const x of all) assert.ok(x.series.every((s) => ['v5', 'v6', 'v7', 'burstable'].includes(s)));
+});
+
+test('the availability set note says when all the VMs must stop', () => {
+    const p = run(sample).plan;
+    const m = byName(p, 'contoso-web02');
+    const n = F.allNotes(m).attention.find((x) => x.topic === 'Availability set');
+    assert.match(n.text, /does not have the new size, you must stop all the VMs in the set/);
 });
