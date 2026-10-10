@@ -490,16 +490,49 @@ lifecycle or modernization pages. Use Microsoft's own terms instead:
   checks and never smaller than the VM.
 - Not yet: the pattern detection (steps below).
 
+**0.2.1-beta (2026-10-10): storage and backup appliances are a hard gate** (owner: "hard
+gate all storage appliances across the board for validation with vendor"). Microsoft's
+v6/v7 Plan page: "Treat VM-based storage appliances like NVAs". Microsoft has no list
+of their images, so `data/storage-appliance-images.js` is our own list from the Azure
+Marketplace catalog (publisher and offers per vendor: NetApp Cloud Volumes ONTAP, Pure
+Storage, Rubrik, Silk, Nasuni, Dell, Veeam, Commvault; read 2026-10-10). The NVA rule
+and its wording stay as they are (owner: the policy's NetApp entry may be a mistake that
+Microsoft fixes later).
+
+**Test build, 2026-10-10 (done):** AKS, Databricks, a uniform scale set, AVD pooled and
+personal host pools with a session host, a SQL Server VM with the SQL IaaS Agent, a
+shared disk, an Azure ML compute cluster. All signals proven; results in
+`docs/workload-patterns.md`. Found: uniform scale-set instances (AKS nodes) are only in
+the `computeresources` table; the AVD host pool type is in the `resources` table, not
+with the session host; Azure ML nodes are in no table of the customer's subscription.
+
 **Steps:**
 1. Rebuild the query as one pass that combines the records by VM (a union, not
    joins: Resource Graph allows only three joins), and add: the resource group
    "managed by" field, scale sets as their own rows, the SQL IaaS Agent records and
    availability groups, shared disks, the Service Fabric extension, AVD host pool type.
-2. A temporary test build to prove each signal (small AKS cluster, SQL Server VM
-   with the SQL IaaS Agent, a VM with a shared disk, a scale set; maybe Databricks),
-   torn down the same hour. Confirm the list and cost with the owner first.
+2. A temporary test build to prove each signal, torn down the same hour. Confirm the
+   list and cost with the owner first. Resource Graph reads configuration, not
+   running state: create, stop the VMs at once, wait for Resource Graph, read, delete.
+   | Signal | Test | Rough cost |
+   |---|---|---|
+   | AKS (resource group managed by the cluster; node scale set) | 1-node AKS, smallest size, then stop the cluster | ~$0.10 |
+   | Databricks (managed resource group) | a workspace only, no compute | ~$0 |
+   | Scale sets as rows (uniform scale sets are not in the VM list) | a scale set with 0 instances | $0 |
+   | AVD pooled vs personal | two empty host pools + one session host, then stop it | ~$0.05 |
+   | SQL Server VM (SQL IaaS Agent) | SQL Server Developer edition (free licence), small VM, registered, stopped | ~$0.10 |
+   | Failover cluster (shared managed disk) | a shared disk on a small VM, stopped | ~$0.20 |
+   | Azure ML compute not in the VM list | a compute cluster with 0 minimum nodes | $0 |
+   Total under ~$1, in one resource group, in the owner's ChrisLittle subscription.
+   Not built (documented from Microsoft's docs, marked "untested"): ARO (6 VMs, about
+   40 minutes), HDInsight, Service Fabric managed cluster (3 nodes, about $1 - optional),
+   availability groups (need a domain), Batch, CycleCloud, Citrix, Horizon.
+   At teardown, check that the resource groups that AKS and Databricks made are gone.
 3. The Pattern column and the advice for each pattern; the text for what the tool
    cannot detect.
+   - Also a tool-neutral reference, `docs/workload-patterns.md` (owner, 2026-10-10):
+     for each pattern, the Resource Graph field or query that finds it, what the test
+     build proved, and what cannot be detected. Any tool can use it.
 4. The feedback changes.
 5. Tests, the STE check, screen widths; pull request.
 
