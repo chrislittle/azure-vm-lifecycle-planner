@@ -646,6 +646,18 @@ existing one can deploy in its approved quota if the region has capacity; Azure
 approves no more quota; running VMs are not affected; it is not a retirement. The
 series names now match Microsoft's table exactly (B and Bs, not "B v1").
 
+## 0.4.6-beta (2026-10-10): VMs with the same name stay apart
+
+Owner: what if VMs have the same name in other subscriptions, regions or groups? The
+query gave no unique key, and vm-not-checked.csv found each VM by name, so a reason
+could come from the other VM. Now: the query gives "Resource ID" (Azure's unique key,
+no extra join; checked on Azure: only the new column changed). The tool keeps rows
+apart by row, never by name. The table shows where a VM is only when its name is in
+the list more than once (owner: "already a bit tight"): the resource group, else the
+subscription, else the region. The details show the resource ID; Find matches it. The
+files get Subscription ID, Resource group and Resource ID, so a customer can group by
+region, subscription or group. The sample has contoso-web01 twice.
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the

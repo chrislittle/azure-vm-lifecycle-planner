@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.5-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.6-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -94,7 +94,15 @@ For each VM:
   [docs/workload-patterns.md](docs/workload-patterns.md) gives the signal for each
   pattern, and how a test build proved it.
 
-The zip file has these files:
+VMs with the same name in other resource groups, subscriptions or regions stay apart:
+the query gives each VM's resource ID. When a name is in the list more than once, the
+table shows what tells those VMs apart (for example the resource group). The details
+of each VM show its resource ID. **Find** also matches the resource group and the
+subscription ID.
+
+The zip file has these files. Each file has the columns Region, Subscription ID,
+Resource group and Resource ID, so you can sort, filter or group by them, for example
+in Excel:
 
 | File | Contents |
 |---|---|

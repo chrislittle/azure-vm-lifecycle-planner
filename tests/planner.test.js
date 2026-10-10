@@ -389,3 +389,34 @@ test('the availability set note says when all the VMs must stop', () => {
     const n = F.allNotes(m).attention.find((x) => x.topic === 'Availability set');
     assert.match(n.text, /does not have the new size, you must stop all the VMs in the set/);
 });
+
+// ---- Same names in other groups or subscriptions (0.4.6-beta) ----
+
+test('the resource ID gives the subscription and the resource group', async () => {
+    const { readResourceId } = await import('../js/planner.js');
+    const r = readResourceId('/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-contoso-dr/providers/Microsoft.Compute/virtualMachines/contoso-web01');
+    assert.equal(r.subscriptionId, '00000000-0000-0000-0000-000000000000');
+    assert.equal(r.resourceGroup, 'rg-contoso-dr');
+    assert.deepEqual(readResourceId(''), { resourceId: '', subscriptionId: '', resourceGroup: '' });
+    assert.equal(readResourceId('not an id').resourceGroup, '');
+});
+
+test('two VMs with the same name stay apart in every file', () => {
+    const head = 'Machine name,Region,Current size,Generation,Resource ID';
+    const id = (rg) => `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/${rg}/providers/Microsoft.Compute/virtualMachines/contoso-app09`;
+    // The first cannot be checked (no generation); the second can.
+    const { plan: p } = run(`${head}\ncontoso-app09,eastus2,Standard_D4s_v3,,${id('rg-a')}\ncontoso-app09,eastus2,Standard_D4s_v3,V2,${id('rg-b')}\n`);
+    const rows = F.notCheckedRows(p, table, NOW);
+    assert.ok(rows.length >= 1);
+    for (const r of rows) assert.equal(r['Resource group'], 'rg-a', 'the reason belongs to the VM in rg-a');
+    assert.ok(rows.some((r) => /generation/i.test(r['Why'])));
+    const summary = F.summaryRows(p);
+    assert.deepEqual(summary.map((r) => r['Resource group']), ['rg-a', 'rg-b']);
+    assert.ok(summary.every((r) => r['Resource ID'].includes('/resourceGroups/')));
+});
+
+test('the sample has a VM name twice, in two resource groups', () => {
+    const twins = run(sample).plan.machines.filter((m) => m.read.name === 'contoso-web01');
+    assert.equal(twins.length, 2);
+    assert.notEqual(twins[0].read.resourceGroup, twins[1].read.resourceGroup);
+});

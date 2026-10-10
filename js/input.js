@@ -37,6 +37,8 @@ export const COLUMNS = [
     { name: 'SQL Server' },
     { name: 'SQL availability group' },
     { name: 'Shared disk' },
+    // Azure's unique key for the VM (query 0.4.6-beta and later). Optional.
+    { name: 'Resource ID' },
 ];
 
 // A header as it is compared: case, spaces, dashes, underscores and dots ignored.

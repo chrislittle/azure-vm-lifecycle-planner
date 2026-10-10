@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.4.5-beta';
-import capacity from '../data/capacity.js?v=0.4.5-beta';
+import endOfLife from '../data/end-of-life.js?v=0.4.6-beta';
+import capacity from '../data/capacity.js?v=0.4.6-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.4.5-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.4.5-beta';
-import { patternOf } from './patterns.js?v=0.4.5-beta';
+} from './lifecycle.js?v=0.4.6-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.4.6-beta';
+import { patternOf } from './patterns.js?v=0.4.6-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -91,6 +91,14 @@ export function readSizeName(text, table) {
 // Machines
 // ---------------------------------------------------------------------------
 
+// An Azure resource ID -> { resourceId, subscriptionId, resourceGroup }. Each is ''
+// when the list does not give it, or the text is not a resource ID.
+export function readResourceId(text) {
+    const id = String(text ?? '').trim();
+    const m = /^\/subscriptions\/([^/]+)\/resourceGroups\/([^/]+)\//i.exec(id);
+    return { resourceId: id, subscriptionId: m ? m[1] : '', resourceGroup: m ? m[2] : '' };
+}
+
 // One row -> { vm, read, problems: [{ what, why }], notes: [] }. vm is null when
 // the row cannot be planned. Facts not in the list are left out of vm, so the
 // logic reads them as unknown.
@@ -162,6 +170,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         row: rowNumber, name, region, regionAsWritten: cell('Region'), sizeAsWritten: sizeText, size: size.size,
         generation: genNotNeeded ? null : gen, generationAsWritten: genText, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
         resourceType: extra.resourceType, instances: extra.instances,
+        ...readResourceId(cell('Resource ID')),
     };
     if (problems.length) return { vm: null, read, extra, pattern, problems, notes };
 
@@ -340,7 +349,7 @@ export function plan(machines, table, now = new Date()) {
     const results = [];
     const review = [];
     const out = [];
-    const addReview = (m, size, series, what, why) => review.push({ machine: m.read.name, region: m.read.region || '', size, series, what, why });
+    const addReview = (m, size, series, what, why) => review.push({ row: m.read.row, machine: m.read.name, region: m.read.region || '', size, series, what, why });
 
     for (const m of machines) {
         if (m.vm) continue;

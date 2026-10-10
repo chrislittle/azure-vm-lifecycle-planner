@@ -36,6 +36,7 @@ Resources
     self = max(toint((isVm or isVmss) and tolower(id) == key)),
     isVmss = max(toint(isVmss)),
     name = anyif(name, (isVm or isVmss) and tolower(id) == key),
+    rid = anyif(id, (isVm or isVmss) and tolower(id) == key),
     rg = anyif(tolower(resourceGroup), (isVm or isVmss) and tolower(id) == key),
     sub = anyif(subscriptionId, (isVm or isVmss) and tolower(id) == key),
     location = anyif(location, (isVm or isVmss) and tolower(id) == key),
@@ -82,6 +83,7 @@ Resources
 | summarize
     isVmss = take_anyif(isVmss, self == 1),
     name = take_anyif(name, self == 1),
+    rid = take_anyif(rid, self == 1),
     rg = take_anyif(rg, self == 1),
     sub = take_anyif(sub, self == 1),
     location = take_anyif(location, self == 1),
@@ -178,5 +180,7 @@ Resources
     ['AVD host pool type'] = hostPoolType,
     ['SQL Server'] = iff(isempty(sqlEdition), 'No', sqlEdition),
     ['SQL availability group'] = iff(isempty(sqlGroup), 'No', 'Yes'),
-    ['Shared disk'] = iff(sharedDisk > 0, 'Yes', 'No')
+    ['Shared disk'] = iff(sharedDisk > 0, 'Yes', 'No'),
+    // Azure's unique key: two VMs can have the same name in other groups or subscriptions.
+    ['Resource ID'] = rid
 | order by ['Machine name'] asc
