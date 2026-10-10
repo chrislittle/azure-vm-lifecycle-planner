@@ -10,8 +10,8 @@ Graph Explorer in the Azure portal, or with `az graph query`.
 
 **Status of each signal:**
 
-- **Tested** - a temporary test build proved it on 10 October 2026 (Central US). The
-  test deleted the build the same day.
+- **Tested** - a temporary test build proved it on 10 October 2026 (Central US). A
+  second build proved the combined query (`query.kql`) and the planner on the same day.
 - **From Azure Policy** - the list comes from an Azure built-in policy definition,
   read from Azure with `az policy definition show`.
 - **From the Marketplace catalog** - our own list, read from the Azure Marketplace
@@ -31,7 +31,7 @@ Graph Explorer in the Azure portal, or with `az graph query`.
 | | Azure Red Hat OpenShift (ARO) | The cluster's resource group is "managed by" the ARO cluster. | From the docs |
 | | Azure Batch, CycleCloud | Batch (user subscription mode) and CycleCloud make their own scale sets or tags. | From the docs |
 | | Self-hosted CI agents on single VMs | None. | Not possible |
-| B. Image-based desktops | AVD pooled host pools | The session host's host pool has `hostPoolType` = `Pooled`. (`Personal` is pattern E.) | Tested |
+| B. Image-based desktops | AVD pooled host pools | The session host's host pool has `hostPoolType` = `Pooled`. (`Personal` is pattern E, tested on a personal session host.) | Tested |
 | | Citrix DaaS, VMware Horizon | Possibly by the tags that their provisioning adds. | From the docs (Citrix); Not possible (Horizon) |
 | C. Service-managed compute | Azure Databricks | The cluster's resource group is "managed by" the Databricks workspace. | Tested |
 | | Data Explorer, Synapse Spark, SSIS integration runtime, PostgreSQL and MySQL flexible server | Their compute is not in the customer's subscription. | Tested for Azure Machine Learning (same model); from the docs for the others |
@@ -40,7 +40,7 @@ Graph Explorer in the Azure portal, or with `az graph query`.
 | E. Customer-managed VMs | Line-of-business, web, file, DNS servers | Any VM that is not in another pattern. | Tested (default) |
 | F. Stateful and clustered | SQL Server on a VM | A `microsoft.sqlvirtualmachine/sqlvirtualmachines` resource that points to the VM. | Tested |
 | | SQL Server Always On availability groups | The same resource, with `sqlVirtualMachineGroupResourceId` set. | From the docs (needs a domain) |
-| | Failover clusters | A managed disk with `maxShares` > 1 on the VM. | Tested |
+| | Failover clusters | A managed disk with `maxShares` > 1 on the VM. Resource Graph has no list of the VMs on a shared disk: find them from the data disks of each VM (see below). | Tested, with two VMs on one disk |
 | | Service Fabric | The Service Fabric extension on a scale set, or a managed cluster's resource group. | From the docs |
 | | SAP | The Azure VM extension for SAP solutions, an SAP licence type, or an SAP marketplace image. | From the docs |
 | | Oracle with Data Guard | An Oracle database image. Data Guard itself has no signal. | From the docs (partly) |
@@ -123,15 +123,26 @@ resources
 
 ### Shared disks (failover clusters)
 
-A disk that more than one VM can use has `properties.maxShares` greater than 1. With
-one VM attached, `managedBy` is that VM. With more than one, Microsoft documents
-`managedByExtended` as the list of VMs.
+A disk that more than one VM can use has `properties.maxShares` greater than 1.
+Microsoft documents `managedByExtended` as the list of VMs on the disk, but Resource
+Graph does not have it (tested with two VMs on one disk: the field is empty, and
+`managedBy` gives only one VM). Each VM lists its data disks, so start from the VMs:
 
 ```kusto
 resources
-| where type =~ 'microsoft.compute/disks' and toint(properties.maxShares) > 1
-| project disk = name, vm = tolower(tostring(managedBy)), others = managedByExtended
+| where type =~ 'microsoft.compute/virtualmachines'
+| mv-expand d = properties.storageProfile.dataDisks
+| project vm = name, disk = tolower(tostring(d.managedDisk.id))
+| join kind=inner (
+    resources
+    | where type =~ 'microsoft.compute/disks' and toint(properties.maxShares) > 1
+    | project disk = tolower(id)
+  ) on disk
+| project vm, disk
 ```
+
+`query.kql` does the same without a join: in its first pass a VM gives a key for
+each of its data disks, so the group of a shared disk holds every VM on it.
 
 ### Compute that is not in the customer's subscription
 
@@ -194,10 +205,24 @@ query (`query.kql`) reads all of them.
 
 ## How to combine the signals in one query
 
-A Resource Graph query can have only three `join` operators. A query that adds all
-these signals with joins goes over that limit. Use `union` instead. Make one row for
-each signal, with the VM ID as the key. Then `summarize` by the VM ID. Each signal in
-this document gives a VM ID (or a scale-set ID, or a resource group) to use as the key.
+Resource Graph limits a query to three `join` or `union` operators, with only one
+table other than `resourcecontainers`, and three `mv-expand` operators. `query.kql`
+fits in these limits:
+
+1. One pass over the `resources` table reads VMs, scale sets, NICs, extensions, SQL IaaS
+   Agent records and disks. Each record gives the key of the VM it belongs to
+   (`mv-expand`). A `summarize` by the key puts each VM's records together.
+2. A second `summarize` gives "shared disk" to every VM on a shared disk.
+3. Three joins: the AVD session hosts (`desktopvirtualizationresources`), the AVD host
+   pools (`resources`) and the resource groups (`resourcecontainers`).
+
+The second test build ran `query.kql` and gave the expected answer for each resource.
+The columns that the earlier query also gave did not change on 9 VMs in two
+subscriptions.
+
+A scale set has no generation in Resource Graph (`instanceView` is only on a VM). The
+image SKU tells for most marketplace images (`-gen2`, `-g2`). An AKS node image is
+not a marketplace image.
 
 ## The test build
 
@@ -216,6 +241,10 @@ one US dollar:
 The test stopped (deallocated) each VM after Azure made it. After it read the signals,
 the test deleted the resource group, and the resource groups that AKS and Databricks
 made.
+
+A second build (the same day) proved the combined query: AKS (stopped), a uniform
+scale set with 0 instances, a pooled and a personal AVD host pool with one session host
+each, a SQL Server VM with the SQL IaaS Agent, and one shared disk on two Linux VMs.
 
 **Not tested** (a large or special setup): ARO, HDInsight, Service Fabric, SQL Server
 availability groups, Batch, CycleCloud, Citrix, VMware Horizon.

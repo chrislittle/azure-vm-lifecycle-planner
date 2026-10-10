@@ -2,20 +2,20 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.2.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.2.1-beta';
-import capacity from '../data/capacity.js?v=0.2.1-beta';
-import nvme from '../data/nvme-images.js?v=0.2.1-beta';
-import query from './query.js?v=0.2.1-beta';
-import sample from './sample.js?v=0.2.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.2.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.2.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.2.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.2.1-beta';
-import { GROUPS, GUIDANCE, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.2.1-beta';
-import * as F from './files.js?v=0.2.1-beta';
-import { makeZip } from './zip.js?v=0.2.1-beta';
-import version from './version.js?v=0.2.1-beta';
+import sizes from '../data/sizes.js?v=0.3.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.3.0-beta';
+import capacity from '../data/capacity.js?v=0.3.0-beta';
+import nvme from '../data/nvme-images.js?v=0.3.0-beta';
+import query from './query.js?v=0.3.0-beta';
+import sample from './sample.js?v=0.3.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.3.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.3.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.3.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.3.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.3.0-beta';
+import * as F from './files.js?v=0.3.0-beta';
+import { makeZip } from './zip.js?v=0.3.0-beta';
+import version from './version.js?v=0.3.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -135,6 +135,7 @@ function run() {
 
 const PAGE = 200;
 let filter = 'all';
+let patternFilter = 'all';
 let limit = PAGE;
 // The colour of each result group. Red only for no supported size; a hard gate
 // and "do this first" are amber: they are steps, not dead ends (peer, 2026-10-09).
@@ -157,10 +158,19 @@ function showResults() {
     sel.replaceChildren(el('option', { value: 'all', text: `All VMs (${p.machines.length})` }),
         ...Object.keys(GROUPS).map((g) => el('option', { value: g, text: GROUPS[g].short })));
     sel.value = filter;
+    // Only the patterns in this list, with their counts.
+    const pf = $('pattern-filter');
+    const found = Object.keys(PATTERNS).filter((k) => p.machines.some((m) => (m.pattern || '') === k));
+    if (patternFilter !== 'all' && !found.includes(patternFilter)) patternFilter = 'all';
+    pf.replaceChildren(el('option', { value: 'all', text: 'All patterns' }),
+        ...found.map((k) => el('option', { value: k, text: `${PATTERNS[k].name} (${p.machines.filter((m) => (m.pattern || '') === k).length})` })));
+    pf.value = patternFilter;
     renderTable();
 }
 
 $('filter').addEventListener('change', (e) => { filter = e.target.value; limit = PAGE; showResults(); });
+$('pattern-filter').addEventListener('change', (e) => { patternFilter = e.target.value; limit = PAGE; renderTable(); });
+$('not-found').textContent = NOT_FOUND;
 $('find').addEventListener('input', () => { limit = PAGE; renderTable(); });
 $('more').addEventListener('click', () => { limit += PAGE; renderTable(); });
 
@@ -181,6 +191,7 @@ function renderTable() {
     const q = $('find').value.trim().toLowerCase();
     const rows = p.machines.filter((m) => {
         if (filter !== 'all' && F.groupOf(m) !== filter) return false;
+        if (patternFilter !== 'all' && (m.pattern || '') !== patternFilter) return false;
         if (q && !`${m.read.name} ${m.read.size || m.read.sizeAsWritten}`.toLowerCase().includes(q)) return false;
         return true;
     });
@@ -195,7 +206,7 @@ function renderTable() {
         };
         const g = F.groupOf(m);
         tr.append(
-            el('td', { text: m.read.name }),
+            el('td', { class: 'vm' }, el('span', { class: 'name', text: m.read.name }), el('span', { class: 'sub', text: vmSub(m) })),
             el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
             stageCell(m),
             el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
@@ -218,6 +229,12 @@ function renderTable() {
     $('more').hidden = rows.length <= limit;
 }
 
+// Under the VM name: a scale set and its instances, and the workload pattern.
+function vmSub(m) {
+    const set = m.read.resourceType === 'Scale set' ? `Scale set${m.read.instances !== null && m.read.instances !== undefined ? `, ${m.read.instances} instance${m.read.instances === 1 ? '' : 's'}` : ''}. ` : '';
+    return `${set}${m.pattern ? PATTERNS[m.pattern].name : 'Pattern not checked'}`;
+}
+
 // The stage, short: the name, the date, and a tag when Microsoft limits capacity.
 function stageCell(m) {
     if (!m.stage) return el('td', {});
@@ -233,6 +250,9 @@ function details(m) {
     const td = el('td', { colspan: '9' });
     const g = F.groupOf(m);
     td.append(el('p', {}, el('strong', { text: GROUPS[g].long })));
+    const pat = PATTERNS[m.pattern || ''];
+    // The advice only for a VM that must move, or when the pattern is not known.
+    td.append(el('p', {}, el('strong', { text: `Workload pattern: ${m.pattern ? pat.name : 'not checked'}. ` }), m.moveRequired === 'Yes' || !m.pattern ? pat.advice : ''));
     if (m.stage) td.append(el('p', { text: `Lifecycle stage: ${stageWords(m.stage, capacityRestricted(m.vm.sourceSize))}` }));
     if (!m.vm) {
         td.append(el('ul', {}, m.problems.map((pr) => el('li', { text: reasonFor(pr.why, { problem: pr }) }))));
@@ -245,7 +265,8 @@ function details(m) {
             const box = el('div', {},
                 el('h4', { text: o.supported ? `${name}: ${o.targetSize}` : name }),
                 el('p', { text: optionReason(r, table, now) }));
-            if (o.supported && m.moveRequired === 'Yes') box.append(el('p', {}, el('strong', { text: 'How to move: ' }), moveWords(r.series, o.rebuild, Boolean(m.vm.os))));
+            // For a pool or a service, the pattern above says how to move.
+            if (o.supported && m.moveRequired === 'Yes' && !POOL_PATTERNS.includes(m.pattern)) box.append(el('p', {}, el('strong', { text: 'How to move: ' }), moveWords(r.series, o.rebuild, Boolean(m.vm.os))));
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;

@@ -536,6 +536,37 @@ with the session host; Azure ML nodes are in no table of the customer's subscrip
 4. The feedback changes.
 5. Tests, the STE check, screen widths; pull request.
 
+## 0.3.0-beta (2026-10-10): workload patterns in the tool
+
+- **Query** (`query.kql`, 31 columns): one pass over `resources` plus three joins (AVD
+  session hosts, AVD host pools, resource groups), in Resource Graph's limits. New
+  columns: Resource type (VM or Scale set), Instances, Managed by (None, AKS,
+  Databricks, ARO, or the provider), AVD host pool type, SQL Server (edition or No),
+  SQL availability group, Shared disk. Uniform scale sets (AKS node pools included)
+  are now rows. Resource Graph has no `managedByExtended`, so a shared disk is found
+  from the data disks of each VM (a second summarize).
+- **Test build 2** (rg-lcp-patterns-test2, kept until the owner says to delete it):
+  the query gave the expected value for every resource; the 24 earlier columns did not
+  change on 9 VMs in two subscriptions. The query output, run through the tool, gave
+  A (AKS, scale set), B (pooled host), E (personal host), F (SQL Server, both VMs on
+  the shared disk). Owner's rule: build, prove the signals, write the final query, run
+  it on the build, run its output through the tool, then tear down when the owner says.
+- **Pattern** for each VM, in this order: G (appliance), C (managed by a service other
+  than AKS or ARO), A (AKS, ARO, scale set), B (AVD pooled), F (SQL Server by agent or
+  image, availability group, shared disk, SAP), E (all signals known and none of the
+  above). A list without the pattern columns gives "Pattern not checked", never E.
+- **Advice:** A to C replace the "how to move" by series (the pool or the service
+  decides); E and F keep it (v5 resize, v6 and v7 in parallel); F adds one node at a
+  time; G stays a hard gate. An AVD personal desktop is E, with an attention note.
+- **Scale set generation:** Resource Graph does not give it. A Generation 2 image SKU
+  (`-gen2`, `-g2`, `gensecond`) gives Generation 2; otherwise the row is not checked,
+  with a reason that asks for the generation. Never a guess.
+- **Page:** the pattern under each VM name, a pattern filter, the advice in the details,
+  and a note on what the tool cannot find (domain controllers, CI agents on single VMs,
+  NoSQL and search clusters, compute outside the subscription).
+- **Files:** Workload pattern and Pattern advice in vm-summary.csv; Workload pattern in
+  vm-target-sizes.csv; a pattern section in about-these-results.txt.
+
 ## Next
 
 - Peer feedback, as GitHub issues.

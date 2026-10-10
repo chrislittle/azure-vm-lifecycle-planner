@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.2.1-beta';
-import nvaImages from '../data/nva-images.js?v=0.2.1-beta';
-import nvme from '../data/nvme-images.js?v=0.2.1-beta';
-import { readCount } from './planner.js?v=0.2.1-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.3.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.3.0-beta';
+import nvme from '../data/nvme-images.js?v=0.3.0-beta';
+import { readCount } from './planner.js?v=0.3.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -21,6 +21,8 @@ export function readExtras(cell) {
     const yes = (column) => readYesNo(cell(column));
     const an = readCount(cell('Accelerated NICs'));
     const zone = cell('Zone');
+    const resourceType = cell('Resource type');
+    const sql = cell('SQL Server');
     return {
         imagePublisher: cell('Image publisher'), imageOffer: cell('Image offer'), imageSku: cell('Image SKU'),
         acceleratedNicCount: an.value,
@@ -35,6 +37,15 @@ export function readExtras(cell) {
         systemIdentity: yes('System-assigned identity'),
         availabilitySet: yes('Availability set'),
         zone: zone ? zone : null,
+        // The workload pattern (patterns.js).
+        resourceType: /^scale ?set$/i.test(resourceType) ? 'Scale set' : /^vm$/i.test(resourceType) ? 'VM' : null,
+        instances: readCount(cell('Instances')).value,
+        managedBy: cell('Managed by') || null,
+        hostPoolType: cell('AVD host pool type') || null,
+        // The SQL Server edition, false for 'No', null when the list does not say.
+        sqlServer: sql === '' ? null : readYesNo(sql) === false ? false : sql,
+        sqlGroup: yes('SQL availability group'),
+        sharedDisk: yes('Shared disk'),
     };
 }
 
@@ -226,7 +237,9 @@ export function caveats(vm, x, option) {
 
     out['Hibernation'] = x.hibernation === false ? fine('Off.') : x.hibernation === true ? problem('Turn off hibernation before the move.') : check('Check: the list does not say if hibernation is on.');
 
-    out['Scale set / AKS / AVD'] = x.scaleSet === true ? problem('Change the size in the scale set model, not on this VM.')
+    out['Scale set / AKS / AVD'] = x.scaleSet === true ? problem('Change the size in the scale set or node pool, not on each VM. See the workload pattern.')
+        // A personal desktop is the VM of one user: it moves as a normal VM.
+        : x.virtualDesktop === true && /^personal$/i.test(x.hostPoolType || '') ? attention('A personal desktop. The user cannot use it during the move. Tell the user first.')
         : x.virtualDesktop === true ? problem('Make new session hosts at the new size from the image. Then remove this host.')
         : x.scaleSet === false && x.virtualDesktop === false ? fine('Not in a scale set.')
         : check('Check: the list does not say if this VM is in a scale set or in Azure Virtual Desktop.');

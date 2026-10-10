@@ -9,14 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.2.1-beta';
-import capacity from '../data/capacity.js?v=0.2.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.3.0-beta';
+import capacity from '../data/capacity.js?v=0.3.0-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.2.1-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.2.1-beta';
+} from './lifecycle.js?v=0.3.0-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.3.0-beta';
+import { patternOf } from './patterns.js?v=0.3.0-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -118,13 +119,24 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     const needsGen2 = security === 'TrustedLaunch' || security === 'ConfidentialVM';
     const securityWords = security === 'TrustedLaunch' ? 'Trusted Launch' : 'a confidential VM';
 
+    // The facts the query adds, and the workload pattern: also for a row that
+    // cannot be planned, because the pattern says how to move it.
+    const extra = readExtras(cell);
+    const pattern = patternOf(extra);
+
     const genText = cell('Generation');
     let gen = readGeneration(genText);
+    // A Generation 2 marketplace image says so in its SKU (for example 22_04-lts-gen2).
+    const gen2Image = /(^|[-_])(gen2|g2)($|[-_])|gensecond/i.test(extra.imageSku || '');
     if (!gen && needsGen2) {
         gen = 'V2';
         notes.push(`The generation is empty. ${securityWords[0].toUpperCase() + securityWords.slice(1)} needs Generation 2, so this tool uses Generation 2.`);
+    } else if (!gen && gen2Image) {
+        gen = 'V2';
+        notes.push(`The generation is empty. The image SKU '${extra.imageSku}' is a Generation 2 image, so this tool uses Generation 2.`);
     } else if (!gen) {
-        problems.push({ what: `Generation '${genText}'`, why: 'generation-missing' });
+        // Azure Resource Graph does not give the generation of a scale set.
+        problems.push({ what: `Generation '${genText}'`, why: extra.resourceType === 'Scale set' ? 'scale-set-generation-missing' : 'generation-missing' });
     } else if (gen === 'V1' && needsGen2) {
         problems.push({ what: `Generation '${genText}' with security type '${securityText}'`, why: 'generation-conflicts-with-security-type', securityWords });
     }
@@ -141,8 +153,9 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     const read = {
         row: rowNumber, name, region, regionAsWritten: cell('Region'), sizeAsWritten: sizeText, size: size.size,
         generation: gen, generationAsWritten: genText, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
+        resourceType: extra.resourceType, instances: extra.instances,
     };
-    if (problems.length) return { vm: null, read, problems, notes };
+    if (problems.length) return { vm: null, read, extra, pattern, problems, notes };
 
     const sourceSize = size.size;
     const entry = table.has(sourceSize) ? table.get(sourceSize) : null;
@@ -179,7 +192,6 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     else if (/^Standard_(DC|EC)\d/i.test(sourceSize)) blockers.push('confidential-family');
     // The facts the query adds: Azure Disk Encryption, SAP, unmanaged disks,
     // an ephemeral OS disk.
-    const extra = readExtras(cell);
     blockers.push(...extraBlockers(extra));
 
     const vm = {
@@ -193,7 +205,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     if (disks.value !== null) vm.dataDiskCount = disks.value;
     if (extra.acceleratedNicCount !== null) vm.acceleratedNicCount = extra.acceleratedNicCount;
     if (extra.primaryNicAccelerated !== null) vm.primaryNicAccelerated = extra.primaryNicAccelerated;
-    return { vm, read, extra, problems: [], notes };
+    return { vm, read, extra, pattern, problems: [], notes };
 }
 
 // ---------------------------------------------------------------------------
