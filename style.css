@@ -6,6 +6,7 @@
     --line: #dde2e8;
     --accent: #0b6bcb;
     --accent-text: #ffffff;
+    --row-hover: #e8f1fb;
     --code: #f0f2f5;
     --fine: #1a7f37;
     --fine-bg: #e6f4ea;
@@ -24,6 +25,7 @@
         --line: #2c333b;
         --accent: #4ea1ff;
         --accent-text: #0b1220;
+        --row-hover: #18222e;
         --code: #20262d;
         --fine: #6cd08a;
         --fine-bg: #15301e;
@@ -107,7 +109,11 @@ table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { position: sticky; top: 0; background: var(--panel); font-weight: 600; white-space: nowrap; }
 tbody tr.machine { cursor: pointer; }
-tbody tr.machine:hover { background: var(--bg); }
+tbody tr.machine:hover, tbody tr.machine:focus-visible, tbody tr.machine[aria-expanded="true"] { background: var(--row-hover); }
+/* An arrow before the name: the row opens (owner, 2026-10-10: not obvious otherwise). */
+td.vm .name::before { content: "\25B8"; display: inline-block; width: 18px; font-size: 16px; line-height: 1; text-align: center; margin-right: 2px; color: var(--accent); transition: transform 0.15s; }
+tr.machine[aria-expanded="true"] td.vm .name::before { transform: rotate(90deg); }
+p.open-hint { margin: 4px 0 8px; }
 td.stage { min-width: 150px; }
 td.stage strong { display: block; font-weight: 600; }
 td.stage .sub, td.vm .sub { display: block; color: var(--muted); font-size: 12px; }

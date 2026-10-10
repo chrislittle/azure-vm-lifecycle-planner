@@ -310,7 +310,7 @@ test('a list without the pattern columns gives no pattern: unknown is not patter
     const p = run(read('samples/contoso-every-series.csv')).plan;
     assert.ok(p.machines.every((m) => m.pattern !== 'E'));
     const rows = F.summaryRows(p);
-    assert.ok(rows.every((r) => r['Workload pattern'] === 'Not checked' || /^[A-G]\. /.test(r['Workload pattern'])));
+    assert.ok(rows.every((r) => r['Workload type'] === 'Type not checked'));
 });
 
 test('an AVD session host with no host pool type is not checked, not pattern E', () => {

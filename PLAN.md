@@ -567,6 +567,15 @@ with the session host; Azure ML nodes are in no table of the customer's subscrip
 - **Files:** Workload pattern and Pattern advice in vm-summary.csv; Workload pattern in
   vm-target-sizes.csv; a pattern section in about-these-results.txt.
 
+## 0.3.1-beta (2026-10-10): plain names for the workload types
+
+Owner: "no one who uses this quickly will know what" pattern A or G means. The page
+and the files now say "Workload type" with plain names: Node pool or scale set (A),
+Pooled AVD host (B), Managed by a service (C), Cluster in a service (D), Standalone VM
+(E), Cluster or database (F), Vendor appliance (G), Type not checked. The letters stay
+only in about-these-results.txt, the README table and docs/workload-patterns.md, to
+match Microsoft's chart.
+
 ## Next
 
 - Peer feedback, as GitHub issues.

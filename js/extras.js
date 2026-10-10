@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.3.0-beta';
-import nvaImages from '../data/nva-images.js?v=0.3.0-beta';
-import nvme from '../data/nvme-images.js?v=0.3.0-beta';
-import { readCount } from './planner.js?v=0.3.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.3.1-beta';
+import nvaImages from '../data/nva-images.js?v=0.3.1-beta';
+import nvme from '../data/nvme-images.js?v=0.3.1-beta';
+import { readCount } from './planner.js?v=0.3.1-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -237,7 +237,7 @@ export function caveats(vm, x, option) {
 
     out['Hibernation'] = x.hibernation === false ? fine('Off.') : x.hibernation === true ? problem('Turn off hibernation before the move.') : check('Check: the list does not say if hibernation is on.');
 
-    out['Scale set / AKS / AVD'] = x.scaleSet === true ? problem('Change the size in the scale set or node pool, not on each VM. See the workload pattern.')
+    out['Scale set / AKS / AVD'] = x.scaleSet === true ? problem('Change the size in the scale set or node pool, not on each VM. See the workload type.')
         // A personal desktop is the VM of one user: it moves as a normal VM.
         : x.virtualDesktop === true && /^personal$/i.test(x.hostPoolType || '') ? attention('A personal desktop. The user cannot use it during the move. Tell the user first.')
         : x.virtualDesktop === true ? problem('Make new session hosts at the new size from the image. Then remove this host.')
