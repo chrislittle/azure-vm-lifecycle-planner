@@ -1,18 +1,19 @@
-// The four download files, made in the browser:
-//   vm-summary.csv          one row per machine - start here
+// The five download files, made in the browser:
+//   vm-lifecycle-report.html the report - start here (report.js)
+//   vm-summary.csv          one row per machine
 //   vm-target-sizes.csv     one row per machine and series, with reasons and caveats
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.4.6-beta';
-import families from '../data/families.js?v=0.4.6-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.6-beta';
-import capacity from '../data/capacity.js?v=0.4.6-beta';
-import nvme from '../data/nvme-images.js?v=0.4.6-beta';
-import { capacityRestricted } from './planner.js?v=0.4.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.6-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.4.6-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.4.6-beta';
+import sizes from '../data/sizes.js?v=0.5.0-beta';
+import families from '../data/families.js?v=0.5.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.5.0-beta';
+import capacity from '../data/capacity.js?v=0.5.0-beta';
+import nvme from '../data/nvme-images.js?v=0.5.0-beta';
+import { capacityRestricted } from './planner.js?v=0.5.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.5.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.5.0-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.5.0-beta';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF.
 export function toCsv(columns, rows) {
@@ -247,7 +248,9 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `  ${NOT_FOUND}`,
         '',
         'FILES',
-        '  vm-summary.csv         One row for each VM. Start with this file.',
+        '  vm-lifecycle-report.html  The report. Start with this file. It opens in a browser.',
+        '                         To make a PDF, print it and select "Save as PDF".',
+        '  vm-summary.csv         One row for each VM, to sort and filter in Excel.',
         '                         It shows if you must move the VM, and the answer for each series.',
         '  vm-target-sizes.csv    One row for each VM and series. It gives the reasons and the notes.',
         '  vm-not-checked.csv     The items that this tool cannot check.',

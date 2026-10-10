@@ -420,3 +420,24 @@ test('the sample has a VM name twice, in two resource groups', () => {
     assert.equal(twins.length, 2);
     assert.notEqual(twins[0].read.resourceGroup, twins[1].read.resourceGroup);
 });
+
+// ---- The report (0.5.0-beta) ----
+
+test('the report is one safe HTML file with every VM that must move', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const { plan: p } = run(sample);
+    const html = reportHtml(p, table, 'sample list (contoso)', NOW);
+    assert.ok(html.startsWith('<!doctype html>'));
+    assert.ok(!/<script|<link|<img|src=|@import|url\(/i.test(html), 'nothing to run and nothing to load');
+    for (const m of p.machines) assert.ok(html.includes(m.read.name), m.read.name);
+    for (const m of p.machines.filter((x) => F.groupOf(x) !== 'modern')) assert.ok(html.includes(`id="vm-${m.read.row}"`), `card for ${m.read.name}`);
+    assert.equal(reportHtml(p, table, 'sample list (contoso)', NOW), html, 'same list, same report');
+});
+
+test('the report escapes the text of the list', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const { plan: p } = run('Machine name,Current size,Generation\n<b>x</b>,Standard_D4s_v3,V2\n');
+    const html = reportHtml(p, table, '<i>list</i>', NOW);
+    assert.ok(!html.includes('<b>x</b>') && html.includes('&lt;b&gt;x&lt;/b&gt;'));
+    assert.ok(!html.includes('<i>list</i>'));
+});
