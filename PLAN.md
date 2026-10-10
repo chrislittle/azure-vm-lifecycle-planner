@@ -658,6 +658,17 @@ subscription, else the region. The details show the resource ID; Find matches it
 files get Subscription ID, Resource group and Resource ID, so a customer can group by
 region, subscription or group. The sample has contoso-web01 twice.
 
+## 0.5.0-beta (2026-10-10): a report in the zip
+
+Owner: a more formal report for people who do not want Excel. The zip now starts with
+vm-lifecycle-report.html: one HTML file with its CSS inside, no scripts, nothing to load,
+so it opens in any browser offline and prints to PDF (each VM card stays on one page).
+Contents: summary (counts by result group, workload type, region, resource group), what
+to do by result group (one table each, with the target size and the main step), one card
+for each VM that needs a move (the page's order), notes and sources. The "What to do"
+words moved to js/details.js, so the page and the report say the same. The CSV files
+stay for Excel. Owner approved a mockup first.
+
 **Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
 source changes and opens an issue. It must also read Azure (the size table, the
 Marketplace images, the policy definition), not only Microsoft Learn: plan it with the

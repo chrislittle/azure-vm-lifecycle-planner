@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.6-beta). The results are advice. They are not a check
+**Status:** beta (version 0.5.0-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -106,7 +106,8 @@ in Excel:
 
 | File | Contents |
 |---|---|
-| vm-summary.csv | One row for each VM. Start with this file. |
+| vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
 | vm-not-checked.csv | The items that the tool cannot check. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |

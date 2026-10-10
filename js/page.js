@@ -2,20 +2,22 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.4.6-beta';
-import endOfLife from '../data/end-of-life.js?v=0.4.6-beta';
-import capacity from '../data/capacity.js?v=0.4.6-beta';
-import nvme from '../data/nvme-images.js?v=0.4.6-beta';
-import query from './query.js?v=0.4.6-beta';
-import sample from './sample.js?v=0.4.6-beta';
-import { SizeTable } from './lifecycle.js?v=0.4.6-beta';
-import { COLUMNS, readList } from './input.js?v=0.4.6-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.4.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.4.6-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.4.6-beta';
-import * as F from './files.js?v=0.4.6-beta';
-import { makeZip } from './zip.js?v=0.4.6-beta';
-import version from './version.js?v=0.4.6-beta';
+import sizes from '../data/sizes.js?v=0.5.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.5.0-beta';
+import capacity from '../data/capacity.js?v=0.5.0-beta';
+import nvme from '../data/nvme-images.js?v=0.5.0-beta';
+import query from './query.js?v=0.5.0-beta';
+import sample from './sample.js?v=0.5.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.5.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.5.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.5.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.5.0-beta';
+import { gateReasons, seriesList, todo } from './details.js?v=0.5.0-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.5.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.5.0-beta';
+import * as F from './files.js?v=0.5.0-beta';
+import { makeZip } from './zip.js?v=0.5.0-beta';
+import version from './version.js?v=0.5.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -347,45 +349,6 @@ function details(m) {
     return el('tr', { class: 'details' }, td);
 }
 
-// 'v6', 'v7' -> 'v6 and v7'.
-function seriesList(list) {
-    const names = list.map((s) => (s === 'burstable' ? 'Burstable' : s));
-    return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
-// The hard gate, in words: SAP, or the vendor of an appliance.
-function gateReasons(m) {
-    const codes = ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor'];
-    return (m.vm.blockers || []).filter((b) => codes.includes(b)).map((b) => reasonFor(b, {}));
-}
-
-// The main thing to do for a VM: { main, more: [] }.
-function todo(m, g) {
-    const pool = POOL_PATTERNS.includes(m.pattern);
-    if (!m.vm) {
-        if (pool) { const a = poolAdvice(m); return { main: a.todo, more: [a.more, 'This tool cannot check the sizes. See "Why".'] }; }
-        return { main: 'This tool cannot check this VM.', more: ['See "Why". Correct the list, then load it again.'] };
-    }
-    if (g === 'modern') return { main: 'No move needed.', more: ['This is a modern size: Microsoft fully supports it.'] };
-    if (g === 'unchecked') return { main: 'This tool cannot check this VM.', more: ['See "Why" and "Sizes".'] };
-    if (g === 'pool') { const a = poolAdvice(m); return { main: a.todo, more: [a.more] }; }
-    if (g === 'gate') {
-        const sap = (m.vm.blockers || []).includes('sap-needs-a-certified-size');
-        return { main: sap ? 'Ask SAP which sizes they certify. Do not change the VM before that.' : 'Ask the vendor which sizes they certify. Do not change the VM before that.', more: [`This tool gives no size. Only ${sap ? 'SAP' : 'the vendor'} can approve a size.`] };
-    }
-    if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
-    const r = F.likelyRow(m);
-    const o = r.option;
-    const main = r.series === 'v6' || r.series === 'v7' ? `Deploy a new VM at ${o.targetSize} in parallel. Then move the workload.`
-        : o.rebuild ? `Rebuild at ${o.targetSize} from a current image.` : `Resize to ${o.targetSize}.`;
-    const more = [];
-    if (g === 'first') more.push('Do the steps in "Before the move" first.');
-    if (m.pattern === 'F') more.push(PATTERNS.F.advice);
-    const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
-    if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);
-    return { main, more };
-}
-
 // ---------------------------------------------------------------------------
 // Downloads: made here, saved by the browser
 // ---------------------------------------------------------------------------
@@ -403,6 +366,7 @@ $('download').addEventListener('click', () => {
         { name: 'vm-summary.csv', text: F.toCsv(F.SUMMARY_COLUMNS, F.summaryRows(p)) },
         { name: 'vm-target-sizes.csv', text: F.toCsv(F.TARGET_COLUMNS, F.targetRows(p, table, now)) },
         { name: 'vm-not-checked.csv', text: F.toCsv(F.NOT_CHECKED_COLUMNS, F.notCheckedRows(p, table, now)) },
+        { name: REPORT_NAME, text: reportHtml(p, table, sourceName, now) },
         { name: 'about-these-results.txt', text: F.aboutText(p, list, sourceName, now) },
     ], now);
     const stamp = now.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
