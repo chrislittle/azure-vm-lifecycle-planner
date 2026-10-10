@@ -18,8 +18,10 @@
     --pool: #4b3aa8;
     --pool-bg: #ece8fc;
 }
+/* Dark: the theme menu says "Dark", or it says "Follow the system" and the
+   system is dark. The menu sets data-theme on <html>. */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg: #101317;
         --panel: #181c21;
         --text: #e7eaee;
@@ -38,8 +40,31 @@
         --none-bg: #232a31;
         --pool: #c3b8ff;
         --pool-bg: #2a2447;
+        color-scheme: dark;
     }
 }
+:root[data-theme="dark"] {
+    --bg: #101317;
+    --panel: #181c21;
+    --text: #e7eaee;
+    --muted: #9aa4b1;
+    --line: #2c333b;
+    --accent: #4ea1ff;
+    --accent-text: #0b1220;
+    --row-hover: #18222e;
+    --code: #20262d;
+    --fine: #6cd08a;
+    --fine-bg: #15301e;
+    --problem: #ff8a80;
+    --problem-bg: #3a1a18;
+    --check: #f3c45b;
+    --check-bg: #33290f;
+    --none-bg: #232a31;
+    --pool: #c3b8ff;
+    --pool-bg: #2a2447;
+    color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -55,6 +80,10 @@ code, pre, textarea { font-family: ui-monospace, SFMono-Regular, Consolas, "Libe
 .wrap { max-width: 1440px; margin: 0 auto; padding: 0 16px; }
 
 .top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 24px 0 18px; }
+.top .wrap { position: relative; }
+/* The theme menu, at the top right. */
+.theme { float: right; margin: 0 0 8px 16px; font-size: 13px; color: var(--muted); }
+.theme select { margin-left: 4px; }
 h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.2; }
 .lede { margin: 0 0 6px; font-size: 17px; }
 .disclaimer { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
@@ -204,5 +233,6 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
     .cards { grid-template-columns: 1fr; }
     .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     h1 { font-size: 22px; }
+    .theme { float: none; display: flex; justify-content: flex-end; align-items: center; margin: 0 0 8px; }
     .code pre { max-height: 200px; }
 }

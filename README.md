@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.4.3-beta). The results are advice. They are not a check
+**Status:** beta (version 0.4.4-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -24,6 +24,10 @@ that a VM is ready to move.
    Select **Download results (.zip)** to get the results files.
 
 To try the tool without your own data, select **Try the sample** on the page.
+
+The **Theme** menu at the top of the page sets light, dark, or the setting of your
+system. The tool does not keep your choice: when you open the page again, it follows
+your system.
 
 ## What the tool shows
 
