@@ -1,0 +1,84 @@
+# Each Monday: reads the Microsoft Learn pages that the tool's data and words come
+# from (tools/sources.mjs) and compares them with tools/source-snapshot.json.
+# For a page that changed, or that it cannot read, it opens one GitHub issue (label
+# source-watch), or comments on the open one. When the page and the snapshot agree
+# again, it closes that issue. It never changes the data: a person updates the data in
+# a pull request, so the tests run.
+# GitHub turns off a scheduled workflow in a public repo after 60 days with no activity
+# in the repo, and sends an email: turn it on again in the Actions tab.
+# Each action is pinned to the exact commit of a release; the comment gives the version.
+name: Watch the sources
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Monday 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watch-sources
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      # No token here: this step reads public pages only.
+      - name: Read the pages
+        run: node tools/watch-sources.mjs
+      - name: Open, comment on or close the issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          errors=0
+          gh label create source-watch --color 0b6bcb --description "A Microsoft source changed" 2>/dev/null || true
+          # The open issues, read once. If GitHub cannot list them, stop: never open a
+          # second issue for a page because the list failed.
+          if ! issues="$(gh issue list --state open --label source-watch --limit 200 --json number,title)"; then
+            echo "::error::Cannot list the open issues. Nothing was changed."
+            exit 1
+          fi
+          # The open issue for a title (titles come from tools/sources.mjs, not from a page).
+          open_issue() { jq -r --arg t "$1" '.[] | select(.title == $t) | .number' <<< "$issues" | head -n 1; }
+          for f in watch-report/*.md; do
+            title="$(head -n 1 "$f" | sed 's/^# //')"
+            tail -n +2 "$f" > body.md
+            number="$(open_issue "$title")"
+            if [ -n "$number" ]; then
+              print="$(grep -o 'source-check-fingerprint: [a-z0-9-]*' body.md || true)"
+              # Only a new difference gets a comment: the same one is already on the issue.
+              if ! text="$(gh issue view "$number" --json body,comments --jq '.body, .comments[].body')"; then
+                echo "::error::Cannot read #$number: $title"; errors=$((errors+1)); continue
+              fi
+              if [ -n "$print" ] && grep -qF "$print" <<< "$text"; then
+                echo "No new difference for #$number: $title"
+              else
+                gh issue comment "$number" --body-file body.md && echo "Commented on #$number: $title"                   || { echo "::error::Cannot comment on #$number"; errors=$((errors+1)); }
+              fi
+            else
+              gh issue create --title "$title" --body-file body.md --label source-watch && echo "Opened: $title"                 || { echo "::error::Cannot open an issue: $title"; errors=$((errors+1)); }
+            fi
+          done
+          for f in watch-report/*.ok; do
+            title="$(head -n 1 "$f")"
+            number="$(open_issue "$title")"
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "The weekly check found that the page and tools/source-snapshot.json agree again. Closing."                 && echo "Closed #$number: $title" || { echo "::error::Cannot close #$number"; errors=$((errors+1)); }
+            fi
+          done
+          exit "$errors"

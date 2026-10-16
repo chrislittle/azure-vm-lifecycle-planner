@@ -54,7 +54,8 @@ test('no real identifiers: the only GUIDs are all zeros, or public Azure policy 
         ...readdirSync(new URL('../samples/', import.meta.url)).map((f) => `samples/${f}`),
         ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`),
         ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`),
-        ...readdirSync(new URL('../docs/', import.meta.url)).map((f) => `docs/${f}`)];
+        ...readdirSync(new URL('../docs/', import.meta.url)).map((f) => `docs/${f}`),
+        ...readdirSync(new URL('../tools/', import.meta.url)).map((f) => `tools/${f}`)];
     for (const f of files) {
         for (const g of read(f).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []) {
             assert.ok(allowed.has(g.toLowerCase()), `${f}: ${g} is not an allowed GUID`);
@@ -541,4 +542,74 @@ test('lists with the old "Machine name" column still work', () => {
     const list = readList('Machine name,Current size,Generation\ncontoso-o1,Standard_D2s_v3,V2\n');
     assert.deepEqual(list.stops, []);
     assert.equal(list.map['VM name'], 0);
+});
+
+// ---- Watching the sources (0.6.0-beta) ----
+
+// A page in the Microsoft Learn layout: the article between the metadata block and
+// the feedback section.
+const learnPage = (article, date = '2026-09-26') => `<html><head><meta name="updated_at" content="${date}T06:04:00Z"></head><body>`
+    + '<nav><table><tr><th>Menu</th></tr><tr><td>x</td></tr></table></nav><main><p>Access to this page requires authorization.</p>'
+    + `<div id="article-metadata"></div><div class="content">${article}</div>`
+    + '<section id="site-user-feedback-footer"><h2>Feedback</h2><p>Was this page helpful?</p></section></main></body></html>';
+
+test('the source check reads every line of the article, with its section', async () => {
+    const { readArticle, pageDate } = await import('../tools/sources.mjs');
+    const html = learnPage('<p>Intro.</p><h2 id="a">Lifecycle stages</h2><p>v6 and v7 series are <b>Current</b>.</p>'
+        + '<table><thead><tr><th>Series name</th><th>Planned&nbsp;Retirement Date<sup>1</sup></th></tr></thead><tr><td>D-series</td><td>05/01/28</td></tr></table>'
+        + '<h3>Linux</h3><ul><li>RHEL<ul><li>8.6 and newer</li></ul></li><li>Ubuntu 24.04</li></ul>'
+        + '<pre><code>az vm list</code></pre><script>var t = 1;</script>');
+    assert.deepEqual(readArticle(html), [
+        '(top) :: Intro.',
+        'Lifecycle stages :: v6 and v7 series are Current.',
+        'Lifecycle stages :: Series name | Planned Retirement Date = D-series | 05/01/28',
+        'Lifecycle stages > Linux :: RHEL',
+        'Lifecycle stages > Linux :: 8.6 and newer',
+        'Lifecycle stages > Linux :: Ubuntu 24.04',
+    ], 'no menu, no code, no footnote number, no feedback, nested list items kept');
+    assert.equal(pageDate(html), '2026-09-26');
+    assert.throws(() => readArticle('<main><table><tr><td>x</td></tr></table></main>'), /article layout/);
+});
+
+test('the source check counts duplicates and writes a safe, short report', async () => {
+    const { diffFacts } = await import('../tools/sources.mjs');
+    const { changeReport } = await import('../tools/watch-sources.mjs');
+    assert.deepEqual(diffFacts(['a', 'a', 'b'], ['a', 'b', 'c']), { added: ['c'], removed: ['a'] });
+    const s = { id: 'x', name: 'Test page', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/x' };
+    const before = { readUtc: '2026-10-16', pageUpdatedUtc: '2026-09-26', facts: ['A :: one', 'A :: two'] };
+    const body = changeReport(s, before, { pageUpdatedUtc: '2026-10-20', facts: ['A :: one', 'A :: ask @someone, see #12 `x`'] }, '2026-10-20');
+    assert.match(body, /- `A :: ask @someone, see #12 'x'`/, 'page text in a code span: no mention, no link');
+    assert.match(body, /source-check-fingerprint: [0-9a-f]{16}/);
+    assert.equal(changeReport(s, before, { facts: before.facts }, '2026-10-20'), null, 'no change, no report');
+    const many = Array.from({ length: 3000 }, (_, i) => `A :: a long line of text number ${i} that Microsoft changed on the page`);
+    assert.ok(changeReport(s, before, { facts: many }, '2026-10-20').length < 65536, 'fits in a GitHub issue');
+});
+
+test('every Microsoft Learn page that the data or the code cites is watched', async () => {
+    const { SOURCES } = await import('../tools/sources.mjs');
+    const watched = new Set(SOURCES.map((s) => s.url.replace('https://learn.microsoft.com/en-us', '').toLowerCase()));
+    const files = [...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`), ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`)];
+    for (const f of files) {
+        for (const u of read(f).match(/https:\/\/learn\.microsoft\.com\/[A-Za-z0-9/_.-]+/g) || []) {
+            const path = u.replace(/^https:\/\/learn\.microsoft\.com(\/en-us)?/, '').replace(/\/$/, '').toLowerCase();
+            assert.ok(watched.has(path), `${f} cites ${u}: add it to tools/sources.mjs`);
+        }
+    }
+    const snapshot = JSON.parse(read('tools/source-snapshot.json'));
+    for (const s of SOURCES) assert.ok(snapshot[s.id] && snapshot[s.id].facts.length >= 3, `${s.id} is in the snapshot`);
+});
+
+test('a storage or backup appliance is found by its image, its purchase plan or its gallery', async () => {
+    const { isStorageAppliance, isAppliance, inManagedApplication } = await import('../js/extras.js');
+    assert.equal(isStorageAppliance({ imagePublisher: 'cohesity', imageOffer: 'cohesity-cloudtd-tool' }), true, 'Cohesity DataPlatform Cloud Edition');
+    assert.equal(isStorageAppliance({ planPublisher: 'rubrik-inc', planProduct: 'rubrik-cloud-data-management' }), true, 'a purchase plan, with a custom image');
+    assert.equal(isStorageAppliance({ imageId: '/communityGalleries/WekaIO-00000000-0000-0000-0000-000000000000/images/weka_custom_image/versions/3.0.0' }), true, "WEKA's gallery");
+    assert.equal(isStorageAppliance({ imageId: '/subscriptions/x/resourceGroups/y/providers/Microsoft.Compute/galleries/contoso/images/web' }), false, 'an own gallery image is not an appliance');
+    assert.equal(isStorageAppliance({ imagePublisher: 'veeam', imageOffer: 'office365backup' }), false);
+    assert.equal(isAppliance({ planPublisher: 'paloaltonetworks', planProduct: 'vmseries-flex' }), true, 'an NVA by its plan');
+    assert.equal(inManagedApplication({ managedBy: 'Managed application' }), true);
+    const p = run(sample).plan;
+    for (const n of ['contoso-rbk01', 'contoso-weka01', 'contoso-coh01', 'contoso-pure01']) assert.equal(F.groupOf(byName(p, n)), 'gate', n);
+    assert.equal(byName(p, 'contoso-weka01').short.v6, 'No - storage or backup appliance', 'vendor approval is the first reason');
+    assert.equal(byName(p, 'contoso-pure01').short.v6, 'No - managed application');
 });

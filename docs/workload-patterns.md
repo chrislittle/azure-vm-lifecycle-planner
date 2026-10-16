@@ -46,7 +46,7 @@ Graph Explorer in the Azure portal, or with `az graph query`.
 | | Oracle with Data Guard | An Oracle database image. Data Guard itself has no signal. | From the docs (partly) |
 | | AD DS domain controllers, NoSQL and search clusters | None. | Not possible |
 | G. ISV appliances | Firewalls, network virtual appliances | The marketplace image: publisher **and** offer on Microsoft's list in the Azure Policy "Configure Marketplace Network Virtual Appliances (NVAs) to add a MANA support tag". | From Azure Policy (the definition, read from Azure on 9 October 2026, version 1.4.0) |
-| | Storage and backup appliances (NetApp Cloud Volumes ONTAP, Pure Storage Cloud Block Store, Rubrik, Silk, Nasuni, Dell) | A separate topic from network virtual appliances (Microsoft's v6/v7 Plan page, "Storage and backup virtual appliances": "Treat VM-based storage appliances like NVAs"). Microsoft has no list of their images. The Azure Marketplace catalog gives the vendors' publishers and offers (see below). | From the Marketplace catalog (our own list); not tested on a real deployment. A hard gate in the VM Lifecycle Planner from 0.2.1-beta. |
+| | Storage and backup appliances (NetApp Cloud Volumes ONTAP, Pure Storage Cloud Block Store, Rubrik, Silk, Nasuni, Dell, Cohesity, WEKA) | A separate topic from network virtual appliances (Microsoft's v6/v7 Plan page, "Storage and backup virtual appliances": "Treat VM-based storage appliances like NVAs"). Microsoft has no list of their images. The Azure Marketplace catalog gives the vendors' publishers and offers (see below). | From the Marketplace catalog (our own list); not tested on a real deployment. A hard gate in the VM Lifecycle Planner from 0.2.1-beta. |
 | | Backup proxies and media agents (Veeam, Commvault) | From the Marketplace catalog when deployed from the vendor's image (a hard gate in the VM Lifecycle Planner, as for the storage appliances). Not possible when someone installs the software on a normal VM. | Partly |
 
 ## Signals in detail
@@ -161,24 +161,50 @@ list as Microsoft publishes it, and check this entry when you refresh the list.
 
 ### Storage and backup appliance images
 
-Read from the Azure Marketplace catalog (`az vm image list-publishers` and
-`az vm image list-offers`, Central US) on 10 October 2026. This is not a Microsoft list.
-The vendors are the examples on Microsoft's v6/v7 Plan page. Offers vary by region,
-and a product that deploys as a managed application can use other images. Refresh the
-list from time to time.
+Our own list, not a Microsoft list (`data/storage-appliance-images.js`). Read on
+16 October 2026 from the Azure Marketplace catalog (`az vm image list-publishers` and
+`az vm image list-offers`, East US and West Europe) and from the vendors' own
+deployment code. Offers vary by region: refresh the list from time to time.
+
+A vendor reaches Azure in one of four ways, and the query reads each one:
+
+| How it deploys | Signal in Resource Graph | Example |
+|---|---|---|
+| A Marketplace image | `imageReference.publisher` and `offer` | Cohesity, Veeam, Rubrik |
+| A Marketplace purchase (any image) | the VM's `plan.publisher` and `plan.product`: they stay when the image comes from a gallery or a managed application | any vendor sold in the Marketplace |
+| The vendor's own gallery | `imageReference.communityGalleryImageId` (or `sharedGalleryImageId`, `id`) | WEKA: `/communityGalleries/WekaIO-*`, from WEKA's Terraform module |
+| A managed application | the VM's resource group is "managed by" `Microsoft.Solutions/applications`: the vendor owns the VMs | Pure Storage Cloud Block Store, Dell APEX |
+
+Tested: the query reads these fields without error (16 October 2026); a test build with a
+real appliance is not possible without each vendor's licence.
 
 | Vendor | Publisher | Offers that are the appliance |
 |---|---|---|
-| NetApp Cloud Volumes ONTAP | `netapp` | `netapp-ontap-cloud` |
+| NetApp (Cloud Volumes ONTAP, Global File Cache) | `netapp` | `netapp-ontap-cloud*`, `netapp-gfc-*` |
 | Pure Storage Cloud Block Store | `purestorageinc1578960262525` | `cloud_block_store*` |
-| Rubrik | `rubrik-inc` | `rubrik-cloud-data-management`, `rubrik-data-protection` |
+| Rubrik | `rubrik-inc` | `rubrik-*` |
 | Silk | `silk` | `silk_cloud_data_platform*` |
-| Nasuni | `nasunicorporation` | `nasuni-nea*`, `naa-server` |
-| Dell | `dellemc` | `apexfilestorage`, `dell_apex_block_storage`, `dell-emc-datadomain-virtual-edition*`, `dell-emc-avamar-virtual-edition`, `dell-emc-networker-virtual-edition`, `ppdm*` |
-| Veeam | `veeam` | `veeam-backup-replication`, `veeamcloudconnect` |
-| Commvault | `commvault` | `commvault`, `commvaultmediaagent` |
-| Cohesity | `cohesity` | No appliance image in the catalog (only a tool image) |
-| WEKA | - | No publisher in the catalog |
+| Nasuni | `nasunicorporation` | `nasuni-*`, `naa-server` |
+| Dell | `dellemc` | `apexfilestorage`, `dell_apex_block_storage`, `dell-emc-datadomain-*`, `dell-emc-avamar-virtual-edition`, `dell-emc-networker-virtual-edition`, `ppdm*` |
+| Dell | `dellemceisi123456` | `apex_block_storage*`, `apexfilestorage*`, `ddve*` |
+| Cohesity DataPlatform Cloud Edition | `cohesity` | `cohesity-cloudtd-tool` (its SKU is `cohesity-dataplatform-cloud-edition-2021`: the appliance) |
+| Cohesity DataPlatform Cloud Edition | `cohesitydev1592001764720` | `sol-4471-ixk` |
+| Veeam | `veeam` | `veeam-backup-replication*`, `veeamcloudconnect`, `veeam-cloud-connect-enterprise`, `azure_backup*` (Veeam Backup for Azure), `veeamhubimage` |
+| Commvault | `commvault` | all |
+| CTERA | `cteranetworksltd1651947437632` | `ctera-*` |
+| Druva | `druvainc1738665083385` | all |
+| Hammerspace | `hammerspace` | all |
+| Hitachi Vantara VSP One SDS | `hitachivantara` | `vsp_one_sds_block_image*`, `gad_cloud_quorum*`, `hv-gadcloudquorum` |
+| IBM Storage Virtualize | `ibm-alliance-usa-ny-armonk-hq-ibmstorage-6201192` | `ibm-svpc-*` |
+| Lightbits | `lightbitslabsinc1670948060485` | `lightbits-*` |
+| Panzura | `panzura-file-system` | all |
+| SoftNAS (Buurst) | `softnas` | all |
+| Zerto | `zerto` | all |
+| WEKA | (gallery) | `/communityGalleries/WekaIO-*`: storage VMs and client VMs. The WEKA client depends on the network adapter, which v6 and v7 change. |
+
+Not appliances: Veeam `office365backup` and its consoles; the NetApp BlueXP connector;
+Hitachi Pentaho. Correction of 10 October 2026: Cohesity's offer is the appliance (the
+offer name hides it), and WEKA deploys from its own gallery.
 
 ## Other signals for the move
 

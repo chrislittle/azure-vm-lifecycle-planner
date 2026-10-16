@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.5.1-beta). The results are advice. They are not a check
+**Status:** beta (version 0.6.0-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -69,11 +69,13 @@ For each VM:
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
   Appliances (NVAs) to add a MANA support tag". Ask the
   vendor which sizes they certify. Then deploy a new appliance beside the old one.
-- Storage and backup appliances (for example NetApp Cloud Volumes ONTAP, Pure Storage,
-  Rubrik, Silk, Nasuni, Dell, Veeam, Commvault). The tool finds them by their
-  marketplace image, from a list that it reads from the Azure Marketplace catalog
+- Storage and backup appliances (for example NetApp, Pure Storage, Rubrik, Silk, Nasuni,
+  Dell, Cohesity, WEKA, Veeam, Commvault, and 9 more vendors). The tool finds them by
+  their Marketplace image, by their Marketplace purchase plan, or by the vendor's own
+  gallery image, from our own list
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
-  Microsoft list. Ask the vendor which sizes they certify before a move.
+  Microsoft list. A VM in a managed application from the Marketplace belongs to its
+  vendor too. Ask the vendor which sizes they certify before a move.
 
 - The workload type. It tells you how to move the VM. The types come from the workload
   patterns in the Microsoft guide for the move to v6 and v7:
@@ -181,6 +183,21 @@ generation only, for example "Standard_D4s_v3, Generation 2".
 - After a change to `query.kql` or `samples/contoso-from-azure.csv`: `node tools/copy-files.mjs`.
   The page cannot read files over the network, so `js/query.js` and `js/sample.js` hold
   the same text. A test checks that they match.
+- Sources: each Monday, the workflow "Watch the sources" reads every Microsoft Learn
+  page that the data or the code cites (`tools/sources.mjs`; a test keeps the list
+  complete). It reads the whole article (each sentence, list item and table row) and
+  compares it with `tools/source-snapshot.json`. For a page that changed, or that it
+  cannot read, it opens one GitHub issue (label `source-watch`) with the lines added and
+  removed, or comments on the open issue when the difference is new. When the page and
+  the snapshot agree again, it closes the issue. It does not change the data. After you
+  update the data files, run `node tools/watch-sources.mjs --update` in the same pull
+  request. The size table and the Azure lists (the NVA policy, the Marketplace images)
+  are not in this check yet. GitHub turns off a scheduled workflow after 60 days with
+  no activity in a public repo: turn it on again in the Actions tab.
+- `tools/` runs on GitHub or on a computer, never in the page. The page does not load
+  it, so its network access does not change the page's "no data leaves your browser"
+  promise. `tools/source-snapshot.json` holds text from Microsoft Learn pages
+  (© Microsoft), kept only to find changes.
 - New release: `node tools/set-version.mjs <version>`. This puts the version on each
   link from the page to its own files, so a browser does not mix old and new files.
 

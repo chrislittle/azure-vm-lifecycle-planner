@@ -3,7 +3,7 @@
 // categories"). The pattern decides how to move a VM, not only the size.
 // docs/workload-patterns.md gives the signal for each pattern and its status.
 
-import { isApplianceImage, isStorageApplianceImage } from './extras.js?v=0.5.1-beta';
+import { inManagedApplication, isAppliance, isStorageAppliance } from './extras.js?v=0.6.0-beta';
 
 // A service that owns a resource group, as the query writes it.
 const POOL_SERVICES = ['aks', 'aro'];
@@ -13,7 +13,7 @@ const POOL_SERVICES = ['aks', 'aro'];
 // In order: a hard gate first, then a service that owns the VM, then the pool
 // or cluster that the VM is part of.
 export function patternOf(x) {
-    if (isApplianceImage(x.imagePublisher, x.imageOffer) || isStorageApplianceImage(x.imagePublisher, x.imageOffer)) return 'G';
+    if (isAppliance(x) || isStorageAppliance(x) || inManagedApplication(x)) return 'G';
     const managedBy = x.managedBy ? x.managedBy.toLowerCase() : null;
     if (managedBy && managedBy !== 'none' && !POOL_SERVICES.includes(managedBy)) return 'C';
     if ((managedBy && POOL_SERVICES.includes(managedBy)) || x.resourceType === 'Scale set' || x.scaleSet === true) return 'A';
