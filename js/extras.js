@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.5.1-beta';
-import nvaImages from '../data/nva-images.js?v=0.5.1-beta';
-import nvme from '../data/nvme-images.js?v=0.5.1-beta';
-import { readCount } from './planner.js?v=0.5.1-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.6.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.6.0-beta';
+import nvme from '../data/nvme-images.js?v=0.6.0-beta';
+import { readCount } from './planner.js?v=0.6.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -46,6 +46,9 @@ export function readExtras(cell) {
         sqlServer: sql === '' ? null : readYesNo(sql) === false ? false : sql,
         sqlGroup: yes('SQL availability group'),
         sharedDisk: yes('Shared disk'),
+        imageId: cell('Image ID') || null,
+        planPublisher: cell('Plan publisher') || null,
+        planProduct: cell('Plan product') || null,
     };
 }
 
@@ -81,6 +84,20 @@ export function isStorageApplianceImage(publisher, offer) {
     return storageImages.vendors.some((v) => v.publisher.toLowerCase() === String(publisher).toLowerCase() && likeAny(offer, v.offers));
 }
 
+// An appliance by any of its signs: the image name, or the Marketplace purchase plan
+// (a VM bought in the Marketplace keeps the vendor's plan, also when its image comes
+// from a gallery or a managed application), or a vendor's gallery image.
+export function isAppliance(x) {
+    return isApplianceImage(x.imagePublisher, x.imageOffer) || isApplianceImage(x.planPublisher, x.planProduct);
+}
+export function isStorageAppliance(x) {
+    return isStorageApplianceImage(x.imagePublisher, x.imageOffer) || isStorageApplianceImage(x.planPublisher, x.planProduct)
+        || Boolean(x.imageId && storageImages.galleries.some((g) => like(x.imageId, g.imageId)));
+}
+// A VM in a managed application (Azure Marketplace): the vendor owns it, and the
+// customer cannot change it.
+export const inManagedApplication = (x) => /^managed application$/i.test(String(x.managedBy ?? ''));
+
 // The reasons the extra facts give, as the target logic reads them. Each
 // applies to the series its rule names (data/series-rules.js).
 export function extraBlockers(x) {
@@ -91,9 +108,10 @@ export function extraBlockers(x) {
     if (x.ephemeralOsDisk === true) out.push('ephemeral-os-disk');
     // Traffic goes through an appliance: it is rebuilt beside the old one with
     // the vendor, never moved in place.
-    if (isApplianceImage(x.imagePublisher, x.imageOffer)) out.push('nva-requires-parallel-deployment');
+    if (isAppliance(x)) out.push('nva-requires-parallel-deployment');
     // A storage or backup appliance: vendor validation first (owner, 2026-10-10).
-    if (isStorageApplianceImage(x.imagePublisher, x.imageOffer)) out.push('storage-appliance-requires-vendor');
+    else if (isStorageAppliance(x)) out.push('storage-appliance-requires-vendor');
+    else if (inManagedApplication(x)) out.push('managed-application-requires-vendor');
     return out;
 }
 
@@ -272,10 +290,10 @@ export function caveats(vm, x, option) {
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
             : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.') : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
-    out['Network virtual appliance'] = isApplianceImage(x.imagePublisher, x.imageOffer)
+    out['Network virtual appliance'] = isAppliance(x)
         ? problem('Ask the vendor which sizes they certify.') : none;
     // Only on a storage or backup appliance.
-    out['Storage or backup appliance'] = isStorageApplianceImage(x.imagePublisher, x.imageOffer)
+    out['Storage or backup appliance'] = !isAppliance(x) && isStorageAppliance(x)
         ? problem('Ask the vendor which sizes they certify.') : none;
     out['Zone'] = x.zone ? fine(/^none$/i.test(x.zone) ? 'No zone.' : `Zone ${x.zone}.`) : check('Check: the list does not give the zone. The new size must be available in it.');
     return out;

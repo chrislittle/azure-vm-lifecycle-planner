@@ -40,6 +40,11 @@ export const COLUMNS = [
     { name: 'Shared disk' },
     // Azure's unique key for the VM (query 0.4.6-beta and later). Optional.
     { name: 'Resource ID' },
+    // The image and the Marketplace purchase plan, to find a vendor appliance that does
+    // not use a Marketplace image name (query 0.6.0-beta and later). Optional.
+    { name: 'Image ID' },
+    { name: 'Plan publisher' },
+    { name: 'Plan product' },
 ];
 
 // A header as it is compared: case, spaces, dashes, underscores and dots ignored.

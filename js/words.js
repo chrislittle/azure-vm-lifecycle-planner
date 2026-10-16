@@ -16,7 +16,7 @@ export const GROUPS = {
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).
     pool: { short: 'Move needed - change in the service or pool', long: 'Move needed. Change the size in the service or the pool, not on this VM.' },
     // Microsoft's term is "hard gate"; "gate" is not an STE word (owner, 2026-10-10).
-    gate: { short: 'Move needed - vendor approval first', long: 'Move needed. SAP or the vendor of the appliance must approve the new size first.' },
+    gate: { short: 'Move needed - vendor approval first', long: 'Move needed. SAP, or the vendor of the appliance or the application, must approve the new size first.' },
     nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
     unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
 };
@@ -175,6 +175,7 @@ const SHORT = {
     'No - no size in this family': 'No size in this family',
     'No - network virtual appliance': 'No - network virtual appliance (ask the vendor)',
     'No - storage or backup appliance': 'No - storage or backup appliance (ask the vendor)',
+    'No - managed application': 'No - managed application (ask the vendor)',
 };
 export const shortWords = (label) => (label in SHORT ? SHORT[label] : label);
 

@@ -1,9 +1,9 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.5.1-beta';
-import { likelyRow, signals } from './files.js?v=0.5.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.5.1-beta';
-import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.5.1-beta';
+import { capacityRestricted } from './planner.js?v=0.6.0-beta';
+import { likelyRow, signals } from './files.js?v=0.6.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.6.0-beta';
+import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.6.0-beta';
 
 // 'v6', 'v7' -> 'v6 and v7'.
 export function seriesList(list) {
@@ -13,7 +13,7 @@ export function seriesList(list) {
 
 // The hard gate, in words: SAP, or the vendor of an appliance.
 export function gateReasons(m) {
-    const codes = ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor'];
+    const codes = ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor', 'managed-application-requires-vendor'];
     return (m.vm.blockers || []).filter((b) => codes.includes(b)).map((b) => reasonFor(b, {}));
 }
 

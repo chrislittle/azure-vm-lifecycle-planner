@@ -51,6 +51,12 @@ Resources
     imagePublisher = anyif(tostring(vmp.storageProfile.imageReference.publisher), (isVm or isVmss) and tolower(id) == key),
     imageOffer = anyif(tostring(vmp.storageProfile.imageReference.offer), (isVm or isVmss) and tolower(id) == key),
     imageSku = anyif(tostring(vmp.storageProfile.imageReference.sku), (isVm or isVmss) and tolower(id) == key),
+    // An image from a gallery (for example a vendor's community gallery) has an ID, not a
+    // publisher; a VM bought in the Marketplace keeps the vendor's purchase plan.
+    imageId = anyif(coalesce(tostring(vmp.storageProfile.imageReference.communityGalleryImageId),
+        tostring(vmp.storageProfile.imageReference.sharedGalleryImageId), tostring(vmp.storageProfile.imageReference.id)), (isVm or isVmss) and tolower(id) == key),
+    planPublisher = anyif(tostring(plan.publisher), (isVm or isVmss) and tolower(id) == key),
+    planProduct = anyif(tostring(plan.product), (isVm or isVmss) and tolower(id) == key),
     diskController = anyif(tostring(vmp.storageProfile.diskControllerType), (isVm or isVmss) and tolower(id) == key),
     // NICs: Azure leaves enableAcceleratedNetworking out when it is off (checked
     // 2026-10-09), so on a NIC that was read, missing means off.
@@ -101,6 +107,9 @@ Resources
     imagePublisher = take_anyif(imagePublisher, self == 1),
     imageOffer = take_anyif(imageOffer, self == 1),
     imageSku = take_anyif(imageSku, self == 1),
+    imageId = take_anyif(imageId, self == 1),
+    planPublisher = take_anyif(planPublisher, self == 1),
+    planProduct = take_anyif(planProduct, self == 1),
     diskController = take_anyif(diskController, self == 1),
     nicsRead = take_anyif(nicsRead, self == 1),
     acceleratedNics = take_anyif(acceleratedNics, self == 1),
@@ -182,11 +191,15 @@ Resources
         managedByType startswith 'microsoft.containerservice/managedclusters', 'AKS',
         managedByType startswith 'microsoft.databricks/workspaces', 'Databricks',
         managedByType startswith 'microsoft.redhatopenshift/openshiftclusters', 'ARO',
+        managedByType startswith 'microsoft.solutions/applications', 'Managed application',
         tostring(split(managedByType, '/')[0])),
     ['AVD host pool type'] = hostPoolType,
     ['SQL Server'] = iff(isempty(sqlEdition), 'No', sqlEdition),
     ['SQL availability group'] = iff(isempty(sqlGroup), 'No', 'Yes'),
     ['Shared disk'] = iff(sharedDisk > 0, 'Yes', 'No'),
     // Azure's unique key: two VMs can have the same name in other groups or subscriptions.
-    ['Resource ID'] = rid
+    ['Resource ID'] = rid,
+    ['Image ID'] = imageId,
+    ['Plan publisher'] = planPublisher,
+    ['Plan product'] = planProduct
 | order by ['VM name'] asc

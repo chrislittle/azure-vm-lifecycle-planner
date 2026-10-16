@@ -699,11 +699,56 @@ checked by running code before a fix. Owner: fix them all.
   (Microsoft's Ddsv5 page); the query runs at tenant scope (run many times); "Azure
   approves no more quota" matches Microsoft's page.
 
-**Next (owner, 2026-10-10): watch the sources.** A scheduled workflow that finds when a
-source changes and opens an issue. It must also read Azure (the size table, the
-Marketplace images, the policy definition), not only Microsoft Learn: plan it with the
-owner first (for example a GitHub OIDC federated credential with Reader access, no
-stored secret).
+## 0.6.0-beta (2026-10-16): watch the sources, phase 1
+
+A weekly workflow (`.github/workflows/watch-sources.yml`, Monday 06:17 UTC, and a Run
+button) reads every Microsoft Learn page that data/*.js or js/*.js cites: 23 pages
+(`tools/sources.mjs`; a test fails when a cited page is not in the list). It reads the
+whole article: each sentence, list item and table row, with its section heading, so a
+fact that is only in a sentence ("v6 and v7 series are Current", "began in July 2026")
+is watched too. Code samples and footnote numbers are left out. It compares the lines
+with `tools/source-snapshot.json` (duplicates counted). One GitHub issue for each page
+(label `source-watch`): opened for a change or a page it cannot read (moved, gone,
+another layout); a comment only when the difference is new (a fingerprint); closed when
+the page and the snapshot agree again. Page text in an issue is in code spans (no
+@-mentions or links); a report fits GitHub's size limit. Fetch: 30 s time limit, three
+tries, a moved page is reported, never followed. `--update` refuses to save when a page
+fails or loses more than 20% of its lines (`--force` to accept). It never changes the
+data. Permissions: read the repo; write issues only in the job that needs it; 15-minute
+job limit; one failed issue call does not skip the other pages.
+- A full agent review (logic and coverage; security) before the PR; its findings fixed:
+  prose facts, 17 missing pages, one issue per page with close, de-duplication,
+  time limits, retries, redirects, nested lists, footnotes, missing layout.
+- It reads the published pages, not GitHub: Microsoft retires most public Microsoft
+  Learn documentation repos by the end of December 2026 (owner, 2026-10-16).
+- The snapshot of 2026-10-16 agrees with the data files (reviewer check).
+- The NVA policy is not in phase 1: the GitHub copy lags Azure (1.3.0 vs 1.4.0 on
+  2026-10-16, same lists). Phase 2 reads it from Azure.
+- Accelerated networking on E v5 (found by the review: the v5 overview says only Intel D
+  v5 requires it): Microsoft changed the Ev5, Esv5, Edv5 and Edsv5 pages to Required on
+  2026-10-01 and did not update the overview; the AMD E v5 pages still say Supported.
+  The tool already requires it on Intel D and E v5 only. No change; no feedback to
+  Microsoft (owner, 2026-10-16).
+- **Storage and backup appliances (owner: "fix all the storage vendor items"):** the
+  review found that Cohesity (an offer name that hides the appliance) and WEKA (not in
+  the Marketplace: its Terraform module builds the VMs from WEKA's community gallery)
+  were missed. Now the query also reads the VM's Marketplace purchase plan, the image ID
+  (gallery images) and names a managed application ("Managed by" Managed application).
+  A VM is an appliance by its image, its plan or its gallery; a VM in a managed
+  application belongs to its vendor (vendor approval first). The list now has 20
+  publishers from the catalog (East US and West Europe, 2026-10-16), Cohesity, the WEKA
+  gallery, and new vendors: CTERA, Druva, Hammerspace, Hitachi VSP One SDS, IBM Storage
+  Virtualize, Lightbits, Panzura, SoftNAS, Zerto. Vendor approval is the first reason in
+  the series answers. Sample: contoso-rbk01 (plan), contoso-weka01 (gallery),
+  contoso-coh01 (image), contoso-pure01 (managed application).
+- GitHub turns off a scheduled workflow after 60 days with no repo activity (public
+  repos) and sends an email: turn it on again in the Actions tab.
+- Phase 2 (to plan with the owner): the size table, the NVA policy and the Marketplace
+  appliance images, read from Azure with a GitHub federated credential (no stored
+  secret), a read-only custom role on one subscription, used only by the scheduled job
+  on main.
+
+**Next:** phase 2 of the source watch (reads from Azure); plan it with the owner first.
 
 ## Next
 

@@ -2,13 +2,13 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.5.1-beta';
-import { capacityRestricted } from './planner.js?v=0.5.1-beta';
-import * as F from './files.js?v=0.5.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.5.1-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.5.1-beta';
-import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.5.1-beta';
-import version from './version.js?v=0.5.1-beta';
+import capacity from '../data/capacity.js?v=0.6.0-beta';
+import { capacityRestricted } from './planner.js?v=0.6.0-beta';
+import * as F from './files.js?v=0.6.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.6.0-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.6.0-beta';
+import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.6.0-beta';
+import version from './version.js?v=0.6.0-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
