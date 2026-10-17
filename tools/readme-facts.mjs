@@ -40,15 +40,17 @@ export const NAMED_VENDORS = ['NetApp', 'Pure Storage', 'Rubrik', 'Silk', 'Nasun
 // more than once (Dell has four publishers), and they count once.
 const company = (name) => name.replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/)[0].toLowerCase();
 
-// Each fact: its id (the name in the mark), the files it comes from, where it is in
-// the README (for an issue), the text before it that must not change, and its text.
+// Each fact: its id (the name in the mark), the files it comes from, the sources
+// that the weekly check reads for it (ids of tools/sources.mjs and of
+// tools/azure-sources.mjs; the version comes from a release, not a source), where it
+// is in the README (for an issue), the text before it that must not change, and its text.
 export const FACTS = [
     {
-        id: 'version', files: ['js/version.js'], where: 'Status',
+        id: 'version', files: ['js/version.js'], sources: [], where: 'Status',
         text: (d) => d.version,
     },
     {
-        id: 'sizes', files: ['data/sizes.js'], where: 'Sources: size facts',
+        id: 'sizes', files: ['data/sizes.js'], sources: ['azure-sizes'], where: 'Sources: size facts',
         text: (d) => {
             const count = Object.keys(d.sizes.sizes).length;
             if (count !== d.sizes.sizeCount) throw new Error(`data/sizes.js: sizeCount is ${d.sizes.sizeCount}, but it has ${count} sizes.`);
@@ -56,15 +58,15 @@ export const FACTS = [
         },
     },
     {
-        id: 'lifecycle-read', files: ['data/end-of-life.js', 'data/capacity.js'], where: 'Sources: lifecycle stages and retirement dates',
+        id: 'lifecycle-read', files: ['data/end-of-life.js', 'data/capacity.js'], sources: ['lifecycle', 'end-of-life', 'retirements'], where: 'Sources: lifecycle stages and retirement dates',
         text: (d) => dates([...d.endOfLife.sources.map((s) => s.readUtc), d.capacity.readUtc]),
     },
     {
-        id: 'nvme-read', files: ['data/nvme-images.js'], where: 'Sources: NVMe support of the OS',
+        id: 'nvme-read', files: ['data/nvme-images.js'], sources: ['nvme'], where: 'Sources: NVMe support of the OS',
         text: (d) => dates([d.nvme.readUtc]),
     },
     {
-        id: 'storage-vendors', files: ['data/storage-appliance-images.js'], where: 'What the tool shows: storage and backup appliances',
+        id: 'storage-vendors', files: ['data/storage-appliance-images.js'], sources: ['azure-catalog'], where: 'What the tool shows: storage and backup appliances',
         before: `${NAMED_VENDORS.join(', ')}, and `,
         text: (d) => {
             const all = new Set([...d.storage.vendors, ...(d.storage.galleries || [])].map((v) => company(v.vendor)));
@@ -126,8 +128,9 @@ export function fillReadme(readme, texts) {
     return readme.replace(MARK, (_, id) => `<!-- fact:${id} -->${texts[id]}<!-- /fact -->`);
 }
 
-// The facts that come from these files, for an issue.
-export const factsFrom = (files) => FACTS.filter((f) => f.files.some((x) => files.includes(x)));
+// The facts that come from one source (an id of tools/sources.mjs or of
+// tools/azure-sources.mjs), for an issue.
+export const factsFrom = (source) => FACTS.filter((f) => f.sources.includes(source));
 
 // The "## README" section of an issue: the facts that come from this source, what
 // the README says now, and (when the check knows it) what the data will make it say.

@@ -240,29 +240,28 @@ function report(id, title, intro, lines, todo, readme = []) {
     writeFileSync(new URL(`watch-report/${id}.md`, root), reportText(title, intro, lines, todo, readme));
 }
 
-// The data file of each Azure source, for the README facts that come from it.
-const DATA_FILE = { 'azure-sizes': 'data/sizes.js', 'azure-nva': 'data/nva-images.js', 'azure-catalog': 'data/storage-appliance-images.js' };
+// The Azure sources: [id, issue title]. tools/readme-facts.mjs names these ids.
+export const AZURE_SOURCES = [['azure-sizes', 'Azure VM sizes (data/sizes.js)'], ['azure-nva', 'NVA policy (data/nva-images.js)'],
+    ['azure-catalog', 'Storage and backup appliances in the Marketplace (data/storage-appliance-images.js)']];
 
 // The "## README" section of a report. For the size list, also the fact text that
 // the sizes of this check give (--update writes it).
 export function readmeFor(id, readme, sizesNow, day = today) {
     const next = id === 'azure-sizes' && sizesNow
         ? { sizes: factText('sizes', { sizes: { readUtc: day, sizeCount: Object.keys(sizesNow).length, sizes: sizesNow } }) } : {};
-    return readmeSection(factsFrom([DATA_FILE[id]]), readme, next);
+    return readmeSection(factsFrom(id), readme, next);
 }
 const ok = (id, title) => writeFileSync(new URL(`watch-report/${id}.ok`, root), `Source check: ${title}\n`);
 
 async function main() {
     const update = process.argv.includes('--update');
     mkdirSync(new URL('watch-report/', root), { recursive: true });
-    const titles = [['azure-sizes', 'Azure VM sizes (data/sizes.js)'], ['azure-nva', 'NVA policy (data/nva-images.js)'],
-        ['azure-catalog', 'Storage and backup appliances in the Marketplace (data/storage-appliance-images.js)']];
     let signedIn;
     try {
         signedIn = signIn();
     } catch (e) {
         // No token: say so for each Azure source, so that the problem gets an issue.
-        for (const [id, title] of titles) report(id, title, '**This check cannot sign in to Azure.** The read-only sign-in of the workflow failed, or the Azure CLI is not signed in.', [], ['Check the `azure-read` environment and its secrets, and the federated credential of the app registration.']);
+        for (const [id, title] of AZURE_SOURCES) report(id, title, '**This check cannot sign in to Azure.** The read-only sign-in of the workflow failed, or the Azure CLI is not signed in.', [], ['Check the `azure-read` environment and its secrets, and the federated credential of the app registration.']);
         console.log('Cannot sign in to Azure: reports written.');
         return;
     }

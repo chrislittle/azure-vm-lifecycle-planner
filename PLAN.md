@@ -909,10 +909,16 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
   tool writes. `tools/azure-sources.mjs --update`, `tools/watch-sources.mjs --update`
   and `tools/set-version.mjs` run the tool; `--check` only compares.
 - Each weekly issue has a section "README": the facts that come from the data of the
-  source (for a Learn page, from the data files that cite it), with the README text
-  now. For the size list, also the text that the data of the check gives. The NVA
-  policy has no README fact: the section says so. The section is not in the
-  fingerprint, so the same difference is still posted once.
+  source, with the README text now. For the size list, also the text that the data
+  of the check gives. The NVA policy has no README fact: the section says so. The
+  section is not in the fingerprint, so the same difference is still posted once.
+  Each fact names its sources (Learn page ids and Azure source ids): a page that a
+  data file only cites, for example the v6 and v7 plan page in
+  `data/storage-appliance-images.js`, gives no fact. A test checks that each fact
+  (but the version, which comes from a release) names a source, and that each source
+  exists.
+- `tools/set-version.mjs` makes the new README before it changes any file, so a
+  README or data fault stops it with no half-done version change.
 - The tests ran only on main, after a merge: `.github/workflows/tests.yml` now runs
   them on each pull request (read only, no secret).
 

@@ -51,9 +51,9 @@ export function changeReport(s, before, now, today) {
     const section = (title, items) => (items.length ? [`\n## ${title} (${items.length})\n`, ...items.map((f) => `- ${code(f)}`)] : []);
     const cited = citedBy(s.url);
     const tail = [
-        // The README facts that come from the files that cite this page. Not in the
-        // fingerprint: the same page change keeps the same fingerprint.
-        ...readmeSection(factsFrom(cited), readFileSync(new URL('README.md', root), 'utf8')),
+        // The README facts that come from this page. Not in the fingerprint: the
+        // same page change keeps the same fingerprint.
+        ...readmeSection(factsFrom(s.id), readFileSync(new URL('README.md', root), 'utf8')),
         '\n## What to do\n',
         `1. Check the change on the page. These files cite it: ${cited.join(', ') || '(none)'}.`,
         '2. Update the data or the words in a pull request, so that the tests run.',

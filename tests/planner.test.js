@@ -1001,8 +1001,25 @@ test('the README facts: words, counts and marks', async () => {
     assert.throws(() => readFacts(`${readme}\nsee <!-- fact:contoso -->x<!-- /fact -->`), /unknown fact/);
     assert.throws(() => readFacts(readme.replace('read on <!-- fact:nvme-read -->', 'read on\n  <!-- fact:nvme-read -->')), /start of a line/);
     assert.throws(() => readFacts(readme.replace('Silk, Nasuni', 'Nasuni')), /text before storage-vendors/);
-    assert.deepEqual(factsFrom(['data/capacity.js']).map((f) => f.id), ['lifecycle-read']);
-    assert.deepEqual(factsFrom(['data/families.js']), []);
+    for (const page of ['lifecycle', 'end-of-life', 'retirements']) assert.deepEqual(factsFrom(page).map((f) => f.id), ['lifecycle-read'], page);
+    assert.deepEqual(factsFrom('nvme').map((f) => f.id), ['nvme-read']);
+    assert.deepEqual(factsFrom('azure-sizes').map((f) => f.id), ['sizes']);
+    assert.deepEqual(factsFrom('v6-v7-plan'), [], 'cited by data/storage-appliance-images.js, but the vendor count does not come from it');
+    assert.deepEqual(factsFrom('azure-catalog').map((f) => f.id), ['storage-vendors']);
+    assert.deepEqual(factsFrom('azure-nva'), []);
+});
+
+test('each README fact names the sources it comes from, and each source exists', async () => {
+    const { FACTS } = await import('../tools/readme-facts.mjs');
+    const { SOURCES } = await import('../tools/sources.mjs');
+    const { AZURE_SOURCES } = await import('../tools/azure-sources.mjs');
+    const ids = new Set([...SOURCES.map((s) => s.id), ...AZURE_SOURCES.map(([id]) => id)]);
+    for (const f of FACTS) {
+        // The version comes from a release (tools/set-version.mjs), not from a source.
+        if (f.id !== 'version') assert.ok(f.sources.length > 0, `${f.id} names a source`);
+        for (const s of f.sources) assert.ok(ids.has(s), `${f.id}: ${s} is a source`);
+    }
+    assert.deepEqual(FACTS.find((f) => f.id === 'version').sources, []);
 });
 
 test('a source check issue lists the README facts that come from the source', async () => {
@@ -1012,7 +1029,7 @@ test('a source check issue lists the README facts that come from the source', as
     const now = readFacts(read('README.md'));
     const before = { readUtc: '2026-10-16', pageUpdatedUtc: '2026-09-26', facts: ['A :: one', 'A :: two', 'A :: three', 'A :: four'] };
     const facts = ['A :: one', 'A :: two', 'A :: three', 'A :: four', 'A :: new'];
-    // The retirements page: data/end-of-life.js and data/capacity.js cite it.
+    // The retirements page: the lifecycle read dates come from it.
     const page = { id: 'retirements', name: 'Retirements', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions' };
     const body = changeReport(page, before, { facts }, '2026-10-20');
     const section = body.slice(body.indexOf('## README'), body.indexOf('## What to do'));
@@ -1020,10 +1037,12 @@ test('a source check issue lists the README facts that come from the source', as
     assert.ok(section.includes(`\`${now['lifecycle-read']}\``), 'the text in the README now');
     assert.ok(!section.includes('nvme-images') && !section.includes('sizes.js'), 'only the facts of this page');
     assert.match(section, /node tools\/readme-facts\.mjs/);
-    // The NVMe page: data/nvme-images.js cites it.
+    // The NVMe page.
     const nvme = changeReport({ id: 'nvme', name: 'NVMe', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/enable-nvme-interface' }, before, { facts }, '2026-10-20');
     assert.ok(nvme.includes(`NVMe support of the OS (from data/nvme-images.js): the README says \`${now['nvme-read']}\`.`));
-    // A page that no data file with a README fact cites.
+    // A page that gives no README fact, also when a data file with a fact cites it.
+    const plan = changeReport({ id: 'v6-v7-plan', name: 'Plan', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-plan' }, before, { facts }, '2026-10-20');
+    assert.match(plan, /## README\n\nNo README fact comes from this source\.\n/);
     const other = changeReport({ id: 'x', name: 'Test page', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/x' }, before, { facts }, '2026-10-20');
     assert.match(other, /## README\n\nNo README fact comes from this source\.\n/);
     // The fingerprint is over the added and removed lines only.
