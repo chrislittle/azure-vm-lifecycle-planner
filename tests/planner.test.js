@@ -954,3 +954,13 @@ test('the Marketplace check: a reviewed offer is not reported again; vendor word
     assert.deepEqual(catalogFindings({ vendors: [], notVendors: ['fabrikam-backup'] },
         { allPublishers: ['Fabrikam-Backup', 'contosomodell', 'contoso-dell'], offers: {} }), [], 'only at the start: dell, silk, weka');
 });
+
+test('the README gives the size count and read date of data/sizes.js', () => {
+    // A refresh (node tools/azure-sources.mjs --update) changes the data: the README
+    // Sources section must change with it.
+    const readme = read('README.md');
+    const count = sizes.sizeCount.toLocaleString('en-US');
+    const date = new Date(`${sizes.readUtc}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    assert.equal(sizes.sizeCount, Object.keys(sizes.sizes).length);
+    assert.match(readme, new RegExp(`a table of ${count} Azure VM sizes, read from Azure on ${date}`));
+});
