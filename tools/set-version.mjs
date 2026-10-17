@@ -5,6 +5,7 @@
 // ones it keeps in its cache. This is not a build step: it only edits the
 // version text in the files, which stay plain and readable.
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { loadData, factTexts, fillReadme } from './readme-facts.mjs';
 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/.test(version || '')) {
@@ -12,6 +13,11 @@ if (!/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/.test(version || '')) {
     process.exit(1);
 }
 const root = new URL('../', import.meta.url);
+// The README gives the version too (a README fact). Make the new README first: if
+// the README or the data has a fault, stop before any file changes.
+const readmeUrl = new URL('README.md', root);
+const readme = readFileSync(readmeUrl, 'utf8');
+const newReadme = fillReadme(readme, factTexts({ ...(await loadData()), version }));
 const edit = (path, fn) => {
     const url = new URL(path, root);
     const before = readFileSync(url, 'utf8');
@@ -26,4 +32,5 @@ for (const f of readdirSync(new URL('js/', root))) {
 edit('index.html', (s) => s
     .replace(/(href="style\.css)(\?v=[^"]*)?"/, `$1?v=${version}"`)
     .replace(/(src="js\/page\.js)(\?v=[^"]*)?"/, `$1?v=${version}"`));
+if (newReadme !== readme) writeFileSync(readmeUrl, newReadme);
 console.log(`Version set to ${version}.`);

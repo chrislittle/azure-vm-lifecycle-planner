@@ -955,12 +955,129 @@ test('the Marketplace check: a reviewed offer is not reported again; vendor word
         { allPublishers: ['Fabrikam-Backup', 'contosomodell', 'contoso-dell'], offers: {} }), [], 'only at the start: dell, silk, weka');
 });
 
-test('the README gives the size count and read date of data/sizes.js', () => {
-    // A refresh (node tools/azure-sources.mjs --update) changes the data: the README
-    // Sources section must change with it.
-    const readme = read('README.md');
-    const count = sizes.sizeCount.toLocaleString('en-US');
-    const date = new Date(`${sizes.readUtc}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+test('README.md has the facts of the data files (node tools/readme-facts.mjs)', async () => {
+    // A data change (for example node tools/azure-sources.mjs --update, or a new
+    // vendor) that forgets the README fails here.
+    const { loadData, factTexts, fillReadme, readFacts, FACTS } = await import('../tools/readme-facts.mjs');
+    const data = await loadData();
     assert.equal(sizes.sizeCount, Object.keys(sizes.sizes).length);
-    assert.match(readme, new RegExp(`a table of ${count} Azure VM sizes, read from Azure on ${date}`));
+    const readme = read('README.md');
+    assert.equal(readme, fillReadme(readme, factTexts(data)), 'run node tools/readme-facts.mjs');
+    assert.deepEqual(Object.keys(readFacts(readme)).sort(), FACTS.map((f) => f.id).sort());
+    assert.match(readme, /a table of <!-- fact:sizes -->\d[\d,]* Azure VM sizes, read from Azure on \d+ \w+ \d{4}<!-- \/fact -->/);
+});
+
+test('the README facts: words, counts and marks', async () => {
+    const { dates, number, factTexts, fillReadme, readFacts, factsFrom, loadData } = await import('../tools/readme-facts.mjs');
+    assert.equal(number(1498), '1,498');
+    assert.equal(number(999), '999');
+    assert.equal(number(1234567), '1,234,567');
+    assert.equal(dates(['2026-10-10', '2026-10-09', '2026-10-09']), '9 and 10 October 2026');
+    assert.equal(dates(['2026-10-16']), '16 October 2026');
+    assert.equal(dates(['2026-09-30', '2026-10-01', '2026-10-02']), '30 September 2026 and 1 and 2 October 2026');
+    assert.equal(dates(['2026-10-03', '2026-10-01', '2026-10-02']), '1, 2 and 3 October 2026');
+    assert.throws(() => dates([]), /Not a list of dates/);
+    const data = await loadData();
+    const t = factTexts(data);
+    assert.equal(t.sizes, `${number(sizes.sizeCount)} Azure VM sizes, read from Azure on ${dates([sizes.readUtc])}`);
+    // Vendors are companies: Dell with four publishers counts once; WEKA (a gallery) counts.
+    const storage = { vendors: [{ vendor: 'NetApp (ONTAP)' }, { vendor: 'Pure Storage Cloud Block Store' }, { vendor: 'Rubrik' }, { vendor: 'Silk' },
+        { vendor: 'Nasuni' }, { vendor: 'Dell (APEX)' }, { vendor: 'Dell (Data Domain)' }, { vendor: 'Cohesity DataPlatform' }, { vendor: 'Veeam' },
+        { vendor: 'Commvault' }, { vendor: 'Contoso Backup' }, { vendor: 'Contoso Backup (two)' }], galleries: [{ vendor: 'WEKA' }] };
+    assert.equal(factTexts({ ...data, storage })['storage-vendors'], '1 more vendor');
+    assert.equal(factTexts({ ...data, storage: { ...storage, vendors: [...storage.vendors, { vendor: 'Fabrikam' }] } })['storage-vendors'], '2 more vendors');
+    assert.throws(() => factTexts({ ...data, storage: { ...storage, vendors: storage.vendors.filter((v) => v.vendor !== 'Silk') } }), /names Silk/);
+    assert.throws(() => factTexts({ ...data, storage: { ...storage, vendors: storage.vendors.slice(0, 10) } }), /No vendor is left/);
+    assert.throws(() => factTexts({ ...data, sizes: { ...sizes, sizeCount: sizes.sizeCount + 1 } }), /sizeCount/);
+    assert.equal(factTexts({ ...data, capacity: { ...data.capacity, readUtc: '2026-11-02' } })['lifecycle-read'], '9 October 2026 and 2 November 2026');
+    // The marks: each fact once, never at the start of a line, the named vendors before the count.
+    const readme = read('README.md');
+    const now = readFacts(readme);
+    const moved = fillReadme(readme, { ...now, sizes: '1,500 Azure VM sizes, read from Azure on 19 October 2026' });
+    assert.equal(readFacts(moved).sizes, '1,500 Azure VM sizes, read from Azure on 19 October 2026');
+    assert.equal(moved.replace(/<!-- fact:sizes -->.*?<!-- \/fact -->/, ''), readme.replace(/<!-- fact:sizes -->.*?<!-- \/fact -->/, ''), 'only the fact changes');
+    assert.throws(() => readFacts(readme.replace('<!-- fact:nvme-read -->', '')), /no mark for nvme-read/);
+    assert.throws(() => readFacts(`${readme}\nsee <!-- fact:sizes -->x<!-- /fact -->`), /two times/);
+    assert.throws(() => readFacts(`${readme}\nsee <!-- fact:contoso -->x<!-- /fact -->`), /unknown fact/);
+    assert.throws(() => readFacts(readme.replace('read on <!-- fact:nvme-read -->', 'read on\n  <!-- fact:nvme-read -->')), /start of a line/);
+    assert.throws(() => readFacts(readme.replace('Silk, Nasuni', 'Nasuni')), /text before storage-vendors/);
+    for (const page of ['lifecycle', 'end-of-life', 'retirements']) assert.deepEqual(factsFrom(page).map((f) => f.id), ['lifecycle-read'], page);
+    assert.deepEqual(factsFrom('nvme').map((f) => f.id), ['nvme-read']);
+    assert.deepEqual(factsFrom('azure-sizes').map((f) => f.id), ['sizes']);
+    assert.deepEqual(factsFrom('v6-v7-plan'), [], 'cited by data/storage-appliance-images.js, but the vendor count does not come from it');
+    assert.deepEqual(factsFrom('azure-catalog').map((f) => f.id), ['storage-vendors']);
+    assert.deepEqual(factsFrom('azure-nva'), []);
+});
+
+test('each README fact names the sources it comes from, and each source exists', async () => {
+    const { FACTS } = await import('../tools/readme-facts.mjs');
+    const { SOURCES } = await import('../tools/sources.mjs');
+    const { AZURE_SOURCES } = await import('../tools/azure-sources.mjs');
+    const ids = new Set([...SOURCES.map((s) => s.id), ...AZURE_SOURCES.map(([id]) => id)]);
+    for (const f of FACTS) {
+        // The version comes from a release (tools/set-version.mjs), not from a source.
+        if (f.id !== 'version') assert.ok(f.sources.length > 0, `${f.id} names a source`);
+        for (const s of f.sources) assert.ok(ids.has(s), `${f.id}: ${s} is a source`);
+    }
+    assert.deepEqual(FACTS.find((f) => f.id === 'version').sources, []);
+});
+
+test('a source check issue lists the README facts that come from the source', async () => {
+    const { createHash } = await import('node:crypto');
+    const { changeReport } = await import('../tools/watch-sources.mjs');
+    const { readFacts } = await import('../tools/readme-facts.mjs');
+    const now = readFacts(read('README.md'));
+    const before = { readUtc: '2026-10-16', pageUpdatedUtc: '2026-09-26', facts: ['A :: one', 'A :: two', 'A :: three', 'A :: four'] };
+    const facts = ['A :: one', 'A :: two', 'A :: three', 'A :: four', 'A :: new'];
+    // The retirements page: the lifecycle read dates come from it.
+    const page = { id: 'retirements', name: 'Retirements', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions' };
+    const body = changeReport(page, before, { facts }, '2026-10-20');
+    const section = body.slice(body.indexOf('## README'), body.indexOf('## What to do'));
+    assert.match(section, /Sources: lifecycle stages and retirement dates \(from data\/end-of-life\.js, data\/capacity\.js\): the README says `/);
+    assert.ok(section.includes(`\`${now['lifecycle-read']}\``), 'the text in the README now');
+    assert.ok(!section.includes('nvme-images') && !section.includes('sizes.js'), 'only the facts of this page');
+    assert.match(section, /node tools\/readme-facts\.mjs/);
+    // The NVMe page.
+    const nvme = changeReport({ id: 'nvme', name: 'NVMe', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/enable-nvme-interface' }, before, { facts }, '2026-10-20');
+    assert.ok(nvme.includes(`NVMe support of the OS (from data/nvme-images.js): the README says \`${now['nvme-read']}\`.`));
+    // A page that gives no README fact, also when a data file with a fact cites it.
+    const plan = changeReport({ id: 'v6-v7-plan', name: 'Plan', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-plan' }, before, { facts }, '2026-10-20');
+    assert.match(plan, /## README\n\nNo README fact comes from this source\.\n/);
+    const other = changeReport({ id: 'x', name: 'Test page', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/x' }, before, { facts }, '2026-10-20');
+    assert.match(other, /## README\n\nNo README fact comes from this source\.\n/);
+    // The fingerprint is over the added and removed lines only.
+    const print = createHash('sha256').update(JSON.stringify([['A :: new'], []])).digest('hex').slice(0, 16);
+    for (const b of [body, nvme, other]) assert.ok(b.includes(`source-check-fingerprint: ${print}`));
+    // A report too long to list the lines keeps the README section and fits in an issue.
+    const many = Array.from({ length: 3000 }, (_, i) => `A :: a long line of text number ${i} that Microsoft changed on the page`);
+    const long = changeReport(page, before, { facts: many }, '2026-10-20');
+    assert.ok(long.length < 60000 && long.includes('too many to list') && long.includes(`\`${now['lifecycle-read']}\``));
+});
+
+test('an Azure source issue lists the README facts, and the new size fact', async () => {
+    const { reportText, readmeFor } = await import('../tools/azure-sources.mjs');
+    const { readFacts } = await import('../tools/readme-facts.mjs');
+    const readme = read('README.md');
+    const now = readFacts(readme);
+    const more = { ...sizes.sizes, Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2' } } };
+    const s = readmeFor('azure-sizes', readme, more, '2026-10-19').join('\n');
+    const count = Object.keys(more).length.toLocaleString('en-US');
+    assert.ok(s.includes(`Sources: size facts (from data/sizes.js): the README says \`${now.sizes}\`.`));
+    assert.ok(s.includes(`With the data that this check read, the README says \`${count} Azure VM sizes, read from Azure on 19 October 2026\`.`), s);
+    assert.ok(!readmeFor('azure-sizes', readme, sizes.sizes, sizes.readUtc).join('\n').includes('With the data'), 'no new text when nothing changes');
+    assert.match(readmeFor('azure-nva', readme).join('\n'), /^\n## README\n\nNo README fact comes from this source\.$/);
+    const c = readmeFor('azure-catalog', readme).join('\n');
+    assert.ok(c.includes(`What the tool shows: storage and backup appliances (from data/storage-appliance-images.js): the README says \`${now['storage-vendors']}\`.`));
+    assert.ok(!c.includes('With the data'));
+    // The README section does not change the fingerprint: the same difference is not posted twice.
+    const print = (t) => /source-check-fingerprint: ([0-9a-f]{16})/.exec(t)[1];
+    const a = reportText('T', 'Intro.', ['Added: Standard_X2_v9'], ['1. Do it.'], s.split('\n'));
+    const b = reportText('T', 'Intro.', ['Added: Standard_X2_v9'], ['1. Do it.']);
+    assert.equal(print(a), print(b));
+    assert.notEqual(print(reportText('T', 'Intro.', ['Added: Standard_Y1'], ['1. Do it.'], s.split('\n'))), print(a));
+    assert.ok(a.indexOf('## README') > a.indexOf('Added: Standard_X2_v9') && a.indexOf('## README') < a.indexOf('## What to do'));
+    // A README with a broken mark: the issue says so, and still lists the fact.
+    const broken = readmeFor('azure-catalog', readme.replace('<!-- /fact -->', '')).join('\n');
+    assert.match(broken, /cannot read the facts in README\.md/);
+    assert.match(broken, /the README says \(not found\)/);
 });
