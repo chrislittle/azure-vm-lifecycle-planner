@@ -869,9 +869,9 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
   scope="row"`). A click on the row still opens it.
 - Column headers had no `scope`; the report's three summary tables had no headers.
 - Contrast (computed from the CSS tokens): the green text on the green pill and on an
-  open row was 4.47:1 and 4.45:1 (light theme, page and report): now 4.78:1. The
-  borders of the text boxes and menus were 1.3:1: a new `--control` token, 3.5:1 light
-  and 3.6:1 dark.
+  open row was 4.47:1 and 4.45:1 (light theme, page and report): now 4.78:1 (4.75:1 on
+  an open row). The borders of the text boxes and menus were 1.3:1: a new `--control`
+  token, 3.5:1 light and 3.6:1 dark.
 - The query box takes the focus (it scrolls) but had no name and no focus ring.
 - Headings skipped a level (h2 to h4 in the details and the report summary).
 - "The table shows N of M VMs" and the download message are now live regions; the

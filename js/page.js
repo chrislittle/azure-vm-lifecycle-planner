@@ -416,6 +416,10 @@ $('download').addEventListener('click', () => {
             const stamp = now.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
             save(`vm-lifecycle-results-${stamp}.zip`, zip, 'application/zip');
             status.textContent = 'Your browser saves the zip file.';
+        } catch (e) {
+            // For example, the browser has no memory left for a very large list.
+            status.textContent = 'This tool could not make the zip file. Close other tabs and try again.';
+            console.error(e);
         } finally {
             button.disabled = false;
         }
