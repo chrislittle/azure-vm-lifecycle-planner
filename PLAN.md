@@ -922,6 +922,49 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
 - The tests ran only on main, after a merge: `.github/workflows/tests.yml` now runs
   them on each pull request (read only, no secret).
 
+## 0.8.0-beta (2026-10-17): the vendor and the evidence
+
+Owner, 2026-10-17: "we say vendor appliance (storage etc) but don't say what it is".
+The tool found the type from facts, but did not show them. No answer changes: the
+three CSV files and the workload type of every sample list are byte for byte the same
+as 0.7.1-beta, but for the two new columns.
+
+- **One source.** The checks for an appliance (`js/extras.js`) and for a workload type
+  (`js/patterns.js`, `patternFound`) give what matched, not only true or false:
+  the sign of an appliance (image, Marketplace purchase plan or gallery image, in that
+  order), the vendor of a storage or backup appliance (our list), and the columns that
+  decided a workload type. `patternOf` is now `patternFound(x).pattern`. The words are
+  in `js/evidence.js`, which the page, `vm-summary.csv` and the report use. Owner's
+  example: "Storage or backup appliance: NetApp. The image is netapp /
+  netapp-ontap-cloud."
+- **A network virtual appliance** shows the publisher ID as Azure gives it: the Azure
+  policy list has no vendor names, and the tool does not make one up (owner,
+  2026-10-17). NetApp Cloud Volumes ONTAP and Global File Cache images are on both
+  lists; as before, the NVA list comes first, so they show as a network virtual
+  appliance with the publisher ID netapp.
+- **A managed application** shows the "Managed by" value. The list does not give its
+  vendor: the page says so. The publisher of its Marketplace purchase plan shows when
+  the list gives one. A query change to read the managed application's publisher is
+  for a later release (owner, 2026-10-17).
+- **The page**: each VM's details have "Workload type" (the type, the vendor and the
+  facts) after "Why", and "Facts from your list" at the end: closed at first (a
+  `<details>` element), each column that the answer used in six groups, with its value
+  as read, "Not in the list" or "No value". It tells a customer why a note says
+  "Check". "Disk controller" is not in it: the tool takes the controller from the size
+  (owner, 2026-10-17). The block is on the page only, not in the report (owner,
+  2026-10-17: the report stays short).
+- **vm-summary.csv**: two new last columns, Vendor and Evidence, so that no other
+  column moves. Both are empty for a standalone VM and for "Type not checked".
+- **The report**: "Workload type" in each VM card, and the table "Appliances by
+  vendor" in the summary (vendor, kind, count, VM names with where-words for names
+  that are in the list more than once), so that a customer can send one list to each
+  vendor. A name links to its card only when the report has a card for the VM: a VM
+  on a modern size has none.
+- Tests: `tests/evidence.test.js` (each sign, each kind, each workload type, missing
+  and empty facts, the CSV columns, the report table and its links). The STE check
+  also reads the Evidence column and the definition lists. 38 mutation checks, all
+  caught.
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.7.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.7.1-beta';
-import capacity from '../data/capacity.js?v=0.7.1-beta';
-import nvme from '../data/nvme-images.js?v=0.7.1-beta';
-import query from './query.js?v=0.7.1-beta';
-import sample from './sample.js?v=0.7.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.7.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.7.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.7.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
-import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.7.1-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.7.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.7.1-beta';
-import * as F from './files.js?v=0.7.1-beta';
-import { makeZip } from './zip.js?v=0.7.1-beta';
-import version from './version.js?v=0.7.1-beta';
+import sizes from '../data/sizes.js?v=0.8.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
+import capacity from '../data/capacity.js?v=0.8.0-beta';
+import nvme from '../data/nvme-images.js?v=0.8.0-beta';
+import query from './query.js?v=0.8.0-beta';
+import sample from './sample.js?v=0.8.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.8.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.8.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.8.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.8.0-beta';
+import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.8.0-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.8.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.8.0-beta';
+import * as F from './files.js?v=0.8.0-beta';
+import { makeZip } from './zip.js?v=0.8.0-beta';
+import version from './version.js?v=0.8.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -381,8 +381,8 @@ function details(m) {
     const groups = factsRead(m);
     if (groups.length) {
         box.append(el('details', { class: 'facts' },
-            el('summary', { text: 'Facts we read' }),
-            el('p', { class: 'hint', text: 'These are the values in your list that this tool used for this VM. "Not in the list" means that the list has no such column. "No value" means that the cell is empty.' }),
+            el('summary', { text: 'Facts from your list' }),
+            el('p', { class: 'hint', text: 'This tool used these values from your list for this VM. "Not in the list" means that your list does not have this column. "No value" means that the cell is empty.' }),
             el('div', { class: 'fact-groups' }, groups.map((gr) => el('div', { class: 'fact-group' },
                 el('h4', { text: gr.group }),
                 el('dl', {}, gr.facts.flatMap((f) => [el('dt', { text: f.column }), el('dd', { class: f.given ? '' : 'missing', text: f.value })])))))));

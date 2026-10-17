@@ -2,8 +2,8 @@
 // an appliance, the facts behind a workload type, and every fact as the list gives
 // it. One source for the page, the files and the report.
 
-import { patternFound } from './patterns.js?v=0.7.1-beta';
-import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.7.1-beta';
+import { patternFound } from './patterns.js?v=0.8.0-beta';
+import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.8.0-beta';
 
 // The workload type of a VM and why: { pattern, name, kind, vendor, lead, evidence }.
 // kind: the kind of appliance in words, or ''. vendor: the vendor of a storage or
