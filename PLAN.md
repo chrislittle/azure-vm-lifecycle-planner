@@ -829,6 +829,68 @@ Resource Manager with a token from the Azure CLI):
 **Next:** peer feedback, as GitHub issues; refresh the data when the weekly check opens
 an issue.
 
+## 0.7.1-beta (2026-10-17): large lists and accessibility
+
+**Large lists.** Nobody had timed a large customer list. `tests/large-list.js` makes a
+made-up contoso list of any size from the sample rows (12 regions, 40 subscriptions,
+300 resource groups, about one VM in seven with a name that another VM has, scale
+sets, AKS node pools, appliances, empty and odd values); the same size gives the same
+list, and no file of it is kept. `node tools/time-large-list.mjs` times each step.
+
+| Step (laptop, Node 24, Chrome) | 20,000 VMs before | after | 50,000 VMs before | after |
+|---|---|---|---|---|
+| Read the list (Node) | 0.12 s | 0.14 s | 0.39 s | 0.2 s |
+| Plan (Node) | 6.84 s | 1.4 s | 14.57 s | 2.4-3.0 s |
+| All five files and the zip (Node) | 2.74 s | 1.2 s | 5.54 s | 2.8 s |
+| Page: load the CSV to the table shown | 5.8 s | 1.0 s | 14.1 s | 3.0 s |
+| Page: Find, one key | | | 350-450 ms | 3-8 ms |
+| Page: Show, Type | | | 240-370 ms | 5-6 ms |
+| Page: Show more | | | 630 ms | 3 ms |
+| Page: Download results | | | 5.0 s | 2.4 s |
+
+- The planning time went to reading the size table again for each VM: each family
+  question walked all 1,498 sizes. The table now keeps the answer to each question
+  (the sizes that match a name pattern, the families with v5, v6 or v7 sizes), each
+  size's capabilities by name, each name's family and processor, and the appliance
+  answer for each image. The answers did not change: every file for the three sample
+  lists and a 6,000-VM list was byte for byte the same before and after (the report
+  changed only in its markup, below).
+- The page: the result group, the Find text and the VMs with the same name are made
+  once for each list. Before, each row with a repeated name searched the whole list
+  (200 rows x 50,000 VMs for each key in Find). "Show more" adds rows and keeps open
+  rows open. "Download results" says "This tool makes the zip file. Wait." first.
+- Tests: 20,000 VMs plan and make every file in under 30 seconds (about 3 on a
+  laptop; generous so that a slow build machine does not fail), the same twice; the
+  same VMs in another order give the same result for each resource ID; the samples
+  give the same files with a new size table and with one that a large list used first.
+- The zip is compressed (owner, 2026-10-17): each file goes through the browser's own
+  `CompressionStream('deflate-raw')` (zip method 8), no library. A file that does not
+  get smaller, or a browser without CompressionStream, gives a stored file. For 50,000
+  VMs: 180 MB of files, an 8.7 MB zip, 1.7 s.
+
+**Accessibility (WCAG 2.2 AA)**, checked by hand and in the browser; found and fixed:
+- Each VM row was a table row that took the focus (`tr` with `aria-expanded`), which
+  screen readers do not read as a control. Now the VM name is a button with
+  `aria-expanded` and `aria-controls` (Enter or Space), in a row header (`th
+  scope="row"`). A click on the row still opens it.
+- Column headers had no `scope`; the report's three summary tables had no headers.
+- Contrast (computed from the CSS tokens): the green text on the green pill and on an
+  open row was 4.47:1 and 4.45:1 (light theme, page and report): now 4.78:1 (4.75:1 on
+  an open row). The borders of the text boxes and menus were 1.3:1: a new `--control`
+  token, 3.5:1 light and 3.6:1 dark.
+- The query box takes the focus (it scrolls) but had no name and no focus ring.
+- Headings skipped a level (h2 to h4 in the details and the report summary).
+- "The table shows N of M VMs" and the download message are now live regions; the
+  messages box has `role="status"`.
+- The arrow before a VM name moved even when the system asks for less motion.
+- The printed report shows the address of each link.
+- Checked and not changed: `lang`, landmarks, a label on each control, the theme menu,
+  the file button, Find and the filters by keyboard; each pill has text; no sideways
+  scroll at 320 px, 375 px or 640 px (200% zoom); light and dark.
+- `tests/accessibility.test.js`: contrast of each text and control colour pair in both
+  themes and in the report, a label for each control, headings in order, table
+  headers with scope, the row button, live regions, reduced motion.
+
 ## Next
 
 - Peer feedback, as GitHub issues.

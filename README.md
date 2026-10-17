@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.7.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.7.1-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -28,6 +28,15 @@ To try the tool without your own data, select **Try the sample** on the page.
 The **Theme** menu at the top of the page sets light, dark, or the setting of your
 system. The tool does not keep your choice: when you open the page again, it follows
 your system.
+
+The tool works with a list of 50,000 VMs. On a laptop, the results for 50,000 VMs show
+in about 3 seconds, and the zip file takes about 2 seconds more. The browser
+compresses the files in the zip: for 50,000 VMs the files are about 180 MB, and the zip
+file is about 9 MB.
+
+You can use the page with only a keyboard. In the results table, each VM name is a
+button: press Enter or Space to open or close the details of the VM. The colours meet
+the WCAG 2.2 AA contrast levels in the light and the dark theme.
 
 ## What the tool shows
 
@@ -177,6 +186,9 @@ generation only, for example "Standard_D4s_v3, Generation 2".
 
 - The code is plain JavaScript modules. There is nothing to install.
 - Tests: `node --test` (Node 20 or later). The tests make no network requests.
+- Speed: `node tools/time-large-list.mjs 20000 50000` makes made-up contoso lists of
+  that size (`tests/large-list.js`) and shows the time of each step. With `--write
+  <folder>` it also saves the lists as CSV files, to load in the page. Do not commit them.
 - Local preview: `python -m http.server 8000` in this folder, then open
   http://localhost:8000/. The page does not work from a `file://` address, because
   browsers do not load modules from files.

@@ -9,9 +9,9 @@
 <meta name="referrer" content="no-referrer">
 <title>VM Lifecycle Planner for Azure</title>
 <meta name="description" content="Give this tool your Azure VM list. It shows the lifecycle stage of each VM and the supported v5, v6 and v7 sizes. It runs only in your browser.">
-<link rel="stylesheet" href="style.css?v=0.7.0-beta">
+<link rel="stylesheet" href="style.css?v=0.7.1-beta">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b6bcb'/%3E%3Cpath d='M8 22V10h4v12zm6 0V6h4v16zm6 0v-8h4v8z' fill='white'/%3E%3C/svg%3E">
-<script type="module" src="js/page.js?v=0.7.0-beta"></script>
+<script type="module" src="js/page.js?v=0.7.1-beta"></script>
 </head>
 <body>
 <header class="top">
@@ -41,7 +41,7 @@
         </ol>
         <div class="code">
           <div class="code-head"><span>Azure Resource Graph query</span><button type="button" id="copy-query" class="small">Copy query</button></div>
-          <pre id="query" tabindex="0"></pre>
+          <pre id="query" tabindex="0" aria-label="Azure Resource Graph query"></pre>
         </div>
         <p class="hint">The query lists each VM in the subscriptions that you can see. It gives the facts that this tool needs, for example the size, generation, OS image, NICs, disks, accelerated networking and Azure Disk Encryption.</p>
       </div>
@@ -71,7 +71,7 @@
         <button type="button" id="run">Show results</button>
       </div>
     </div>
-    <div id="messages" aria-live="polite"></div>
+    <div id="messages" role="status" aria-live="polite"></div>
   </section>
 
   <section class="step" id="results-section" hidden aria-labelledby="s3">
@@ -79,18 +79,19 @@
     <div id="counts" class="counts"></div>
     <div class="downloads">
       <button type="button" id="download">Download results (.zip)</button>
+      <span id="download-status" class="status" role="status"></span>
       <span class="hint">Start with the report, vm-lifecycle-report.html. Open it in a browser, or print it to PDF. The zip file also has three CSV files for Excel and one file about the results.</span>
     </div>
     <div class="filters">
       <label>Show <select id="filter"></select></label>
       <label>Type <select id="pattern-filter"></select></label>
       <label>Find <input type="search" id="find" placeholder="VM, size or resource group"></label>
-      <span id="shown" class="hint"></span>
+      <span id="shown" class="hint" role="status"></span>
     </div>
     <p class="hint open-hint">Select a VM to see what to do, the steps before the move, and the sizes.</p>
     <div class="table-wrap results-wrap">
       <table id="table">
-        <thead><tr><th>VM</th><th>Current size</th><th>Lifecycle stage</th><th>Result</th><th>v5</th><th>v6</th><th>v7</th><th>Burstable</th></tr></thead>
+        <thead><tr><th scope="col">VM</th><th scope="col">Current size</th><th scope="col">Lifecycle stage</th><th scope="col">Result</th><th scope="col">v5</th><th scope="col">v6</th><th scope="col">v7</th><th scope="col">Burstable</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -119,7 +120,7 @@
     <h3>The target sizes that this tool suggests</h3>
     <div class="table-wrap narrow">
       <table>
-        <thead><tr><th>Series</th><th>Families</th><th>For which VMs</th><th>Example</th></tr></thead>
+        <thead><tr><th scope="col">Series</th><th scope="col">Families</th><th scope="col">For which VMs</th><th scope="col">Example</th></tr></thead>
         <tbody>
           <tr><td>v5</td><td>D, E</td><td>Generation 1 and Generation 2 VMs</td><td class="size">Standard_D4s_v5</td></tr>
           <tr><td>v6</td><td>D, E</td><td>Generation 2 VMs</td><td class="size">Standard_D4s_v6</td></tr>
