@@ -36,7 +36,9 @@ for (const count of counts.length ? counts : [20000, 50000]) {
         { name: 'vm-lifecycle-report.html', text: time('report', () => reportHtml(p, table, 'large list', now)) },
         { name: 'about-these-results.txt', text: time('about file', () => F.aboutText(p, list, 'large list', now)) },
     ];
-    const zip = time('zip', () => makeZip(files, now));
+    const start = performance.now();
+    const zip = await makeZip(files, now);
+    times.push(['zip', performance.now() - start]);
     console.log(`\n${count} VMs (${(text.length / 1e6).toFixed(1)} MB list, ${(zip.length / 1e6).toFixed(1)} MB zip)`);
     for (const f of files) console.log(`  ${f.name.padEnd(24)} ${(f.text.length / 1e6).toFixed(1)} MB`);
     for (const [label, ms] of times) console.log(`  ${label.padEnd(24)} ${(ms / 1000).toFixed(2)} s`);

@@ -859,8 +859,10 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
   laptop; generous so that a slow build machine does not fail), the same twice; the
   same VMs in another order give the same result for each resource ID; the samples
   give the same files with a new size table and with one that a large list used first.
-- Not changed: the zip for 50,000 VMs is about 180 MB (vm-target-sizes.csv is 115 MB,
-  stored, not compressed: compression needs a library or much more code).
+- The zip is compressed (owner, 2026-10-17): each file goes through the browser's own
+  `CompressionStream('deflate-raw')` (zip method 8), no library. A file that does not
+  get smaller, or a browser without CompressionStream, gives a stored file. For 50,000
+  VMs: 180 MB of files, an 8.7 MB zip, 1.7 s.
 
 **Accessibility (WCAG 2.2 AA)**, checked by hand and in the browser; found and fixed:
 - Each VM row was a table row that took the focus (`tr` with `aria-expanded`), which

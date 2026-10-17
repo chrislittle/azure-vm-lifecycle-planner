@@ -30,9 +30,9 @@ system. The tool does not keep your choice: when you open the page again, it fol
 your system.
 
 The tool works with a list of 50,000 VMs. On a laptop, the results for 50,000 VMs show
-in about 3 seconds, and the zip file takes about 3 seconds more. The zip file for
-50,000 VMs is large (about 180 MB), because the CSV files have one row for each VM and
-series.
+in about 3 seconds, and the zip file takes about 2 seconds more. The browser
+compresses the files in the zip: for 50,000 VMs the files are about 180 MB, and the zip
+file is about 9 MB.
 
 You can use the page with only a keyboard. In the results table, each VM name is a
 button: press Enter or Space to open or close the details of the VM. The colours meet

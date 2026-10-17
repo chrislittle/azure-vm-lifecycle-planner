@@ -404,9 +404,9 @@ $('download').addEventListener('click', () => {
     // A large list takes some seconds: say so, and let the message show first.
     button.disabled = true;
     status.textContent = 'This tool makes the zip file. Wait.';
-    setTimeout(() => {
+    setTimeout(async () => {
         try {
-            const zip = makeZip([
+            const zip = await makeZip([
                 { name: 'vm-summary.csv', text: F.toCsv(F.SUMMARY_COLUMNS, F.summaryRows(p)) },
                 { name: 'vm-target-sizes.csv', text: F.toCsv(F.TARGET_COLUMNS, F.targetRows(p, table, now)) },
                 { name: 'vm-not-checked.csv', text: F.toCsv(F.NOT_CHECKED_COLUMNS, F.notCheckedRows(p, table, now)) },

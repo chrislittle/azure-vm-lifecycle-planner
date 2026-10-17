@@ -193,17 +193,21 @@ test('a machine that is not moving says "Not needed", never a no', async () => {
     assert.equal(answerWords(byName(run(sample).plan, 'contoso-app01'), 'v5'), 'Standard_D2ds_v5');
 });
 
-test('the results zip opens and holds the four files, unchanged', async () => {
+test('the results zip opens, holds the files unchanged, and compresses them', async () => {
     const { makeZip } = await import('../js/zip.js');
     const { execFileSync } = await import('node:child_process');
     const { writeFileSync, mkdtempSync, readFileSync: rf } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
-    const files = [{ name: 'vm-summary.csv', text: '﻿"a","b"\r\n"1","é"\r\n' }, { name: 'about-these-results.txt', text: 'hello' }];
+    const big = '"contoso-vm","eastus","Standard_D4s_v5"\r\n'.repeat(2000);
+    const files = [{ name: 'vm-summary.csv', text: '﻿"a","b"\r\n"1","é"\r\n' + big }, { name: 'about-these-results.txt', text: 'hello' }];
     const dir = mkdtempSync(join(tmpdir(), 'zip-'));
-    writeFileSync(join(dir, 'r.zip'), makeZip(files));
-    // Python's zipfile checks every CRC.
-    const out = execFileSync('python', ['-I', '-c', 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; sys.stdout.buffer.write(z.read("vm-summary.csv"))', join(dir, 'r.zip')]);
+    const zip = await makeZip(files);
+    writeFileSync(join(dir, 'r.zip'), zip);
+    // Python's zipfile checks every CRC. Method 8 is deflate, 0 is stored: a file that
+    // does not get smaller ("hello") is stored.
+    const out = execFileSync('python', ['-I', '-c', 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; assert [i.compress_type for i in z.infolist()] == [8, 0]; sys.stdout.buffer.write(z.read("vm-summary.csv"))', join(dir, 'r.zip')]);
+    assert.ok(zip.length < files[0].text.length / 10, `zip ${zip.length} bytes`);
     assert.equal(out.toString('utf8'), files[0].text);
 });
 
