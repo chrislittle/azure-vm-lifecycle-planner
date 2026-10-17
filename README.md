@@ -198,7 +198,10 @@ generation only, for example "Standard_D4s_v3, Generation 2".
   password (a federated credential), which only the `azure-read` environment on `main`
   can use. To refresh the size table and the NVA list yourself: `az login`, then
   `node tools/azure-sources.mjs --update`. GitHub turns off a scheduled workflow after
-  60 days with no activity in a public repo: turn it on again in the Actions tab.
+  60 days with no activity in a public repo. To prevent this, each run turns the
+  workflow on again with the GitHub API (job `keep-on`). It makes no commit. If GitHub
+  turns the workflow off all the same, it sends an email: turn the workflow on again in
+  the Actions tab.
 - `tools/` runs on GitHub or on a computer, never in the page. The page does not load
   it, so its network access does not change the page's "no data leaves your browser"
   promise. `tools/source-snapshot.json` holds text from Microsoft Learn pages
