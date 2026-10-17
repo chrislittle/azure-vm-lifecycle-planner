@@ -768,7 +768,11 @@ Resource Manager with a token from the Azure CLI):
   Microsoft extensions or publishers with no VM image.
 - **Sign-in (owner approved the commands, 2026-10-16):** an app registration
   "vm-lifecycle-planner-source-reader" with no secret or certificate; a federated
-  credential for `repo:chrislittle/azure-vm-lifecycle-planner:environment:azure-read`;
+  credential for the subject that GitHub sends, with the owner's and the repo's
+  numeric IDs: `repo:chrislittle@11097012/azure-vm-lifecycle-planner@1411898953:environment:azure-read`
+  (the first run on 2026-10-17 showed that GitHub no longer sends the name-only form
+  `repo:chrislittle/azure-vm-lifecycle-planner:environment:azure-read`; the credential
+  was changed, and the IDs do not change when a repo is renamed);
   a custom role "VM Lifecycle Planner source reader" with 5 read actions (VM sizes,
   Marketplace publishers and offers, policy definitions, regions), assignable and
   assigned only on the ChrisLittle subscription. The IDs are GitHub environment secrets,
@@ -792,8 +796,15 @@ Resource Manager with a token from the Azure CLI):
   `Microsoft.Authorization/policyDefinitions/read`; if the first run reads it, that
   permission can go.
 
-**Next:** run the workflow once by hand after the merge (the Azure sign-in works only on
-`main`).
+- **First runs on GitHub (2026-10-17):** run 1: the sign-in failed (the subject form
+  above); the check wrote "cannot sign in" reports, and the workflow opened issues #19
+  to #21 as designed. Run 2, after the credential change: sign-in worked; 23 pages, the
+  size list (1,498 sizes, 63 regions), the NVA policy (1.4.0) and the catalog all agree
+  with the data; the workflow closed #19 to #21 by itself. The policy-definitions read
+  permission stays (owner, 2026-10-17): it reads only public rule text.
+
+**Next:** peer feedback, as GitHub issues; refresh the data when the weekly check opens
+an issue.
 
 ## Next
 
