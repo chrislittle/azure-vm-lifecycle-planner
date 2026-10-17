@@ -191,6 +191,12 @@ test('appliances by vendor: one row for each vendor and kind, sorted; same names
         ['', 'Managed application', ['contoso-ma1']],
     ]);
     assert.deepEqual(appliancesByVendor(run(list([{ 'VM name': 'contoso-e1' }])).machines), []);
+    // The same publisher in another case is one vendor: the first spelling shows.
+    const c = appliancesByVendor(run(list([
+        { 'VM name': 'contoso-fw7', 'Image publisher': 'PaloAltoNetworks', 'Image offer': 'vmseries-flex' },
+        { 'VM name': 'contoso-fw8', 'Image publisher': 'paloaltonetworks', 'Image offer': 'vmseries-flex' },
+    ])).machines);
+    assert.deepEqual(c.map((x) => [x.vendor, x.machines.length]), [['PaloAltoNetworks', 2]]);
 });
 
 test('the report: "Appliances by vendor" links only to a VM that has a card; no facts block in the cards', () => {

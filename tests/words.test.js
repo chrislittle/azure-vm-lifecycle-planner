@@ -20,6 +20,7 @@ import { todo, whyLines } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import * as W from '../js/words.js';
 import * as F from '../js/files.js';
+import { FACT_GROUPS, NO_VALUE, NOT_IN_LIST, workloadFound } from '../js/evidence.js';
 
 const table = new SizeTable(sizes.sizes);
 const NOW = new Date('2026-10-09T12:00:00Z');
@@ -87,6 +88,24 @@ function collect() {
             problem: { securityWords: 'Trusted launch' }, facts: { processor: 'Arm64', family: 'D', vcpus: 4, memoryGB: 16, required: 3, suggestion, sizes: [] } };
         for (const code of Object.keys(REASONS)) add(`reasons.js: ${code}`, reasonFor(code, ctx));
     }
+    // Every evidence text, with made-up facts for each kind, so that a text the samples
+    // do not reach (a plan, a gallery, a managed application with a plan) is checked too.
+    const known = { managedBy: 'None', scaleSet: false, sqlServer: false, sharedDisk: false, sap: false, virtualDesktop: false, imagePublisher: 'Canonical', imageOffer: 'ubuntu' };
+    for (const extra of [
+        known, { ...known, managedBy: null }, { ...known, virtualDesktop: true }, { ...known, virtualDesktop: true, hostPoolType: 'Personal' },
+        { ...known, imagePublisher: 'paloaltonetworks', imageOffer: 'vmseries-flex' }, { ...known, imagePublisher: '', planPublisher: 'fortinet', planProduct: 'fortinet_fortigate-vm_v5' },
+        { ...known, imagePublisher: 'cohesity', imageOffer: 'cohesity-cloudtd-tool' }, { ...known, imagePublisher: '', planPublisher: 'rubrik-inc', planProduct: 'rubrik-cloud-data-management' },
+        { ...known, imagePublisher: '', imageId: '/communityGalleries/WekaIO-00000000-0000-0000-0000-000000000000/images/weka/versions/1.0.0' },
+        { ...known, managedBy: 'Managed application' }, { ...known, managedBy: 'Managed application', planPublisher: 'contosoisv', planProduct: 'contoso-app' },
+        { ...known, managedBy: 'Managed application', planPublisher: 'contosoisv' },
+        { ...known, managedBy: 'AKS' }, { ...known, managedBy: 'ARO' }, { ...known, resourceType: 'Scale set' }, { ...known, scaleSet: true },
+        { ...known, virtualDesktop: true, hostPoolType: 'Pooled' }, { ...known, managedBy: 'Databricks' },
+        { ...known, sqlServer: 'Enterprise', imagePublisher: 'MicrosoftSQLServer', sqlGroup: true, sharedDisk: true, sap: true },
+    ]) {
+        const w = workloadFound({ extra, read: { name: 'contoso-x' } });
+        add(`evidence.js: ${w.name}`, w.lead, w.shown, w.evidence, w.kind ? `${w.kind}. ${w.evidence}` : '');
+    }
+    add('evidence.js', NOT_IN_LIST, NO_VALUE, FACT_GROUPS.map(([group]) => group));
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
         W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),

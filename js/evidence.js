@@ -101,7 +101,8 @@ export function appliancesByVendor(machines) {
     for (const m of machines) {
         if (m.pattern !== 'G') continue;
         const w = workloadFound(m);
-        const key = `${w.vendor}\n${w.kind}`;
+        // One row for each vendor, whatever its case: the first spelling in the list shows.
+        const key = `${w.vendor.toLowerCase()}\n${w.kind}`;
         if (!groups.has(key)) groups.set(key, { vendor: w.vendor, kind: w.kind, machines: [] });
         const same = byName.get(m.read.name.toLowerCase());
         groups.get(key).machines.push({ m, where: same.length > 1 ? whereWords(m, same) : '' });

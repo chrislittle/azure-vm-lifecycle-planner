@@ -132,7 +132,7 @@ in Excel:
 | File | Contents |
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
-| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace purchase plan when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
 | vm-not-checked.csv | The items that the tool cannot check. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
