@@ -7,7 +7,8 @@ import { capacityRestricted } from './planner.js?v=0.7.1-beta';
 import * as F from './files.js?v=0.7.1-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
 import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
-import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.7.1-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.7.1-beta';
+import { appliancesByVendor, factsRead, workloadFound } from './evidence.js?v=0.7.1-beta';
 import version from './version.js?v=0.7.1-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
@@ -25,6 +26,31 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const count = (g) => p.machines.filter((m) => F.groupOf(m) === g).length;
     const ORDER = ['first', 'ready', 'pool', 'gate', 'nopath', 'unchecked', 'modern'];
     const TONE = { modern: 'ok', ready: 'ok', first: 'act', pool: 'pool', gate: 'act', nopath: 'no', unchecked: 'muted' };
+
+    // The workload type and the facts behind it (evidence.js).
+    function workloadHtml(m) {
+        const w = workloadFound(m);
+        return `<h4>Workload type</h4><p><b>${esc(w.lead)}</b> ${esc(w.shown)}</p>`;
+    }
+    // Every fact that the answer used, as the list gives it. Closed at first: a
+    // browser opens it without a script.
+    function factsHtml(m) {
+        const groups = factsRead(m);
+        if (!groups.length) return '';
+        return `<details class="facts"><summary>Facts we read</summary><div class="fact-groups">${groups.map((g) => `<div><h5>${esc(g.group)}</h5><dl>${g.facts.map((x) => `<dt>${esc(x.column)}</dt><dd${x.given ? '' : ' class="muted"'}>${esc(x.value)}</dd>`).join('')}</dl></div>`).join('')}</div></details>`;
+    }
+
+    // The appliances, by vendor: one list to send to each vendor. The NVA list and a
+    // Marketplace plan give a publisher ID, not a company name.
+    const appliances = appliancesByVendor(p.machines);
+    const vendorCell = (a) => (!a.vendor ? '<span class="muted">The list does not give the vendor.</span>'
+        : a.kind === APPLIANCE_KINDS.storage ? esc(a.vendor) : `${esc(a.vendor)} <span class="muted">(publisher ID)</span>`);
+    const appliancesHtml = !appliances.length ? '' : `
+    <h3 class="label">Appliances by vendor</h3>
+    <p class="muted">Send each vendor the list of its VMs. Ask the vendor which sizes they certify.</p>
+    <table><thead><tr><th scope="col">Vendor</th><th scope="col">Kind</th><th scope="col">VMs</th><th scope="col">VM names</th></tr></thead><tbody>
+    ${appliances.map((a) => `<tr><td>${vendorCell(a)}</td><td>${esc(a.kind)}</td><td>${a.machines.length}</td><td>${a.machines.map((x) => `<a href="#vm-${x.m.read.row}">${esc(x.m.read.name)}</a>${x.where ? ` <span class="muted">(${esc(x.where)})</span>` : ''}`).join(', ')}</td></tr>`).join('')}
+    </tbody></table>`;
 
     function vmCard(m) {
         const g = F.groupOf(m); const t = todo(m, g); const n = F.allNotes(m);
@@ -46,11 +72,13 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
       <div class="todo"><b>What to do:</b> ${esc(t.main)} ${t.more.map(esc).join(' ')}</div>
       ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
+      ${workloadHtml(m)}
       ${serviceManaged(m) && m.moveRequired === 'Yes' ? '<h4>Before the move</h4><p class="muted">Nothing to do on the VM. The service manages the image and the disks.</p>' : notes('Before the move', n.actions, 'act')}
       ${notes('Good to know', n.attention, 'att')}
       ${notes('To check', n.checks, 'chk', true)}
       ${sizesHtml}
       ${m.read.resourceId ? `<p class="rid">${esc(m.read.resourceId)}</p>` : ''}
+      ${factsHtml(m)}
     </section>`;
     }
 
@@ -93,6 +121,9 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     ul { margin: 0; padding-left: 18px; } li { margin: 2px 0; }
     ul.act li::marker { color: var(--act); } ul.att li::marker { color: var(--accent); } ul.chk li::marker { color: var(--muted); }
     table.sizes th:first-child { width: 80px; }
+    details.facts { margin-top: 8px; } details.facts summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .fact-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 4px 16px; } h5 { font-size: 12px; margin: 8px 0 2px; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0 10px; margin: 0; font-size: 12px; } dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
     .rid { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
     @media (max-width: 700px) { .three { grid-template-columns: 1fr; } }
     @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
@@ -110,6 +141,8 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <div><h3 class="label">Region</h3><table><thead><tr><th scope="col">Region</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.region).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
       <div><h3 class="label">Resource group</h3><table><thead><tr><th scope="col">Resource group</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.resourceGroup).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
     </div>
+
+    ${appliancesHtml}
 
     <h2>2. What to do, by result</h2>
     ${actionTables}

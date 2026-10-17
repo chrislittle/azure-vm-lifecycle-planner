@@ -14,6 +14,13 @@ import { capacityRestricted } from './planner.js?v=0.7.1-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
 import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.7.1-beta';
 import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.7.1-beta';
+import { workloadFound } from './evidence.js?v=0.7.1-beta';
+
+// The vendor of an appliance and the facts behind the workload type (evidence.js).
+function vendorAndEvidence(m) {
+    const w = workloadFound(m);
+    return { 'Vendor': w.vendor, 'Evidence': w.kind && w.evidence ? `${w.kind}. ${w.evidence}` : w.evidence };
+}
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF. A cell that
 // starts with = + - @ (or a tab or CR) and is longer than one character gets a ' in
@@ -140,7 +147,9 @@ function stageText(m) {
 }
 
 export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
-    'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Needs review', 'Notes', 'Resource ID'];
+    'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Needs review', 'Notes', 'Resource ID',
+    // Added in 0.8.0-beta at the end, so that the other columns keep their place.
+    'Vendor', 'Evidence'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -157,6 +166,7 @@ export function summaryRows(p) {
         'To check': signals(m).checks.map((c) => c.topic).join(', '),
         'Needs review': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
+        ...vendorAndEvidence(m),
     }));
 }
 

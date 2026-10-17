@@ -205,6 +205,18 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 .d ul.list .topic { font-weight: 600; }
 .d ul.list .only { color: var(--muted); }
 .series p { margin: 0 0 8px; }
+/* "Facts we read": closed at first; the summary is a normal button for the keyboard. */
+.d details.facts { margin: 16px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.d details.facts > summary { cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.d details.facts > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.d details.facts > .hint { margin: 8px 0; }
+.fact-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; }
+.fact-group { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; min-width: 0; }
+.fact-group h4 { margin: 0 0 4px; font-size: 13px; }
+.fact-group dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+.fact-group dt { color: var(--muted); }
+.fact-group dd { margin: 0; overflow-wrap: anywhere; }
+.fact-group dd.missing { color: var(--muted); font-style: italic; }
 .caveats { list-style: none; margin: 0; padding: 0; }
 .caveats li { padding: 2px 0 2px 18px; position: relative; }
 .caveats li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 8px; height: 8px; border-radius: 50%; }

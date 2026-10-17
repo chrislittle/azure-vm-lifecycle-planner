@@ -59,7 +59,7 @@ function collect() {
         if (list.stops.length) continue;
         const p = plan(list.rows.map((r, i) => toMachine(r, list.map, i + 2, table, NOW)), table, NOW);
         for (const r of F.summaryRows(p)) {
-            add(`${name}: vm-summary.csv`, ['Current stage', 'Move needed', 'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Needs review'].map((c) => r[c]));
+            add(`${name}: vm-summary.csv`, ['Current stage', 'Move needed', 'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Needs review', 'Evidence'].map((c) => r[c]));
             // Lists joined with "; " or ", ": each item is one text.
             for (const c of ['Before the move', 'Good to know', 'Notes']) add(`${name}: vm-summary.csv ${c}`, r[c].split('; '));
             add(`${name}: vm-summary.csv To check`, r['To check'].split(', '));
@@ -102,7 +102,7 @@ function collect() {
 // inside the sentence. No styles, no tags.
 function htmlText(html) {
     return html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<code>[\s\S]*?<\/code>/gi, 'CODE')
-        .split(/<\/?(?:p|li|ul|ol|div|h\d|td|th|tr|table|thead|tbody|section|header|footer|main|label|option|select|button|br|title|textarea|input)\b[^>]*>/i)
+        .split(/<\/?(?:p|li|ul|ol|div|h\d|td|th|tr|table|thead|tbody|section|header|footer|main|label|option|select|button|br|title|textarea|input|dl|dt|dd|details|summary)\b[^>]*>/i)
         .map((t) => t.replace(/<\/?span\b[^>]*>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#9;/g, ' ').replace(/&amp;/g, '&'));
 }
 

@@ -121,6 +121,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     };
     const problems = [];
     const notes = [];
+    // The row as read, for "Facts we read" (details.js): no copy, only references.
+    const source = { row, map };
 
     let name = cell('VM name');
     if (!name) { name = `(row ${rowNumber})`; problems.push({ what: 'VM name', why: 'machine-name-empty' }); }
@@ -183,7 +185,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         resourceType: extra.resourceType, instances: extra.instances,
         ...readResourceId(cell('Resource ID')),
     };
-    if (problems.length) return { vm: null, read, extra, pattern, problems, notes };
+    if (problems.length) return { vm: null, read, extra, pattern, problems, notes, source };
 
     const sourceSize = size.size;
     const entry = table.has(sourceSize) ? table.get(sourceSize) : null;
@@ -233,7 +235,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     if (disks.value !== null) vm.dataDiskCount = disks.value;
     if (extra.acceleratedNicCount !== null) vm.acceleratedNicCount = extra.acceleratedNicCount;
     if (extra.primaryNicAccelerated !== null) vm.primaryNicAccelerated = extra.primaryNicAccelerated;
-    return { vm, read, extra, pattern, problems: [], notes };
+    return { vm, read, extra, pattern, problems: [], notes, source };
 }
 
 // ---------------------------------------------------------------------------
