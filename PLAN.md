@@ -1029,13 +1029,18 @@ words, a new table and three new query columns are added.
     2 VMs, one row each, the 35 earlier columns the same as the 0.8.0-beta query. A
     probe copy that also joined the VMs themselves through the new join gave one row
     for each VM, with the name from the joined row: the join works with a match.
-  - **Not proven on a real Marketplace managed application**, and the AVD host pool
-    through the changed join is not proven on a real host pool (the owner's Azure has
-    neither today). A test needs: a pooled AVD host pool with one session host (as in
-    the test build of 2026-10-10, about $0.05), and a managed application. A service
-    catalog application from our own definition with an empty template costs nothing and
-    proves the name; only a Marketplace offer has a plan, and its cost depends on the
-    offer (what it deploys, for under one hour).
+  - **Test build (owner, 2026-10-17)**: a pooled AVD host pool with one Windows session
+    host, and a service catalog managed application (our own definition) with one Linux
+    VM in its managed resource group, both VMs stopped (deallocated). The old and new
+    query each gave 2 rows; the 35 earlier columns were the same; the session host read
+    "Azure Virtual Desktop" Yes and host pool type Pooled (no change through the new
+    join); the managed application VM read "Managed by" Managed application and
+    "Managed application" with the application name, and a blank plan (a service catalog
+    application has no Marketplace plan). The old and new tool gave the same answers
+    for both VMs. The raw rows are kept locally, not in the repo.
+  - **Not proven on a real Marketplace managed application**: only a Marketplace offer
+    has a plan, and its cost depends on the offer. The plan columns read `plan.publisher`
+    and `plan.product` of the application, as Microsoft's ARM reference gives them.
   - Edge case: an AVD session host in the resource group of a managed application keeps
     its host pool, and the list then does not give the application (it is a vendor
     appliance either way).

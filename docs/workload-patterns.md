@@ -180,9 +180,11 @@ A vendor reaches Azure in one of four ways, and the query reads each one:
 
 Tested: the query reads these fields without error (16 October 2026); a test build with a
 real appliance is not possible without each vendor's licence. The managed application
-name and plan (0.9.0-beta): the query runs without error and gives one row for each VM
-(17 October 2026), and a probe query proved that the join matches. Not proven on a real
-Marketplace managed application.
+name and plan (0.9.0-beta): a test build (17 October 2026) with a service catalog managed
+application (one VM in its managed resource group) and a pooled AVD session host gave one
+row for each VM, the application name for the managed application VM, a blank plan (a
+service catalog application has none), and the same AVD host pool type as before. Not
+proven on a real Marketplace managed application (only those have a plan).
 
 | Vendor | Publisher | Offers that are the appliance |
 |---|---|---|
