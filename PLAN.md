@@ -826,8 +826,7 @@ Resource Manager with a token from the Azure CLI):
   with the data; the workflow closed #19 to #21 by itself. The policy-definitions read
   permission stays (owner, 2026-10-17): it reads only public rule text.
 
-**Next:** peer feedback, as GitHub issues; refresh the data when the weekly check opens
-an issue.
+**Next:** refresh the data when the weekly check opens an issue.
 
 ## 0.7.1-beta (2026-10-17): large lists and accessibility
 
@@ -893,7 +892,6 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
 
 ## Next
 
-- Peer feedback, as GitHub issues.
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen
   widths (step 6) and the STE check of all customer text.
 - Refresh the size table and Microsoft's lists when the owner asks.
