@@ -3,7 +3,7 @@
 // categories"). The pattern decides how to move a VM, not only the size.
 // docs/workload-patterns.md gives the signal for each pattern and its status.
 
-import { inManagedApplication, isAppliance, isStorageAppliance } from './extras.js?v=0.6.0-beta';
+import { inManagedApplication, isAppliance, isStorageAppliance } from './extras.js?v=0.7.0-beta';
 
 // A service that owns a resource group, as the query writes it.
 const POOL_SERVICES = ['aks', 'aro'];
