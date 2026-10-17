@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.7.0-beta';
-import nvaImages from '../data/nva-images.js?v=0.7.0-beta';
-import nvme from '../data/nvme-images.js?v=0.7.0-beta';
-import { readCount } from './planner.js?v=0.7.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.7.1-beta';
+import nvaImages from '../data/nva-images.js?v=0.7.1-beta';
+import nvme from '../data/nvme-images.js?v=0.7.1-beta';
+import { readCount } from './planner.js?v=0.7.1-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -72,9 +72,18 @@ function like(value, pattern) {
     return at <= v.length - parts[parts.length - 1].length;
 }
 const likeAny = (value, patterns) => patterns.some((p) => like(value, p));
+// Each image is checked against the lists once: a large list has the same images
+// many times (2026-10-17).
+const applianceImages = new Map();
 export function isApplianceImage(publisher, offer) {
     if (!publisher || !offer) return false;
-    return likeAny(publisher, nvaImages.publishers) && likeAny(offer, nvaImages.offers);
+    const key = `${publisher}\n${offer}`;
+    let found = applianceImages.get(key);
+    if (found === undefined) {
+        found = likeAny(publisher, nvaImages.publishers) && likeAny(offer, nvaImages.offers);
+        applianceImages.set(key, found);
+    }
+    return found;
 }
 
 // Is this marketplace image a storage or backup appliance? Our own list from the

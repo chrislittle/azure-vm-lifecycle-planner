@@ -4,11 +4,13 @@
     --text: #1b1f24;
     --muted: #5b6573;
     --line: #dde2e8;
+    /* The border of a text box or a menu: 3:1 on its background (WCAG 1.4.11). */
+    --control: #7b8594;
     --accent: #0b6bcb;
     --accent-text: #ffffff;
     --row-hover: #e8f1fb;
     --code: #f0f2f5;
-    --fine: #1a7f37;
+    --fine: #187a34;
     --fine-bg: #e6f4ea;
     --problem: #b42318;
     --problem-bg: #fdecea;
@@ -27,6 +29,7 @@
         --text: #e7eaee;
         --muted: #9aa4b1;
         --line: #2c333b;
+        --control: #687382;
         --accent: #4ea1ff;
         --accent-text: #0b1220;
         --row-hover: #18222e;
@@ -49,6 +52,7 @@
     --text: #e7eaee;
     --muted: #9aa4b1;
     --line: #2c333b;
+    --control: #687382;
     --accent: #4ea1ff;
     --accent-text: #0b1220;
     --row-hover: #18222e;
@@ -110,13 +114,13 @@ button, .button {
 button.secondary, .button.secondary { background: var(--panel); color: var(--accent); }
 button.small { padding: 3px 10px; font-size: 13px; }
 button.link { background: none; border: none; color: var(--accent); padding: 7px 4px; text-decoration: underline; font-weight: 500; }
-button:focus-visible, .button:focus-within, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, .button:focus-within, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, pre:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .file { position: relative; }
 
 .drop.over { border-color: var(--accent); border-style: dashed; }
 .label { display: block; font-weight: 600; margin-bottom: 6px; }
-textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre; overflow-x: auto; }
+textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--control); border-radius: 6px; padding: 8px; white-space: pre; overflow-x: auto; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
 .actions .spacer { flex: 1; }
 .or { color: var(--muted); font-size: 13px; }
@@ -135,22 +139,26 @@ textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--te
 
 .downloads, .filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
 .downloads .label { display: inline; margin: 0; }
-select, input[type=search] { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+.status { color: var(--muted); font-size: 13px; }
+select, input[type=search] { font: inherit; padding: 5px 8px; border: 1px solid var(--control); border-radius: 6px; background: var(--panel); color: var(--text); }
 
 .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { position: sticky; top: 0; background: var(--panel); font-weight: 600; white-space: nowrap; }
+thead th { position: sticky; top: 0; background: var(--panel); font-weight: 600; white-space: nowrap; }
+tbody th { font-weight: 400; }
 tbody tr.machine { cursor: pointer; }
-tbody tr.machine:hover, tbody tr.machine:focus-visible, tbody tr.machine[aria-expanded="true"] { background: var(--row-hover); }
+tbody tr.machine:hover, tbody tr.machine:focus-within, tbody tr.machine.open { background: var(--row-hover); }
+/* The VM name is the button that opens the details: it looks like the name. */
+button.name { background: none; border: none; border-radius: 2px; color: var(--text); font-weight: inherit; padding: 0; text-align: left; line-height: inherit; overflow-wrap: anywhere; }
 /* An arrow before the name: the row opens (owner, 2026-10-10: not obvious otherwise). */
-td.vm .name::before { content: "\25B8"; display: inline-block; width: 18px; font-size: 16px; line-height: 1; text-align: center; margin-right: 2px; color: var(--accent); transition: transform 0.15s; }
-tr.machine[aria-expanded="true"] td.vm .name::before { transform: rotate(90deg); }
+.vm .name::before { content: "\25B8"; display: inline-block; width: 18px; font-size: 16px; line-height: 1; text-align: center; margin-right: 2px; color: var(--accent); transition: transform 0.15s; }
+.vm .name[aria-expanded="true"]::before { transform: rotate(90deg); }
 p.open-hint { margin: 4px 0 8px; }
 td.stage { min-width: 150px; }
 td.stage strong { display: block; font-weight: 600; }
-td.stage .sub, td.vm .sub { display: block; color: var(--muted); font-size: 12px; }
-td.vm { min-width: 150px; }
+td.stage .sub, .vm .sub { display: block; color: var(--muted); font-size: 12px; }
+.vm { min-width: 150px; }
 .tag-limit { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--check-bg); color: var(--check); white-space: nowrap; }
 td.warn { min-width: 140px; }
 .tags { display: flex; flex-wrap: wrap; min-width: 0; }
@@ -178,13 +186,13 @@ td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consol
 tr.details > td { background: var(--bg); padding: 12px 14px; }
 .series { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px; }
 .series > div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
-.series h4, .series h5 { margin: 0 0 4px; font-size: 14px; }
+.series h4 { margin: 0 0 4px; font-size: 14px; }
 .series .no { color: var(--muted); }
 /* The details of a VM: what to do, why, sizes, then the notes. */
-.d h4.sec { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.d h4.sec:first-child, .d .rid + h4.sec { margin-top: 0; }
+.d h3.sec { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.d h3.sec:first-child, .d .rid + h3.sec { margin-top: 0; }
 .d .rid { margin: 0 0 10px; overflow-wrap: anywhere; user-select: all; }
-td.vm .sub.where { color: var(--text); }
+.vm .sub.where { color: var(--text); }
 .d .todo { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
 .d .todo-sub, .d .why { margin: 0 0 4px; }
 .d .none { color: var(--muted); margin: 0; }
@@ -210,22 +218,27 @@ td.vm .sub.where { color: var(--text); }
 .table-wrap.narrow { max-width: 720px; }
 .foot { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
 
+/* No motion when the system asks for less (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before { transition: none !important; animation: none !important; }
+}
+
 /* Narrow screens: each VM is a card with a label on each line, not a wide table row. */
 @media (max-width: 1000px) {
     .counts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #table thead { display: none; }
     #table, #table tbody { display: block; }
     #table tr.machine { display: block; padding: 8px 4px; border-bottom: 1px solid var(--line); }
-    #table tr.machine td { display: flex; gap: 10px; align-items: baseline; padding: 3px 8px; border: none; min-width: 0; overflow-wrap: anywhere; }
-    #table tr.machine td::before { content: attr(data-label); flex: 0 0 110px; color: var(--muted); font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    #table tr.machine > * { display: flex; gap: 10px; align-items: baseline; padding: 3px 8px; border: none; min-width: 0; overflow-wrap: anywhere; }
+    #table tr.machine > ::before { content: attr(data-label); flex: 0 0 110px; color: var(--muted); font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     #table .pill { white-space: normal; }
-    #table tr.machine td:empty { display: none; }
-    #table tr.machine td:first-child { font-weight: 600; font-size: 14px; }
+    #table tr.machine > :empty { display: none; }
+    #table tr.machine > :first-child { font-weight: 600; font-size: 14px; }
     #table td.stage { display: flex; flex-wrap: wrap; column-gap: 8px; }
     #table td.stage strong, #table td.stage .sub { display: inline; }
-    #table td.vm { flex-wrap: wrap; row-gap: 0; }
-    #table td.vm .name { flex: 1 1 0; min-width: 0; }
-    #table td.vm .sub { flex: 1 1 100%; padding-left: 120px; font-weight: 400; }
+    #table .vm { flex-wrap: wrap; row-gap: 0; }
+    #table .vm .name { flex: 1 1 0; min-width: 0; }
+    #table .vm .sub { flex: 1 1 100%; padding-left: 120px; font-weight: 400; }
     #table tr.details { display: block; }
     #table tr.details > td { display: block; }
     .results-wrap { overflow-x: visible; }

@@ -2,22 +2,22 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.7.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.7.0-beta';
-import capacity from '../data/capacity.js?v=0.7.0-beta';
-import nvme from '../data/nvme-images.js?v=0.7.0-beta';
-import query from './query.js?v=0.7.0-beta';
-import sample from './sample.js?v=0.7.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.7.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.7.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.7.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.7.0-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.7.0-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.7.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.7.0-beta';
-import * as F from './files.js?v=0.7.0-beta';
-import { makeZip } from './zip.js?v=0.7.0-beta';
-import version from './version.js?v=0.7.0-beta';
+import sizes from '../data/sizes.js?v=0.7.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.7.1-beta';
+import capacity from '../data/capacity.js?v=0.7.1-beta';
+import nvme from '../data/nvme-images.js?v=0.7.1-beta';
+import query from './query.js?v=0.7.1-beta';
+import sample from './sample.js?v=0.7.1-beta';
+import { SizeTable } from './lifecycle.js?v=0.7.1-beta';
+import { COLUMNS, readList } from './input.js?v=0.7.1-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.7.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.7.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.7.1-beta';
+import * as F from './files.js?v=0.7.1-beta';
+import { makeZip } from './zip.js?v=0.7.1-beta';
+import version from './version.js?v=0.7.1-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -106,6 +106,7 @@ function message(kind, title, items = []) {
 
 function run() {
     const box = $('messages');
+    $('download-status').textContent = '';
     const list = readList(paste.value);
     if (list.stops.length) {
         current = null;
@@ -127,7 +128,8 @@ function run() {
     setTimeout(() => {
         const now = new Date();
         const machines = list.rows.map((r, i) => toMachine(r, list.map, r.line ?? i + 2, table, now));
-        current = { list, plan: plan(machines, table, now), now };
+        const p = plan(machines, table, now);
+        current = { list, plan: p, now, ...indexOf(p) };
         const msgs = [message('ok', `This tool made the results for ${vms(machines.length)} in your browser. It sent no data.`)];
         if (list.notes.length) msgs.push(message('note', 'Note:', list.notes));
         const missing = COLUMNS.map((c) => c.name).filter((c) => !(c in list.map));
@@ -137,7 +139,7 @@ function run() {
             'To get all the facts, run the query in step 1 and load its CSV file.',
         ]));
         box.replaceChildren(...msgs);
-        filter = 'all'; $('find').value = ''; limit = PAGE;
+        filter = 'all'; $('find').value = '';
         showResults();
     }, 20);
 }
@@ -149,22 +151,42 @@ function run() {
 const PAGE = 200;
 let filter = 'all';
 let patternFilter = 'all';
-let limit = PAGE;
+// The rows that the filters and Find select, and how many of them the table shows.
+let selected = [];
+let shown = 0;
 // The colour of each result group. Red only for no supported size; a hard gate
 // and "do this first" are amber: they are steps, not dead ends (peer, 2026-10-09).
 const PILL = { modern: 'no-move', ready: 'ready', first: 'move', pool: 'pool', gate: 'move', nopath: 'no-suggestion', unchecked: 'not-checked' };
+
+// What the table asks of each VM, made once for each list: its result group, the
+// text that Find looks in, and the VMs with the same name. A large list (50,000
+// VMs) then filters at once (2026-10-17).
+function indexOf(p) {
+    const group = new Map();
+    const text = new Map();
+    const byName = new Map();
+    for (const m of p.machines) {
+        group.set(m, F.groupOf(m));
+        text.set(m, `${m.read.name} ${m.read.size || m.read.sizeAsWritten} ${m.read.resourceId || ''}`.toLowerCase());
+        const k = m.read.name.toLowerCase();
+        if (!byName.has(k)) byName.set(k, []);
+        byName.get(k).push(m);
+    }
+    return { group, text, byName };
+}
 
 function showResults() {
     const p = current.plan;
     $('results-section').hidden = false;
 
     // Counts, which also filter.
+    const n = {};
+    for (const g of current.group.values()) n[g] = (n[g] || 0) + 1;
     const counts = $('counts');
     counts.replaceChildren(...Object.keys(GROUPS).map((g) => {
-        const n = p.machines.filter((m) => F.groupOf(m) === g).length;
         const b = el('button', { type: 'button', class: `count${filter === g ? ' active' : ''}`, 'aria-pressed': String(filter === g) },
-            el('span', { class: 'n', text: String(n) }), el('span', { class: 't', text: GROUPS[g].short }));
-        b.addEventListener('click', () => { filter = filter === g ? 'all' : g; limit = PAGE; showResults(); });
+            el('span', { class: 'n', text: String(n[g] || 0) }), el('span', { class: 't', text: GROUPS[g].short }));
+        b.addEventListener('click', () => { filter = filter === g ? 'all' : g; showResults(); });
         return b;
     }));
     const sel = $('filter');
@@ -173,15 +195,17 @@ function showResults() {
     sel.value = filter;
     // Only the patterns in this list, with their counts.
     const pf = $('pattern-filter');
-    const found = Object.keys(PATTERNS).filter((k) => p.machines.some((m) => (m.pattern || '') === k));
+    const byPattern = {};
+    for (const m of p.machines) byPattern[m.pattern || ''] = (byPattern[m.pattern || ''] || 0) + 1;
+    const found = Object.keys(PATTERNS).filter((k) => byPattern[k]);
     if (patternFilter !== 'all' && !found.includes(patternFilter)) patternFilter = 'all';
     pf.replaceChildren(el('option', { value: 'all', text: 'All types' }),
-        ...found.map((k) => el('option', { value: k, text: `${PATTERNS[k].name} (${p.machines.filter((m) => (m.pattern || '') === k).length})` })));
+        ...found.map((k) => el('option', { value: k, text: `${PATTERNS[k].name} (${byPattern[k]})` })));
     pf.value = patternFilter;
     renderTable();
 }
 
-$('filter').addEventListener('change', (e) => { filter = e.target.value; limit = PAGE; showResults(); });
+$('filter').addEventListener('change', (e) => { filter = e.target.value; showResults(); });
 // The theme menu: light, dark, or follow the system. The page keeps no data, so
 // the choice lasts until the page closes (owner, 2026-10-10).
 $('theme').addEventListener('change', (e) => {
@@ -189,65 +213,89 @@ $('theme').addEventListener('change', (e) => {
     if (v === 'light' || v === 'dark') document.documentElement.setAttribute('data-theme', v);
     else document.documentElement.removeAttribute('data-theme');
 });
-$('pattern-filter').addEventListener('change', (e) => { patternFilter = e.target.value; limit = PAGE; renderTable(); });
+$('pattern-filter').addEventListener('change', (e) => { patternFilter = e.target.value; renderTable(); });
 $('not-found').textContent = NOT_FOUND;
-$('find').addEventListener('input', () => { limit = PAGE; renderTable(); });
-$('more').addEventListener('click', () => { limit += PAGE; renderTable(); });
+$('find').addEventListener('input', () => renderTable());
+$('more').addEventListener('click', () => addRows());
 
 const HEADERS = [...document.querySelectorAll('#table thead th')].map((th) => th.textContent);
 
+// Select the rows again, and show the first ones.
 function renderTable() {
     const p = current.plan;
     const q = $('find').value.trim().toLowerCase();
-    const rows = p.machines.filter((m) => {
-        if (filter !== 'all' && F.groupOf(m) !== filter) return false;
+    selected = p.machines.filter((m) => {
+        if (filter !== 'all' && current.group.get(m) !== filter) return false;
         if (patternFilter !== 'all' && (m.pattern || '') !== patternFilter) return false;
-        if (q && !`${m.read.name} ${m.read.size || m.read.sizeAsWritten} ${m.read.resourceId || ''}`.toLowerCase().includes(q)) return false;
+        if (q && !current.text.get(m).includes(q)) return false;
         return true;
     });
-    // Names that are in the list more than once: only those rows say where the VM is.
-    const seen = new Map();
-    for (const m of p.machines) { const k = m.read.name.toLowerCase(); seen.set(k, (seen.get(k) || 0) + 1); }
-    const twins = new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
-    const tbody = $('table').tBodies[0];
-    tbody.replaceChildren();
-    for (const m of rows.slice(0, limit)) {
-        const tr = el('tr', { class: 'machine', tabindex: '0', 'aria-expanded': 'false' });
-        const answer = (s) => {
-            const t = m.short[s] || '';
-            if (!t) return el('td', {});
-            return /^(Standard|Basic)_/.test(t) ? el('td', {}, el('span', { class: 'ans-ok', title: t, text: shortSize(t) })) : el('td', {}, el('span', { class: 'ans-no', text: answerWords(m, s) }));
-        };
-        const g = F.groupOf(m);
-        tr.append(
-            el('td', { class: 'vm' }, el('span', { class: 'name', text: m.read.name }),
-                twins.has(m.read.name.toLowerCase()) ? el('span', { class: 'sub where', text: whereWords(m, p.machines) }) : null,
-                el('span', { class: 'sub', text: vmSub(m) })),
-            el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
-            stageCell(m),
-            el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
-            answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
-        );
-        // On a narrow screen each row shows as a card; each cell gets its column name.
-        [...tr.children].forEach((td, i) => { td.dataset.label = HEADERS[i]; });
-        const toggle = () => {
-            const open = tr.nextSibling && tr.nextSibling.classList && tr.nextSibling.classList.contains('details');
-            if (open) { tr.nextSibling.remove(); tr.setAttribute('aria-expanded', 'false'); return; }
-            tr.after(details(m));
-            tr.setAttribute('aria-expanded', 'true');
-        };
-        tr.addEventListener('click', toggle);
-        tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-        tbody.append(tr);
-    }
-    $('shown').textContent = rows.length === p.machines.length ? '' : `The table shows ${rows.length} of ${vms(p.machines.length)}.`;
-    $('more').hidden = rows.length <= limit;
+    $('table').tBodies[0].replaceChildren();
+    shown = 0;
+    addRows();
+    $('shown').textContent = selected.length === p.machines.length ? '' : `The table shows ${selected.length} of ${vms(p.machines.length)}.`;
+}
+
+// Show the next rows below the rows that the table shows now. Open rows stay open.
+function addRows() {
+    const part = document.createDocumentFragment();
+    for (const m of selected.slice(shown, shown + PAGE)) part.append(machineRow(m));
+    $('table').tBodies[0].append(part);
+    shown = Math.min(selected.length, shown + PAGE);
+    $('more').hidden = selected.length <= shown;
+}
+
+// One VM in the table. The button on the VM name opens and closes its details
+// (Enter or Space). A click on the row does the same.
+function machineRow(m) {
+    const tr = el('tr', { class: 'machine' });
+    const answer = (s) => {
+        const t = m.short[s] || '';
+        if (!t) return el('td', {});
+        return /^(Standard|Basic)_/.test(t) ? el('td', {}, el('span', { class: 'ans-ok', title: t, text: shortSize(t) })) : el('td', {}, el('span', { class: 'ans-no', text: answerWords(m, s) }));
+    };
+    const g = current.group.get(m);
+    const same = current.byName.get(m.read.name.toLowerCase());
+    const id = `details-${m.read.row}`;
+    const button = el('button', { type: 'button', class: 'name', 'aria-expanded': 'false', text: m.read.name });
+    tr.append(
+        el('th', { class: 'vm', scope: 'row' }, button,
+            same.length > 1 ? el('span', { class: 'sub where', text: whereWords(m, same) }) : null,
+            el('span', { class: 'sub', text: vmSub(m) })),
+        el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
+        stageCell(m),
+        el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
+        answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
+    );
+    // On a narrow screen each row shows as a card; each cell gets its column name.
+    [...tr.children].forEach((td, i) => { td.dataset.label = HEADERS[i]; });
+    const toggle = () => {
+        const open = tr.nextSibling && tr.nextSibling.classList && tr.nextSibling.classList.contains('details');
+        if (open) {
+            tr.nextSibling.remove();
+            tr.classList.remove('open');
+            button.setAttribute('aria-expanded', 'false');
+            button.removeAttribute('aria-controls');
+            return;
+        }
+        const d = details(m);
+        d.id = id;
+        tr.after(d);
+        tr.classList.add('open');
+        button.setAttribute('aria-expanded', 'true');
+        button.setAttribute('aria-controls', id);
+    };
+    button.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    // A click that selects text in the row does not close it.
+    tr.addEventListener('click', () => { if (!String(getSelection())) toggle(); });
+    return tr;
 }
 
 // For a VM whose name is in the list more than once: what tells it apart. The
-// resource group, else the subscription, else the region, else the row.
-function whereWords(m, all) {
-    const same = all.filter((x) => x !== m && x.read.name.toLowerCase() === m.read.name.toLowerCase());
+// resource group, else the subscription, else the region, else the row. same:
+// every VM with this name, this one too.
+function whereWords(m, same) {
+    same = same.filter((x) => x !== m);
     const r = m.read;
     if (r.resourceGroup && same.every((x) => (x.read.resourceGroup || '').toLowerCase() !== r.resourceGroup.toLowerCase())) return r.resourceGroup;
     if (r.subscriptionId && same.every((x) => x.read.subscriptionId !== r.subscriptionId)) return `Subscription ${r.subscriptionId}`;
@@ -278,7 +326,7 @@ function details(m) {
     const box = el('div', { class: 'd' });
     td.append(box);
     const g = F.groupOf(m);
-    const section = (title, ...content) => box.append(el('h4', { class: 'sec', text: title }), ...content);
+    const section = (title, ...content) => box.append(el('h3', { class: 'sec', text: title }), ...content);
     const pool = POOL_PATTERNS.includes(m.pattern);
 
     if (m.read.resourceId) box.append(el('p', { class: 'hint rid', text: `Resource ID: ${m.read.resourceId}` }));
@@ -316,7 +364,7 @@ function details(m) {
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
-            const card = el('div', {}, el('h5', { class: o.supported ? '' : 'no', text: title }));
+            const card = el('div', {}, el('h4', { class: o.supported ? '' : 'no', text: title }));
             if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no', text: optionReason(r, table, now) }));
             if (o.supported && m.moveRequired === 'Yes' && !pool) card.append(el('p', { class: 'hint', text: moveWords(r.series, o.rebuild, Boolean(m.vm.os)) }));
             if (o.supported) {
@@ -351,15 +399,27 @@ function save(name, bytes, type) {
 $('download').addEventListener('click', () => {
     if (!current) return;
     const { plan: p, list, now } = current;
-    const zip = makeZip([
-        { name: 'vm-summary.csv', text: F.toCsv(F.SUMMARY_COLUMNS, F.summaryRows(p)) },
-        { name: 'vm-target-sizes.csv', text: F.toCsv(F.TARGET_COLUMNS, F.targetRows(p, table, now)) },
-        { name: 'vm-not-checked.csv', text: F.toCsv(F.NOT_CHECKED_COLUMNS, F.notCheckedRows(p, table, now)) },
-        { name: REPORT_NAME, text: reportHtml(p, table, sourceName, now) },
-        { name: 'about-these-results.txt', text: F.aboutText(p, list, sourceName, now) },
-    ], now);
-    const stamp = now.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
-    save(`vm-lifecycle-results-${stamp}.zip`, zip, 'application/zip');
+    const button = $('download');
+    const status = $('download-status');
+    // A large list takes some seconds: say so, and let the message show first.
+    button.disabled = true;
+    status.textContent = 'This tool makes the zip file. Wait.';
+    setTimeout(() => {
+        try {
+            const zip = makeZip([
+                { name: 'vm-summary.csv', text: F.toCsv(F.SUMMARY_COLUMNS, F.summaryRows(p)) },
+                { name: 'vm-target-sizes.csv', text: F.toCsv(F.TARGET_COLUMNS, F.targetRows(p, table, now)) },
+                { name: 'vm-not-checked.csv', text: F.toCsv(F.NOT_CHECKED_COLUMNS, F.notCheckedRows(p, table, now)) },
+                { name: REPORT_NAME, text: reportHtml(p, table, sourceName, now) },
+                { name: 'about-these-results.txt', text: F.aboutText(p, list, sourceName, now) },
+            ], now);
+            const stamp = now.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+            save(`vm-lifecycle-results-${stamp}.zip`, zip, 'application/zip');
+            status.textContent = 'Your browser saves the zip file.';
+        } finally {
+            button.disabled = false;
+        }
+    }, 20);
 });
 
 // ---------------------------------------------------------------------------

@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.7.0-beta';
-import seriesRules from '../data/series-rules.js?v=0.7.0-beta';
+import families from '../data/families.js?v=0.7.1-beta';
+import seriesRules from '../data/series-rules.js?v=0.7.1-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -48,13 +48,35 @@ export class SizeTable {
     has(name) { return this.byLower.has(lower(name)); }
     get(name) { return this.byLower.get(lower(name)) || null; }
     keys() { return this.names; }
+    // The names that match a pattern, each with its match, in name order. The table
+    // does not change, so each pattern is read once: a large list asks the same
+    // questions many times (2026-10-17: 50,000 VMs).
+    matching(re) {
+        if (!this.found) this.found = new Map();
+        const key = `${re.source}/${re.flags}`;
+        let list = this.found.get(key);
+        if (!list) {
+            list = [];
+            for (const name of this.names) { const m = re.exec(name); if (m) list.push({ name, m }); }
+            this.found.set(key, list);
+        }
+        return list;
+    }
 }
 
-// A capability's value as text, or null when the entry does not report it.
+// A capability's value as text, or null when the entry does not report it. The
+// first key that matches, ignoring case, as the entry lists them.
+const capsByEntry = new WeakMap();
 function cap(entry, name) {
     if (!entry) return null;
-    for (const [k, v] of Object.entries(entry.caps)) if (eqI(k, name)) return String(v);
-    return null;
+    let caps = capsByEntry.get(entry);
+    if (!caps) {
+        caps = new Map();
+        for (const [k, v] of Object.entries(entry.caps)) if (!caps.has(lower(k))) caps.set(lower(k), String(v));
+        capsByEntry.set(entry, caps);
+    }
+    const v = caps.get(lower(name));
+    return v === undefined ? null : v;
 }
 function capInt(entry, name) {
     const v = cap(entry, name);
@@ -73,9 +95,16 @@ export function sizeGeneration(sizeName) {
 }
 
 // Standard_D2ds_v4 -> 'D', Standard_E8-4ds_v5 -> 'E', Standard_NC6s_v3 -> 'NC'.
+const familyOf = new Map();
 export function sizeFamily(sizeName) {
-    const m = /^Standard_([A-Za-z]+?)\d/i.exec(String(sizeName ?? ''));
-    return m ? m[1].toUpperCase() : '';
+    const text = String(sizeName ?? '');
+    let family = familyOf.get(text);
+    if (family === undefined) {
+        const m = /^Standard_([A-Za-z]+?)\d/i.exec(text);
+        family = m ? m[1].toUpperCase() : '';
+        familyOf.set(text, family);
+    }
+    return family;
 }
 
 // A series as Microsoft's tables write it: Standard_D4s_v3 -> 'Dsv3'.
@@ -86,8 +115,14 @@ function sizeSeriesName(sizeName) {
 
 // Intel, AMD or Arm64, from the letters after the size number ('a' AMD, 'p' Arm).
 // null when the name cannot be read, or carries two platform letters.
+const processorOf = new Map();
 export function sizeProcessor(sizeName) {
     if (blank(sizeName)) return null;
+    const key = String(sizeName);
+    if (!processorOf.has(key)) processorOf.set(key, readProcessor(key));
+    return processorOf.get(key);
+}
+function readProcessor(sizeName) {
     const m = /^Standard_[A-Za-z]+\d+(?:-\d+)?([a-z]*)/i.exec(sizeName);
     if (!m) return null;
     const letters = m[1];
@@ -353,12 +388,15 @@ function familyHasGeneration(sourceSize, table, targetGeneration) {
     if (table.count === 0) return null;
     const family = sizeFamily(sourceSize);
     if (!family) return null;
-    for (const n of table.keys()) {
-        const l = lower(n);
-        if (!l.endsWith('_v6') && !l.endsWith('_v7') && !(targetGeneration === 'v5' && l.endsWith('_v5'))) continue;
-        if (sizeFamily(n) === family) return true;
+    // The families with a v6 or v7 size, and with a v5 size: read from the table once.
+    const versions = targetGeneration === 'v5' ? /_v[567]$/i : /_v[67]$/i;
+    if (!table.families) table.families = new Map();
+    let set = table.families.get(versions.source);
+    if (!set) {
+        set = new Set(table.matching(versions).map((x) => sizeFamily(x.name)));
+        table.families.set(versions.source, set);
     }
-    return false;
+    return set.has(family);
 }
 
 function smallestSizeFor(kind, sourceSize, required, table, targetGeneration, sourceShape) {
@@ -366,9 +404,7 @@ function smallestSizeFor(kind, sourceSize, required, table, targetGeneration, so
     if (!m) return null;
     const re = new RegExp(`^Standard_${m[1]}(\\d+)(?:-\\d+)?${m[2]}_${targetGeneration}$`, 'i');
     let best = null;
-    for (const name of table.keys()) {
-        const mm = re.exec(name);
-        if (!mm) continue;
+    for (const { name, m: mm } of table.matching(re)) {
         const vcpuGuess = parseInt(mm[1], 10);
         const entry = table.get(name);
         const max = kind === 'disks' ? skuMaxDataDisks(entry) : skuMaxNics(entry);
@@ -568,9 +604,7 @@ function shapeSizeChoices({ sourceSize, table, requiredNics, requiredDataDisks, 
     for (const [family, prefix, infix] of familyNames) {
         const find = (l) => {
             const re = new RegExp(`^Standard_${prefix}(\\d+)${infix}${l}_${targetGeneration}$`, 'i');
-            const found = [];
-            for (const name of table.keys()) { const m = re.exec(name); if (m) found.push({ size: name, base: parseInt(m[1], 10) }); }
-            return found;
+            return table.matching(re).map(({ name, m }) => ({ size: name, base: parseInt(m[1], 10) }));
         };
         let plain = find(letters);
         if (!plain.length && family === 'Fal' && letters === 'ds') plain = find('s');
@@ -583,8 +617,7 @@ function shapeSizeChoices({ sourceSize, table, requiredNics, requiredDataDisks, 
             out.push({ size: p.size, family, variant: 'default', vcpus: Math.trunc(shape.vcpus), activeVcpus: Math.trunc(shape.vcpus), memoryGB: shape.memoryGB, best: false });
             if (family === 'E') {
                 const cre = new RegExp(`^Standard_E${p.base}-(\\d+)${letters}_${targetGeneration}$`, 'i');
-                const constrained = [];
-                for (const name of table.keys()) { const m = cre.exec(name); if (m) constrained.push({ size: name, active: parseInt(m[1], 10) }); }
+                const constrained = table.matching(cre).map(({ name, m }) => ({ size: name, active: parseInt(m[1], 10) }));
                 constrained.sort((a, b) => a.active - b.active);
                 for (const c of constrained) {
                     if (!passes(c.size)) continue;
@@ -932,10 +965,8 @@ export function burstableOption(vm, table, now = new Date()) {
     const nics = vm.nicCount !== undefined && vm.nicCount > 0 ? vm.nicCount : 1;
     const disks = vm.dataDiskCount !== undefined ? vm.dataDiskCount : 0;
     const fits = [];
-    for (const name of table.keys()) {
-        // Bsv2 and Basv2, with their smaller-memory sizes (B2ts_v2, B2ls_v2); not the Arm Bpsv2.
-        const m = /^Standard_B(\d+)(a?)[lt]?s_v2$/i.exec(name);
-        if (!m) continue;
+    // Bsv2 and Basv2, with their smaller-memory sizes (B2ts_v2, B2ls_v2); not the Arm Bpsv2.
+    for (const { name, m } of table.matching(/^Standard_B(\d+)(a?)[lt]?s_v2$/i)) {
         const entry = table.get(name);
         const shape = skuShape(entry);
         if (shape.vcpus === null || shape.memoryGB === null || shape.vcpus < source.vcpus || shape.memoryGB < source.memoryGB) continue;

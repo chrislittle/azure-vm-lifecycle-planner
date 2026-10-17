@@ -2,13 +2,13 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.7.0-beta';
-import { capacityRestricted } from './planner.js?v=0.7.0-beta';
-import * as F from './files.js?v=0.7.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.7.0-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.7.0-beta';
-import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.7.0-beta';
-import version from './version.js?v=0.7.0-beta';
+import capacity from '../data/capacity.js?v=0.7.1-beta';
+import { capacityRestricted } from './planner.js?v=0.7.1-beta';
+import * as F from './files.js?v=0.7.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
+import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.7.1-beta';
+import version from './version.js?v=0.7.1-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -34,12 +34,12 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
         if (m.vm && !['gate', 'nopath'].includes(g)) {
             const rows = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => {
                 const o = r.option; const name = r.series === 'burstable' ? 'Burstable' : r.series;
-                if (!o.supported) return `<tr><th>${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
+                if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
                 const ranked = F.rankedFor(m, r, table, now);
                 const how = POOL_PATTERNS.includes(m.pattern) ? '' : moveWords(r.series, o.rebuild, Boolean(m.vm.os)).split('. ')[0] + '.';
-                return `<tr><th>${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span></td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
+                return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span></td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');
-            sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th>Series</th><th>Size</th><th>Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;
+            sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;
         }
         return `<section class="vm">
       <header><h3>${esc(m.read.name)}</h3><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></header>
@@ -57,7 +57,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const actionTables = ORDER.filter((g) => g !== 'modern' && count(g)).map((g) => `
     <h3 class="grp"><span class="tag ${TONE[g]}">${count(g)}</span> ${esc(GROUPS[g].short)}</h3>
     <p class="muted">${esc(GROUPS[g].long)}</p>
-    <table><thead><tr><th>VM</th><th>Where</th><th>Size</th><th>Lifecycle stage</th><th>Target</th><th>What to do</th></tr></thead><tbody>
+    <table><thead><tr><th scope="col">VM</th><th scope="col">Where</th><th scope="col">Size</th><th scope="col">Lifecycle stage</th><th scope="col">Target</th><th scope="col">What to do</th></tr></thead><tbody>
     ${p.machines.filter((m) => F.groupOf(m) === g).map((m) => `<tr><td><a href="#vm-${m.read.row}">${esc(m.read.name)}</a></td><td class="muted">${esc(where(m))}</td><td>${esc(short(m.read.size || m.read.sizeAsWritten))}</td><td>${stageCell(m)}</td><td>${esc(target(m, g))}</td><td>${esc(todo(m, g).main)}</td></tr>`).join('')}
     </tbody></table>`).join('');
 
@@ -67,12 +67,12 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
     <title>VM Lifecycle Report</title>
     <style>
-    :root { --text:#1b1f24; --muted:#5b6573; --line:#dde2e8; --bg:#f6f7f9; --accent:#0b6bcb; --ok:#1a7f37; --ok-bg:#e6f4ea; --act:#8a5a00; --act-bg:#fff4dc; --no:#b42318; --no-bg:#fdecea; --pool:#4b3aa8; --pool-bg:#ece8fc; }
+    :root { --text:#1b1f24; --muted:#5b6573; --line:#dde2e8; --bg:#f6f7f9; --accent:#0b6bcb; --ok:#187a34; --ok-bg:#e6f4ea; --act:#8a5a00; --act-bg:#fff4dc; --no:#b42318; --no-bg:#fdecea; --pool:#4b3aa8; --pool-bg:#ece8fc; }
     * { box-sizing: border-box; }
     body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: var(--text); background: #fff; }
     main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
     h1 { font-size: 24px; margin: 0 0 4px; } h2 { font-size: 18px; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--text); }
-    h3 { font-size: 15px; margin: 18px 0 4px; } h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 12px 0 4px; }
+    h3 { font-size: 15px; margin: 18px 0 4px; } h4, h3.label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 12px 0 4px; }
     .muted { color: var(--muted); } p { margin: 0 0 6px; }
     .cover { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
     .facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 10px 0 0; font-size: 13px; }
@@ -95,7 +95,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     table.sizes th:first-child { width: 80px; }
     .rid { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
     @media (max-width: 700px) { .three { grid-template-columns: 1fr; } }
-    @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } @page { margin: 14mm; } }
+    @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
     </style></head><body><main>
     <div class="cover">
       <h1>VM Lifecycle Report</h1>
@@ -106,9 +106,9 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     <h2>1. Summary</h2>
     <div class="tiles">${ORDER.map((g) => `<div class="tile"><b>${count(g)}</b><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></div>`).join('')}</div>
     <div class="three">
-      <div><h4>Workload type</h4><table><tbody>${by((m) => PATTERNS[m.pattern || ''].name).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
-      <div><h4>Region</h4><table><tbody>${by((m) => m.read.region).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
-      <div><h4>Resource group</h4><table><tbody>${by((m) => m.read.resourceGroup).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
+      <div><h3 class="label">Workload type</h3><table><thead><tr><th scope="col">Workload type</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => PATTERNS[m.pattern || ''].name).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
+      <div><h3 class="label">Region</h3><table><thead><tr><th scope="col">Region</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.region).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
+      <div><h3 class="label">Resource group</h3><table><thead><tr><th scope="col">Resource group</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.resourceGroup).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
     </div>
 
     <h2>2. What to do, by result</h2>
