@@ -119,7 +119,7 @@ Technical English** - short sentences, one idea in each, active voice, no
 contractions, no Microsoft sentences pasted in (say what they mean). One term for one
 meaning: **VM** (the column stays "Machine name"), **notes** for the per-topic notes
 (fine / problem / "Check:", where "Check:" means only that the list did not give the
-fact), **Problems** for the problem notes in the summary, **move** with its two kinds
+fact, or, since 0.9.0-beta, that this tool cannot judge it from what the list gives), **Problems** for the problem notes in the summary, **move** with its two kinds
 **resize** and **rebuild** (defined on the page and in the about file), and
 **Supported** only for a target size. The wording in the tables below was rewritten in
 STE on 2026-10-09; the code (`js/words.js`, `js/reasons.js`, `js/extras.js`) holds
@@ -199,7 +199,8 @@ Agreed so far:
   | No - out of scope | No - not covered here |
 
 - **Caveats** - each has three answers: fine, a problem, or blank (a hand-made list). (0.1.1-beta: a fine fact shows no note.)
-  "Check:" means it is on the customer; "fits" means it was checked.
+  "Check:" means it is on the customer: the list does not give the fact, or this tool
+  cannot judge it from what the list gives (0.9.0-beta). "Fits" means it was checked.
 
   | Topic | Fine | Problem | Blank |
   |---|---|---|---|
@@ -994,8 +995,10 @@ words, a new table and three new query columns are added.
   and the size name for "no size with the same name". Where the value is missing, the
   note says so, as before. The NVMe note for an image that the list gives, but that is
   not on the Microsoft list either way, said "the list does not give the OS image": it
-  now says "this tool cannot tell if the image ... supports NVMe", and the "To check"
-  hint (page) and the about file say "or this tool cannot read them". The reason codes
+  now says "this tool cannot tell if the image ... supports NVMe". So "Check:" is wider:
+  the list does not give the fact, or this tool cannot judge it from what the list
+  gives. The old wording said that the list did not give the OS image, also when it
+  did. The "To check" hint (page), the about file and the README use this definition. The reason codes
   and which notes show did not change; the note columns of the CSV files changed in
   their words only (vm-summary.csv Before the move, Good to know, Notes;
   vm-target-sizes.csv the note columns and Reason; vm-not-checked.csv Why). The

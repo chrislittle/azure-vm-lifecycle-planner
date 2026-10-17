@@ -346,7 +346,7 @@ function details(m) {
         if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
         else if (n.actions.length) section('Before the move', list('act', n.actions));
         if (n.attention.length) section('Good to know', list('att', n.attention));
-        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts, or this tool cannot read them.' }), list('chk', n.checks, true));
+        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts, or this tool cannot judge them from what the list gives.' }), list('chk', n.checks, true));
     }
     // Sizes.
     // A hard gate has no size: "Why" gives the reason once.

@@ -72,7 +72,8 @@ For each VM:
   notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
   - **Before the move** (amber): a step to do first. It does not block the move.
   - **Good to know** (blue): a fact to know, with nothing to do first.
-  - **To check** (grey): the list does not give the fact, or the tool cannot read it.
+  - **To check** (grey): the list does not give the fact, or the tool cannot judge it
+    from what the list gives.
 
   Each note gives the value from your list that made it, for example "Hibernation" is
   Yes, or the image that is not on the Microsoft NVMe list.

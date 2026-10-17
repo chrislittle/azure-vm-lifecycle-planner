@@ -302,7 +302,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  These notes are the readiness signals in the Microsoft guide for the move to v6 and v7.',
         '  Before the move: a step to do before the move. It does not block the move.',
         '  Good to know: a fact to know, with nothing to do first. A VM with only these notes is ready.',
-        '  To check: the list does not give the fact, or this tool cannot read it.',
+        '  To check: the list does not give the fact, or this tool cannot judge it from what the list gives.',
         '  A VM that a service manages (AKS, Azure Red Hat OpenShift, Azure Databricks) has no notes.',
         '  The service manages its image and its disks.',
         '  A fact that is fine has no note.',
