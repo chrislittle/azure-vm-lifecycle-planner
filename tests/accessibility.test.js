@@ -169,8 +169,9 @@ test('the report has a language, headings in order, and a header for each table 
     const html = reportHtml(planned(), new SizeTable(sizes.sizes), 'sample', NOW);
     assert.match(html, /<html lang="en">/);
     assert.match(html, /<main>/);
-    // The three summary tables are under h2 "Summary": each has an h3.
-    assert.equal((html.match(/<h3 class="label">/g) || []).length, 3);
+    // The summary tables are under h2 "Summary": each has an h3. The sample has
+    // appliances, so it has the fourth table, "Appliances by vendor".
+    assert.equal((html.match(/<h3 class="label">/g) || []).length, 4);
     const levels = [...html.matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
     assert.equal(levels[0], 1);
     for (let i = 1; i < levels.length; i++) assert.ok(levels[i] <= levels[i - 1] + 1, `heading h${levels[i]} after h${levels[i - 1]}`);

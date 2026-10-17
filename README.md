@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.7.1-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.8.0-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -99,6 +99,20 @@ For each VM:
   | Cluster or database | SQL Server, an availability group, a shared disk, SAP | Move one node at a time. |
   | Vendor appliance | A network virtual appliance, or a storage or backup appliance | Ask the vendor which sizes they certify. |
 
+  The details of each VM show the workload type and the facts that the tool found it
+  from. For a storage or backup appliance, they give the vendor from our list and the
+  sign that matched: the image (publisher / offer), the Marketplace purchase plan (plan
+  publisher / plan product), or the gallery image (image ID). For a network virtual
+  appliance, they give the publisher ID as Azure gives it. The Microsoft list has no
+  vendor names. For a managed application, they give the "Managed by" value. For the
+  other types, they give the columns that decided the type, for example "Managed by" is
+  AKS, or "SQL availability group" is Yes.
+
+  The details of each VM also have **Facts from your list**. It is closed at first.
+  It shows each column that the tool used, with its value from your list. "Not in the
+  list" means that your list does not have the column. "No value" means that the cell
+  is empty. These facts tell you why a note says "Check".
+
   The tool cannot find domain controllers, self-hosted CI agents on single VMs, or
   NoSQL and search clusters. Look for them yourself. A list without these
   columns (from an earlier query, or made by hand) shows "Type not checked".
@@ -117,8 +131,8 @@ in Excel:
 
 | File | Contents |
 |---|---|
-| vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. |
-| vm-summary.csv | One row for each VM, to sort and filter in Excel. |
+| vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace purchase plan when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
 | vm-not-checked.csv | The items that the tool cannot check. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |

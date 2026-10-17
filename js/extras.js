@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.7.1-beta';
-import nvaImages from '../data/nva-images.js?v=0.7.1-beta';
-import nvme from '../data/nvme-images.js?v=0.7.1-beta';
-import { readCount } from './planner.js?v=0.7.1-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.8.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.8.0-beta';
+import nvme from '../data/nvme-images.js?v=0.8.0-beta';
+import { readCount } from './planner.js?v=0.8.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -88,21 +88,35 @@ export function isApplianceImage(publisher, offer) {
 
 // Is this marketplace image a storage or backup appliance? Our own list from the
 // Azure Marketplace catalog: the publisher, and one of that publisher's offers.
-export function isStorageApplianceImage(publisher, offer) {
-    if (!publisher || !offer) return false;
-    return storageImages.vendors.some((v) => v.publisher.toLowerCase() === String(publisher).toLowerCase() && likeAny(offer, v.offers));
+// The vendor entry of the list that the image matches, or null.
+function storageVendor(publisher, offer) {
+    if (!publisher || !offer) return null;
+    return storageImages.vendors.find((v) => v.publisher.toLowerCase() === String(publisher).toLowerCase() && likeAny(offer, v.offers)) || null;
 }
+export const isStorageApplianceImage = (publisher, offer) => storageVendor(publisher, offer) !== null;
 
 // An appliance by any of its signs: the image name, or the Marketplace purchase plan
 // (a VM bought in the Marketplace keeps the vendor's plan, also when its image comes
 // from a gallery or a managed application), or a vendor's gallery image.
-export function isAppliance(x) {
-    return isApplianceImage(x.imagePublisher, x.imageOffer) || isApplianceImage(x.planPublisher, x.planProduct);
+// Each function gives the sign that matched, so that the page and the files can show
+// it: { sign: 'image' | 'plan' | 'gallery', publisher, offer, imageId, vendor }, or
+// null. The image is checked first, then the plan, then the gallery. The NVA list
+// has no vendor names: the publisher ID is all that it gives.
+export function applianceSign(x) {
+    if (isApplianceImage(x.imagePublisher, x.imageOffer)) return { sign: 'image', publisher: x.imagePublisher, offer: x.imageOffer };
+    if (isApplianceImage(x.planPublisher, x.planProduct)) return { sign: 'plan', publisher: x.planPublisher, offer: x.planProduct };
+    return null;
 }
-export function isStorageAppliance(x) {
-    return isStorageApplianceImage(x.imagePublisher, x.imageOffer) || isStorageApplianceImage(x.planPublisher, x.planProduct)
-        || Boolean(x.imageId && storageImages.galleries.some((g) => like(x.imageId, g.imageId)));
+export function storageApplianceSign(x) {
+    let v = storageVendor(x.imagePublisher, x.imageOffer);
+    if (v) return { sign: 'image', vendor: v.vendor, publisher: x.imagePublisher, offer: x.imageOffer };
+    v = storageVendor(x.planPublisher, x.planProduct);
+    if (v) return { sign: 'plan', vendor: v.vendor, publisher: x.planPublisher, offer: x.planProduct };
+    const g = x.imageId ? storageImages.galleries.find((gallery) => like(x.imageId, gallery.imageId)) : null;
+    return g ? { sign: 'gallery', vendor: g.vendor, imageId: x.imageId } : null;
 }
+export const isAppliance = (x) => applianceSign(x) !== null;
+export const isStorageAppliance = (x) => storageApplianceSign(x) !== null;
 // A VM in a managed application (Azure Marketplace): the vendor owns it, and the
 // customer cannot change it.
 export const inManagedApplication = (x) => /^managed application$/i.test(String(x.managedBy ?? ''));

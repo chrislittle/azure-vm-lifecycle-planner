@@ -2,13 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.7.1-beta';
-import { capacityRestricted } from './planner.js?v=0.7.1-beta';
-import * as F from './files.js?v=0.7.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
-import { GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.7.1-beta';
-import version from './version.js?v=0.7.1-beta';
+import capacity from '../data/capacity.js?v=0.8.0-beta';
+import { capacityRestricted } from './planner.js?v=0.8.0-beta';
+import * as F from './files.js?v=0.8.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.8.0-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.8.0-beta';
+import { appliancesByVendor, workloadFound } from './evidence.js?v=0.8.0-beta';
+import version from './version.js?v=0.8.0-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -25,6 +26,28 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const count = (g) => p.machines.filter((m) => F.groupOf(m) === g).length;
     const ORDER = ['first', 'ready', 'pool', 'gate', 'nopath', 'unchecked', 'modern'];
     const TONE = { modern: 'ok', ready: 'ok', first: 'act', pool: 'pool', gate: 'act', nopath: 'no', unchecked: 'muted' };
+
+    // The workload type and the facts behind it (evidence.js).
+    function workloadHtml(m) {
+        const w = workloadFound(m);
+        return `<h4>Workload type</h4><p><b>${esc(w.lead)}</b> ${esc(w.shown)}</p>`;
+    }
+    // Section 3 has a card for each VM to act on: a VM on a modern size has none.
+    const hasCard = (m) => F.groupOf(m) !== 'modern';
+    // A VM name: a link to its card, or plain text when it has no card.
+    const nameLink = (m) => (hasCard(m) ? `<a href="#vm-${m.read.row}">${esc(m.read.name)}</a>` : esc(m.read.name));
+
+    // The appliances, by vendor: one list to send to each vendor. The NVA list and a
+    // Marketplace plan give a publisher ID, not a company name.
+    const appliances = appliancesByVendor(p.machines);
+    const vendorCell = (a) => (!a.vendor ? '<span class="muted">The list does not give the vendor.</span>'
+        : a.kind === APPLIANCE_KINDS.storage ? esc(a.vendor) : `${esc(a.vendor)} <span class="muted">(publisher ID)</span>`);
+    const appliancesHtml = !appliances.length ? '' : `
+    <h3 class="label">Appliances by vendor</h3>
+    <p class="muted">Send each vendor the list of its VMs. Ask the vendor which sizes they certify.</p>
+    <table><thead><tr><th scope="col">Vendor</th><th scope="col">Kind</th><th scope="col">VMs</th><th scope="col">VM names</th></tr></thead><tbody>
+    ${appliances.map((a) => `<tr><td>${vendorCell(a)}</td><td>${esc(a.kind)}</td><td>${a.machines.length}</td><td>${a.machines.map((x) => `${nameLink(x.m)}${x.where ? ` <span class="muted">(${esc(x.where)})</span>` : ''}`).join(', ')}</td></tr>`).join('')}
+    </tbody></table>`;
 
     function vmCard(m) {
         const g = F.groupOf(m); const t = todo(m, g); const n = F.allNotes(m);
@@ -46,6 +69,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
       <div class="todo"><b>What to do:</b> ${esc(t.main)} ${t.more.map(esc).join(' ')}</div>
       ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
+      ${workloadHtml(m)}
       ${serviceManaged(m) && m.moveRequired === 'Yes' ? '<h4>Before the move</h4><p class="muted">Nothing to do on the VM. The service manages the image and the disks.</p>' : notes('Before the move', n.actions, 'act')}
       ${notes('Good to know', n.attention, 'att')}
       ${notes('To check', n.checks, 'chk', true)}
@@ -111,13 +135,15 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <div><h3 class="label">Resource group</h3><table><thead><tr><th scope="col">Resource group</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.resourceGroup).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
     </div>
 
+    ${appliancesHtml}
+
     <h2>2. What to do, by result</h2>
     ${actionTables}
     <h3 class="grp"><span class="tag ok">${modern.length}</span> ${esc(GROUPS.modern.short)}</h3>
     <p class="muted">${modern.map((m) => esc(m.read.name)).join(', ')}</p>
 
     <h2>3. Each VM to act on</h2>
-    ${p.machines.filter((m) => F.groupOf(m) !== 'modern').map((m) => vmCard(m).replace('<section class="vm">', `<section class="vm" id="vm-${m.read.row}">`)).join('\n')}
+    ${p.machines.filter(hasCard).map((m) => vmCard(m).replace('<section class="vm">', `<section class="vm" id="vm-${m.read.row}">`)).join('\n')}
     <p class="muted">${esc(PROCESSOR_NOTE)}</p>
 
     <h2>4. Notes and sources</h2>

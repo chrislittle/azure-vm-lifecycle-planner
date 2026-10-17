@@ -158,6 +158,9 @@ The Azure Policy list (version 1.4.0) has the publisher `netapp`, a storage vend
 offer patterns such as `net*`. So a NetApp marketplace image matches the network virtual
 appliance list. This can be a mistake in the policy that Microsoft fixes later. Use the
 list as Microsoft publishes it, and check this entry when you refresh the list.
+Because the network virtual appliance list comes first, the tool shows a NetApp image as
+a network virtual appliance with the publisher ID `netapp` (0.8.0-beta: the details of
+each VM show the sign that matched).
 
 ### Storage and backup appliance images
 

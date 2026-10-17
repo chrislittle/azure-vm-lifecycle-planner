@@ -65,6 +65,8 @@ export const PATTERNS = {
 };
 // The patterns where the series advice ("resize", "deploy in parallel") does not apply.
 export const POOL_PATTERNS = ['A', 'B', 'C', 'D'];
+// The kinds of vendor appliance (pattern G), as the page and the files name them.
+export const APPLIANCE_KINDS = { nva: 'Network virtual appliance', storage: 'Storage or backup appliance', 'managed-application': 'Managed application' };
 
 // A service that manages the VM, its image and its disks: AKS, ARO, or a
 // service in pattern C. Nothing on the VM itself is for the customer to change.

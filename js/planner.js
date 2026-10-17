@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.7.1-beta';
-import capacity from '../data/capacity.js?v=0.7.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
+import capacity from '../data/capacity.js?v=0.8.0-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.7.1-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.7.1-beta';
-import { patternOf } from './patterns.js?v=0.7.1-beta';
+} from './lifecycle.js?v=0.8.0-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.8.0-beta';
+import { patternOf } from './patterns.js?v=0.8.0-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -121,6 +121,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     };
     const problems = [];
     const notes = [];
+    // The row as read, for "Facts from your list" (evidence.js): no copy, only references.
+    const source = { row, map };
 
     let name = cell('VM name');
     if (!name) { name = `(row ${rowNumber})`; problems.push({ what: 'VM name', why: 'machine-name-empty' }); }
@@ -183,7 +185,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         resourceType: extra.resourceType, instances: extra.instances,
         ...readResourceId(cell('Resource ID')),
     };
-    if (problems.length) return { vm: null, read, extra, pattern, problems, notes };
+    if (problems.length) return { vm: null, read, extra, pattern, problems, notes, source };
 
     const sourceSize = size.size;
     const entry = table.has(sourceSize) ? table.get(sourceSize) : null;
@@ -233,7 +235,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     if (disks.value !== null) vm.dataDiskCount = disks.value;
     if (extra.acceleratedNicCount !== null) vm.acceleratedNicCount = extra.acceleratedNicCount;
     if (extra.primaryNicAccelerated !== null) vm.primaryNicAccelerated = extra.primaryNicAccelerated;
-    return { vm, read, extra, pattern, problems: [], notes };
+    return { vm, read, extra, pattern, problems: [], notes, source };
 }
 
 // ---------------------------------------------------------------------------

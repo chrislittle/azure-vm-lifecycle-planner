@@ -2,22 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.7.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.7.1-beta';
-import capacity from '../data/capacity.js?v=0.7.1-beta';
-import nvme from '../data/nvme-images.js?v=0.7.1-beta';
-import query from './query.js?v=0.7.1-beta';
-import sample from './sample.js?v=0.7.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.7.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.7.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.7.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.7.1-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.7.1-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.7.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.7.1-beta';
-import * as F from './files.js?v=0.7.1-beta';
-import { makeZip } from './zip.js?v=0.7.1-beta';
-import version from './version.js?v=0.7.1-beta';
+import sizes from '../data/sizes.js?v=0.8.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
+import capacity from '../data/capacity.js?v=0.8.0-beta';
+import nvme from '../data/nvme-images.js?v=0.8.0-beta';
+import query from './query.js?v=0.8.0-beta';
+import sample from './sample.js?v=0.8.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.8.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.8.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.8.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
+import { seriesList, todo, whyLines } from './details.js?v=0.8.0-beta';
+import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.8.0-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.8.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.8.0-beta';
+import * as F from './files.js?v=0.8.0-beta';
+import { makeZip } from './zip.js?v=0.8.0-beta';
+import version from './version.js?v=0.8.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -291,18 +292,6 @@ function machineRow(m) {
     return tr;
 }
 
-// For a VM whose name is in the list more than once: what tells it apart. The
-// resource group, else the subscription, else the region, else the row. same:
-// every VM with this name, this one too.
-function whereWords(m, same) {
-    same = same.filter((x) => x !== m);
-    const r = m.read;
-    if (r.resourceGroup && same.every((x) => (x.read.resourceGroup || '').toLowerCase() !== r.resourceGroup.toLowerCase())) return r.resourceGroup;
-    if (r.subscriptionId && same.every((x) => x.read.subscriptionId !== r.subscriptionId)) return `Subscription ${r.subscriptionId}`;
-    if (r.region && same.every((x) => x.read.region !== r.region)) return r.region;
-    return `Row ${r.row} of the list`;
-}
-
 // Under the VM name: a scale set and its instances, and the workload type.
 function vmSub(m) {
     const set = m.read.resourceType === 'Scale set' ? `Scale set${m.read.instances !== null && m.read.instances !== undefined ? `, ${m.read.instances} instance${m.read.instances === 1 ? '' : 's'}` : ''}. ` : '';
@@ -344,6 +333,10 @@ function details(m) {
             el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
     }
 
+    // The workload type, and the facts that this tool found it from.
+    const w = workloadFound(m);
+    section('Workload type', el('p', { class: 'why' }, el('strong', { text: w.lead })), w.shown ? el('p', { class: 'why', text: w.shown }) : null);
+
     // The notes.
     if (m.vm && m.moveRequired === 'Yes') {
         const n = F.allNotes(m);
@@ -383,6 +376,17 @@ function details(m) {
     }
 
     if (m.notes.length) box.append(el('p', { class: 'hint', text: `Notes about the list: ${m.notes.join(' ')}` }));
+
+    // Every fact that the answer used, as the list gives it. Closed at first.
+    const groups = factsRead(m);
+    if (groups.length) {
+        box.append(el('details', { class: 'facts' },
+            el('summary', { text: 'Facts from your list' }),
+            el('p', { class: 'hint', text: 'This tool used these values from your list for this VM. "Not in the list" means that your list does not have this column. "No value" means that the cell is empty.' }),
+            el('div', { class: 'fact-groups' }, groups.map((gr) => el('div', { class: 'fact-group' },
+                el('h4', { text: gr.group }),
+                el('dl', {}, gr.facts.flatMap((f) => [el('dt', { text: f.column }), el('dd', { class: f.given ? '' : 'missing', text: f.value })])))))));
+    }
     return el('tr', { class: 'details' }, td);
 }
 
