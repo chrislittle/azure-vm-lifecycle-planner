@@ -761,7 +761,11 @@ job limit; one failed issue call does not skip the other pages.
   the series answers. Sample: contoso-rbk01 (plan), contoso-weka01 (gallery),
   contoso-coh01 (image), contoso-pure01 (managed application).
 - GitHub turns off a scheduled workflow after 60 days with no repo activity (public
-  repos) and sends an email: turn it on again in the Actions tab.
+  repos) and sends an email: turn it on again in the Actions tab. Since 2026-10-17 each
+  run also calls the REST API "Enable a workflow" for itself (job `keep-on`: only
+  `actions: write`, no environment, no secret, no checkout, no commit). GitHub does not
+  define "activity" or say that this call resets the 60 days (it is a common practice). If
+  GitHub still turns it off, the email comes as before.
 - Phase 2 (to plan with the owner): the size table, the NVA policy and the Marketplace
   appliance images, read from Azure with a GitHub federated credential (no stored
   secret), a read-only custom role on one subscription, used only by the scheduled job

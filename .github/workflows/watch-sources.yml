@@ -7,7 +7,9 @@
 # again, it closes that issue. It never changes the data: a person updates the data in
 # a pull request, so the tests run.
 # GitHub turns off a scheduled workflow in a public repo after 60 days with no activity
-# in the repo, and sends an email: turn it on again in the Actions tab.
+# in the repo, and sends only an email. So each run also turns this workflow on again
+# (job keep-on: one REST API call, no commit). If GitHub turns it off all the same,
+# turn it on again in the Actions tab.
 # Each action is pinned to the exact commit of a release; the comment gives the version.
 name: Watch the sources
 
@@ -24,6 +26,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # "In a public repository, scheduled workflows are automatically disabled when no
+  # repository activity has occurred in 60 days." (docs.github.com, Disabling and
+  # enabling a workflow). This job calls "Enable a workflow"
+  # (PUT /repos/{owner}/{repo}/actions/workflows/{workflow_id}/enable) for this
+  # workflow each week, with no commit. GitHub does not say what counts as activity,
+  # or that this call resets the 60 days (a common practice, not documented). If it
+  # does not, GitHub sends its email as before. It is a separate job so that it has
+  # only actions: write, and no Azure environment or secret; the watch job keeps its
+  # own permissions. It does not need the code, so there is no checkout. It runs only
+  # on main, and does not wait for the watch job (an Azure failure does
+  # not stop it).
+  keep-on:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # The API call, not "gh workflow enable": that command looks only for workflows
+      # that are off. The API call also accepts a workflow that is on (204).
+      - name: Keep this workflow turned on
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # GITHUB_WORKFLOW_REF: owner/repo/.github/workflows/<file>@<ref>
+          file="${GITHUB_WORKFLOW_REF%%@*}"
+          file="${file##*/}"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/${file}/enable"
+          echo "Turned on: ${file}"
+
   watch:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
