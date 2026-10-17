@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import sizes from '../data/sizes.js';
 import query from '../js/query.js';
 import sample from '../js/sample.js';
-import { SizeTable, lifecycleChange } from '../js/lifecycle.js';
+import { SizeTable, lifecycleChange, rankedSizes } from '../js/lifecycle.js';
 import { readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { caveats, imageSupportsNvme } from '../js/extras.js';
@@ -649,4 +649,288 @@ test('an Azure error never puts the subscription ID in an issue, and "not a vend
     const lines = catalogFindings({ vendors: [], reviewed: ['contoso.ext/old'], notVendors: ['contoso.ext'] },
         { allPublishers: ['contoso.ext'], offers: { 'contoso.ext': ['old', 'new-appliance'] } });
     assert.deepEqual(lines, ['New image from a publisher marked "not a vendor": contoso.ext/new-appliance']);
+});
+
+// ---- Mutation checks: each rule below had no test that failed when the rule broke ----
+
+// The size table with some facts changed: { size: { capability: value } }. A value of
+// undefined removes that capability; null removes the size.
+function tableWith(changes) {
+    const out = {};
+    for (const [name, s] of Object.entries(sizes.sizes)) {
+        if (changes[name] === null) continue;
+        const capabilities = { ...s.capabilities };
+        for (const [k, v] of Object.entries(changes[name] || {})) { if (v === undefined) delete capabilities[k]; else capabilities[k] = v; }
+        out[name] = { ...s, capabilities };
+    }
+    return new SizeTable(out);
+}
+function runWith(text, t) {
+    const list = readList(text);
+    return plan(list.rows.map((r, i) => toMachine(r, list.map, i + 2, t, NOW)), t, NOW);
+}
+const rowOf = (m, series) => m.rows.find((r) => r.series === series);
+
+test('the lifecycle stage: a size is Retired from its retirement day, and End of Life before it', async () => {
+    const { currentStage } = await import('../js/planner.js');
+    assert.equal(currentStage('Standard_D4_v2', table, new Date('2028-04-30T12:00:00Z')).stage, 'End of Life');
+    assert.equal(currentStage('Standard_D4_v2', table, new Date('2028-05-01T12:00:00Z')).stage, 'Retired', 'on the day');
+    assert.equal(currentStage('Standard_D4_v2', table, new Date('2028-06-01T00:00:00Z')).stage, 'Retired');
+    // The first sizes have no version in the name: for the stage they are v1.
+    const { sizeLifecycleStage } = await import('../js/lifecycle.js');
+    assert.equal(sizeLifecycleStage('Standard_D2').stage, 'End of Life');
+    assert.equal(lifecycleChange('Standard_D2', 'Standard_D2s_v6'), 'up');
+});
+
+test('a VM on a retired size is outside the tool from one day before the retirement day', async () => {
+    const { sizeRetiredForTool } = await import('../js/lifecycle.js');
+    assert.equal(sizeRetiredForTool('Standard_D4_v2', new Date('2028-04-29T00:00:00Z')), false);
+    assert.equal(sizeRetiredForTool('Standard_D4_v2', new Date('2028-04-30T00:00:00Z')), true);
+    const m = toMachine(['contoso-a1', 'Standard_A1', 'V2'], { 'VM name': 0, 'Current size': 1, 'Generation': 2 }, 2, table, NOW);
+    assert.ok(m.vm.blockers.includes('size-retired'));
+});
+
+test('a reason code that this tool does not know is "not checked", never a no', () => {
+    const list = readList('VM name,Current size,Generation,OS\ncontoso-u1,Standard_D4s_v3,V2,Linux\n');
+    const m = toMachine(list.rows[0], list.map, 2, table, NOW);
+    m.vm.blockers.push('a-new-reason');
+    const p = plan([m], table, NOW);
+    for (const s of ['v5', 'v6', 'v7']) assert.equal(rowOf(p.machines[0], s).result, 'Needs team review', s);
+});
+
+test('a size that is supported, but with a limit the table does not give, is not checked', () => {
+    const t = tableWith({ Standard_D4ds_v5: { MaxNetworkInterfaces: undefined } });
+    const m = runWith('VM name,Current size,Generation,OS,NIC count\ncontoso-u2,Standard_D4s_v3,V2,Linux,2\n', t).machines[0];
+    const v5 = rowOf(m, 'v5');
+    assert.equal(v5.result, 'Needs team review');
+    assert.deepEqual(v5.reviewWhy, ['target-not-in-table']);
+});
+
+test('a VM that must move, with only some options outside the tool, is not checked', () => {
+    // v6 and v7: Generation 1 (outside the tool). v5: no size holds 64 data disks (a fact).
+    const m = run('VM name,Current size,Generation,OS,NIC count,Data-disk count\ncontoso-q,Standard_D4s_v3,V1,Linux,1,64\n').plan.machines[0];
+    assert.equal(m.outcome, 'Needs team review');
+    assert.equal(m.short.v5, 'No fitting size (data disks)');
+});
+
+test('the results keep the order of the list', () => {
+    const p = run(sample).plan;
+    const rows = p.machines.map((m) => m.read.row);
+    assert.deepEqual(rows, [...rows].sort((a, b) => a - b));
+    assert.equal(p.machines[0].read.name, 'contoso-web01');
+});
+
+test('Generation 1: v6 and v7 need Generation 2; a Trusted launch VM must be Generation 2', () => {
+    const p = run('VM name,Current size,Generation,OS,Security type\ncontoso-g1,Standard_A2_v2,V1,Linux,\ncontoso-g2,Standard_D4s_v3,1,Linux,TrustedLaunch\ncontoso-g3,Standard_D4s_v3,,Linux,TrustedLaunch\n').plan;
+    const g1 = byName(p, 'contoso-g1');
+    assert.deepEqual([g1.short.v6, g1.short.v7], ['No - needs Gen2', 'No - needs Gen2']);
+    const g2 = byName(p, 'contoso-g2');
+    assert.deepEqual(g2.problems.map((x) => x.why), ['generation-conflicts-with-security-type']);
+    assert.equal(g2.outcome, 'Needs team review');
+    assert.equal(byName(p, 'contoso-g3').vm.gen, 'V2', 'Trusted launch runs on Generation 2 only');
+});
+
+test('a Promo size is read as its size; a negative count is not a number', async () => {
+    const { readSizeName, readCount } = await import('../js/planner.js');
+    assert.equal(readSizeName('Standard_DS3_v2_Promo', table).size, 'Standard_DS3_v2');
+    assert.deepEqual(readCount('-1').value, null);
+    assert.ok(readCount('-1').note);
+});
+
+test('an HPC size says HPC, not "no size in this family"', () => {
+    assert.equal(byName(run(sample).plan, 'contoso-hpc01').short.v6, 'No - HPC/FPGA out of scope');
+});
+
+test('a VM with no vCPUs and memory in the size table: no guess at a larger size', () => {
+    // Standard_D4_v2: the number is not the vCPU count.
+    const t = tableWith({ Standard_D4_v2: { vCPUs: undefined, vCPUsAvailable: undefined, MemoryGB: undefined } });
+    const m = runWith('VM name,Current size,Generation,OS\ncontoso-s1,Standard_D4_v2,V2,Linux\n', t).machines[0];
+    assert.deepEqual(rowOf(m, 'v5').codes, ['shape-unknown']);
+    assert.equal(rowOf(m, 'v5').result, 'Needs team review');
+    // A VM whose shape is not known gets no other ranked sizes: none can be shown not smaller.
+    const t2 = tableWith({ Standard_D4s_v3: { vCPUs: undefined, vCPUsAvailable: undefined, MemoryGB: undefined } });
+    const m2 = runWith('VM name,Current size,Generation,OS\ncontoso-s2,Standard_D4s_v3,V2,Linux\n', t2).machines[0];
+    const v6 = rowOf(m2, 'v6');
+    assert.equal(v6.result, 'Supported');
+    assert.deepEqual(rankedSizes(m2.vm, t2, v6.option, NOW).map((x) => x.size), [v6.option.targetSize]);
+});
+
+test('the target must hold the VM: not smaller, enough NICs and data disks, and its generation', () => {
+    const small = tableWith({ Standard_D4ds_v5: { MemoryGB: '8' }, Standard_D4s_v5: { MemoryGB: '8' } });
+    assert.equal(runWith('VM name,Current size,Generation,OS\ncontoso-t1,Standard_D4s_v3,V2,Linux\n', small).machines[0].short.v5, 'No fitting size');
+    const p = run('VM name,Current size,Generation,OS,NIC count,Data-disk count\ncontoso-t2,Standard_D2s_v3,V2,Linux,4,0\ncontoso-t3,Standard_D2s_v3,V2,Linux,1,10\n').plan;
+    assert.equal(byName(p, 'contoso-t2').short.v5, 'No fitting size (NICs)');
+    assert.equal(byName(p, 'contoso-t3').short.v5, 'No fitting size (data disks)');
+    const gen2Only = tableWith({ Standard_D4ds_v5: { HyperVGenerations: 'V2' }, Standard_D4s_v5: { HyperVGenerations: 'V2' } });
+    const g = runWith('VM name,Current size,Generation,OS\ncontoso-t4,Standard_D4s_v3,V1,Linux\n', gen2Only).machines[0];
+    const v5 = rowOf(g, 'v5').option.targetSize;
+    assert.ok(v5 && gen2Only.get(v5).caps.HyperVGenerations.split(',').includes('V1'), `${v5} takes Generation 1`);
+});
+
+test('the temporary disk is read from the size name when the table does not give it', async () => {
+    const { diskArchitecture } = await import('../js/lifecycle.js');
+    assert.equal(diskArchitecture('Standard_D4ds_v5', null), 'scsi-temp');
+    assert.equal(diskArchitecture('Standard_D4ds_v6', null), 'nvme-temp');
+    assert.equal(diskArchitecture('Standard_D4s_v6', null), 'diskless');
+});
+
+test('a Windows VM whose temporary disk changes type needs a rebuild, and a rebuild never keeps Azure Disk Encryption', () => {
+    const rows = F.targetRows(run(sample).plan, table, NOW).filter((r) => r['VM name'] === 'contoso-web01' && r['Region'] === 'eastus2');
+    assert.deepEqual(rows.map((r) => r['Rebuild']), ['No', 'Yes', 'Yes'], 'v5 keeps a SCSI temporary disk; v6 and v7 change it to NVMe');
+    // A v5 size with a temporary disk, for a VM without one.
+    const t = tableWith({ Standard_D4s_v5: { MaxResourceVolumeMB: '153600' } });
+    const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption';
+    const p = runWith(`${head}\ncontoso-r1,Standard_D4s_v4,V2,Windows,No\ncontoso-r2,Standard_D4s_v4,V2,Windows,Yes\ncontoso-r3,Standard_D4s_v4,V2,,Yes\n`, t);
+    assert.equal(rowOf(byName(p, 'contoso-r1'), 'v5').option.rebuild, true);
+    assert.deepEqual(rowOf(byName(p, 'contoso-r2'), 'v5').codes, ['disk-encryption-rebuild']);
+    assert.deepEqual(rowOf(byName(p, 'contoso-r3'), 'v5').codes, ['os-unknown-encryption'], 'unknown OS: not checked');
+});
+
+test('ranked sizes: none smaller than the VM, none that loses Azure Disk Encryption, five at most', () => {
+    const t = tableWith({ Standard_D4ads_v6: { MemoryGB: '4' } });
+    const m = runWith('VM name,Current size,Generation,OS\ncontoso-k1,Standard_D4s_v3,V2,Linux\n', t).machines[0];
+    const v6 = rowOf(m, 'v6');
+    assert.ok(!rankedSizes(m.vm, t, v6.option, NOW).some((x) => x.size === 'Standard_D4ads_v6'), 'a smaller size is not ranked');
+    const w = run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-k2,Standard_D4s_v3,V2,Windows,Yes\n').plan.machines[0];
+    const v5 = rowOf(w, 'v5');
+    assert.ok(!rankedSizes(w.vm, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'no temporary disk: a rebuild on Windows');
+    // These VMs have more than five sizes that fit on v5.
+    for (const [n, gen] of [['Standard_D2_v2', 'V2'], ['Standard_D16_v3', 'V1']]) {
+        const a = run(`VM name,Current size,Generation,OS\ncontoso-k3,${n},${gen},Linux\n`).plan.machines[0];
+        assert.equal(rankedSizes(a.vm, table, rowOf(a, 'v5').option, NOW).length, 5, n);
+    }
+});
+
+test('the burstable size takes the generation and the NICs of the VM', () => {
+    const t = tableWith({ Standard_B2ls_v2: { HyperVGenerations: 'V2' } });
+    const g = runWith('VM name,Current size,Generation,OS\ncontoso-b5,Standard_A2_v2,V1,Linux\n', t).machines[0];
+    assert.notEqual(g.short.burstable, 'Standard_B2ls_v2');
+    assert.match(g.short.burstable, /^Standard_B/);
+    const n = run('VM name,Current size,Generation,OS,NIC count\ncontoso-b6,Standard_B2ms,V2,Linux,3\n').plan.machines[0];
+    assert.notEqual(n.short.burstable, 'Standard_B2ls_v2', 'Standard_B2ls_v2 holds 2 NICs');
+    assert.ok(Number(table.get(n.short.burstable).caps.MaxNetworkInterfaces) >= 3);
+});
+
+test('NVMe support: Windows Server 2019, rolling and interim images, CentOS', () => {
+    assert.equal(imageSupportsNvme('MicrosoftWindowsServer', 'WindowsServer', '2019-datacenter-gensecond'), true);
+    assert.equal(imageSupportsNvme('Canonical', '0001-com-ubuntu-server-mantic', '23_10'), null, 'an interim Ubuntu: not on the list either way');
+    assert.equal(imageSupportsNvme('RedHat', 'RHEL', '9-lvm-gen2'), true, 'a rolling RHEL 9 image');
+    assert.equal(imageSupportsNvme('OpenLogic', 'CentOS', '7_9'), false);
+});
+
+test('notes: a new VM on v6 and v7 gets a new identity; unknown accelerated networking is "check"', () => {
+    const m = run('VM name,Current size,Generation,OS,System-assigned identity\ncontoso-i1,Standard_D4s_v3,V2,Linux,Yes\n').plan.machines[0];
+    assert.equal(rowOf(m, 'v6').caveats['Identity'].state, 'problem');
+    assert.equal(rowOf(m, 'v5').caveats['Accelerated networking'].state, 'check', 'the new size needs it, and the list does not say');
+});
+
+test('workload type: ARO is a pool that the service manages; a SQL Server image is a database; unknown "Managed by" is not E', async () => {
+    const { patternOf } = await import('../js/patterns.js');
+    const { serviceManaged } = await import('../js/words.js');
+    const known = { managedBy: 'None', scaleSet: false, sqlServer: false, sharedDisk: false, sap: false, virtualDesktop: false, imagePublisher: 'Canonical' };
+    assert.equal(patternOf(known), 'E');
+    assert.equal(patternOf({ ...known, managedBy: 'ARO' }), 'A');
+    assert.equal(patternOf({ ...known, imagePublisher: 'MicrosoftSQLServer' }), 'F');
+    assert.equal(patternOf({ ...known, managedBy: null }), '');
+    assert.equal(serviceManaged({ pattern: 'A', extra: { managedBy: 'ARO' } }), true);
+});
+
+test('the CSV formula guard also covers a tab and a carriage return', () => {
+    const csv = F.toCsv(['Machine'], [{ Machine: '\tcmd' }, { Machine: '\r=1' }]);
+    const cells = csv.replace(/^﻿/, '').split('\r\n').slice(1, 3);
+    assert.deepEqual(cells, ['"\'\tcmd"', '"\'\r=1"']);
+});
+
+test('the files: no size on an option that is not supported, and "Not checked" is never a no', () => {
+    const p = run(sample).plan;
+    const rows = F.targetRows(p, table, NOW);
+    assert.ok(rowOf(byName(p, 'contoso-sap01'), 'v6').option.targetSize, 'the logic found a size');
+    assert.equal(rows.find((r) => r['VM name'] === 'contoso-sap01' && r['Series'] === 'v6')['Target size'], '', 'but it is not supported');
+    assert.equal(rows.find((r) => r['VM name'] === 'contoso-app02' && r['Series'] === 'v5')['Series result'], 'Not needed');
+    assert.equal(F.summaryRows(p).find((r) => r['VM name'] === 'contoso-odd01')['Move needed'], 'Not checked');
+    const e1 = F.targetRows(run('VM name,Current size,Generation\ncontoso-e1,Standard_E16-4s_v3,V2\n').plan, table, NOW);
+    assert.equal(e1.find((r) => r['Series'] === 'v7')['Supported'], 'Not checked');
+    assert.equal(e1.find((r) => r['Series'] === 'v5')['Rebuild'], 'Not checked. This tool does not know the OS.');
+    const t = tableWith({ Standard_D4ds_v6: { PremiumIO: undefined } });
+    const pr = F.targetRows(runWith('VM name,Current size,Generation,OS\ncontoso-p1,Standard_D4s_v3,V2,Linux\n', t), t, NOW);
+    assert.equal(pr.find((r) => r['Series'] === 'v6')['Premium SSD on target'], 'Not checked');
+});
+
+test('a size this tool cannot identify shows "Not checked" for each series', async () => {
+    const { answerWords } = await import('../js/words.js');
+    const m = byName(run(sample).plan, 'contoso-odd01');
+    assert.deepEqual(['v5', 'v6', 'v7'].map((s) => answerWords(m, s)), ['Not checked', 'Not checked', 'Not checked']);
+});
+
+test('a note that applies to every supported series names no series', () => {
+    const n = F.allNotes(byName(run(sample).plan, 'contoso-web01'));
+    const temp = n.attention.find((x) => x.topic === 'Temporary disk');
+    assert.deepEqual(temp.series, []);
+    assert.deepEqual(n.actions.find((x) => x.topic === 'Identity').series, ['v6', 'v7']);
+});
+
+test('two VMs with the same name: the reason goes to the right VM, whatever the order', () => {
+    const head = 'Machine name,Region,Current size,Generation,Resource ID';
+    const id = (rg) => `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/${rg}/providers/Microsoft.Compute/virtualMachines/contoso-app09`;
+    const { plan: p } = run(`${head}\ncontoso-app09,eastus2,Standard_D4s_v3,V2,${id('rg-a')}\ncontoso-app09,eastus2,Standard_D4s_v3,,${id('rg-b')}\n`);
+    const rows = F.notCheckedRows(p, table, NOW);
+    assert.ok(rows.length >= 1);
+    for (const r of rows) assert.equal(r['Resource group'], 'rg-b');
+    assert.ok(rows.some((r) => /generation/i.test(r['Why'])));
+});
+
+test('what to do: burstable first for a B VM, the OS note, SAP, and v7 in parallel', async () => {
+    const { todo, whyLines } = await import('../js/details.js');
+    const b = run('VM name,Current size,Generation\ncontoso-b7,Standard_B2s,V2\n').plan.machines[0];
+    const t = todo(b, F.groupOf(b));
+    assert.match(t.main, /^Resize to Standard_B\d+\w*_v2\.$/);
+    assert.ok(t.more.includes('The list does not give the OS. For a Windows VM, a rebuild can be necessary.'));
+    const p = run(sample).plan;
+    const sap = byName(p, 'contoso-sap01');
+    assert.match(todo(sap, F.groupOf(sap)).main, /^Ask SAP /);
+    const gpu = byName(p, 'contoso-gpu01');
+    assert.ok(whyLines(gpu, F.groupOf(gpu), table, NOW).includes('This tool gives no target size for GPU sizes (the N family). A D or E size has no GPU.'));
+    // No v6 size of the same name: the likely move is v7, a new VM in parallel.
+    const v7 = tableWith({ Standard_D4ds_v6: null, Standard_D4s_v6: null });
+    const m = runWith('VM name,Current size,Generation,OS\ncontoso-v7,Standard_D4s_v3,V2,Linux\n', v7).machines[0];
+    assert.equal(F.likelyRow(m).series, 'v7');
+    assert.match(todo(m, F.groupOf(m)).main, /^Deploy a new VM at Standard_D4ds_v7 in parallel\./);
+});
+
+test('the list reader: two columns with one name stop; doubled quotes; a semicolon list', () => {
+    assert.ok(readList('VM name,Machine name,Current size,Generation\ncontoso-d1,contoso-d2,Standard_D2s_v3,V2\n').stops.some((s) => s.startsWith('Two columns have the name VM name')));
+    const list = readList('VM name,Current size,Generation\n"contoso ""x""",Standard_D2s_v3,V2\n');
+    assert.equal(list.rows[0][0], 'contoso "x"');
+    const semi = readList('VM name;Current size;Generation\ncontoso-s1;Standard_D2s_v3;V2\n');
+    assert.deepEqual(semi.stops, []);
+    assert.equal(semi.rows[0][1], 'Standard_D2s_v3');
+});
+
+test('the report: a card only for a VM to act on, and quotes escaped', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const p = run(sample).plan;
+    const html = reportHtml(p, table, 'list "a"', NOW);
+    assert.ok(!html.includes(`id="vm-${byName(p, 'contoso-app02').read.row}"`), 'a modern size has no card');
+    assert.ok(html.includes('list &quot;a&quot;') && !html.includes('list "a"'));
+});
+
+test('the source check: duplicates added, a page with only removed lines, and the fingerprint', async () => {
+    const { diffFacts } = await import('../tools/sources.mjs');
+    const { changeReport } = await import('../tools/watch-sources.mjs');
+    assert.deepEqual(diffFacts(['a'], ['a', 'a']), { added: ['a'], removed: [] });
+    const s = { id: 'x', name: 'Test page', url: 'https://learn.microsoft.com/en-us/azure/virtual-machines/x' };
+    const before = { readUtc: '2026-10-16', pageUpdatedUtc: '2026-09-26', facts: ['A :: one', 'A :: two', 'A :: three', 'A :: four'] };
+    assert.ok(changeReport(s, before, { facts: ['A :: one', 'A :: two', 'A :: three'] }, '2026-10-20'), 'a removed line is a change');
+    const print = (facts) => /source-check-fingerprint: ([0-9a-f]{16})/.exec(changeReport(s, before, { facts }, '2026-10-20'))[1];
+    const same = print(['A :: one', 'A :: two', 'A :: three', 'A :: four', 'A :: new']);
+    assert.equal(print(['A :: one', 'A :: two', 'A :: three', 'A :: four', 'A :: new']), same, 'same change, same fingerprint');
+    assert.notEqual(print(['A :: one', 'A :: two', 'A :: three', 'A :: new']), same, 'another removed line, another fingerprint');
+});
+
+test('the Marketplace check: a reviewed offer is not reported again; vendor words; case of a known publisher', async () => {
+    const { catalogFindings } = await import('../tools/azure-sources.mjs');
+    assert.deepEqual(catalogFindings({ vendors: [{ vendor: 'Contoso Storage', publisher: 'contoso', offers: ['vault*'] }], reviewed: ['contoso/monitor'] },
+        { allPublishers: ['contoso'], offers: { contoso: ['vault-edge', 'monitor'] } }), []);
+    assert.deepEqual(catalogFindings({ vendors: [], notVendors: ['fabrikam-backup'] },
+        { allPublishers: ['Fabrikam-Backup', 'contosomodell', 'contoso-dell'], offers: {} }), [], 'only at the start: dell, silk, weka');
 });

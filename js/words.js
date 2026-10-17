@@ -54,7 +54,7 @@ export function moveWords(series, rebuild, osKnown) {
 // hard gate (owner, 2026-10-10). The page shows plain names, not the letters
 // (owner, 2026-10-10: a quick user does not know what "pattern A" means).
 export const PATTERNS = {
-    A: { name: 'Node pool or scale set', advice: 'This VM is part of a pool (AKS, Azure Red Hat OpenShift or a scale set). Do not change the size of each VM. Add a new node pool or scale set at the new size, move the workload to it, then remove the old one.' },
+    A: { name: 'Node pool or scale set', advice: 'This VM is part of a pool (AKS, Azure Red Hat OpenShift or a scale set). Do not change the size of each VM. Add a new node pool or scale set at the new size. Move the workload to it, then remove the old one.' },
     B: { name: 'Pooled AVD host', advice: 'This VM is a session host in a pooled Azure Virtual Desktop host pool. Do not change the size of the host. Make new session hosts at the new size from the image. Move the users to them, then remove the old hosts.' },
     C: { name: 'Managed by a service', advice: 'A service (for example Azure Databricks) manages this VM. Do not change the VM. Change the node type or size in the service.' },
     D: { name: 'Cluster in a service', advice: 'Make a new cluster at the new size in the service. Then remove the old cluster.' },
@@ -93,7 +93,7 @@ export function poolAdvice(m) {
 }
 
 // What this tool cannot find. The customer must look for these.
-export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself: Active Directory domain controllers and NoSQL or search clusters (move one VM at a time), and self-hosted CI agents on single VMs. It also cannot find compute that is not in the VM list, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
+export const NOT_FOUND = 'This tool cannot find these workloads. Look for them yourself. They are Active Directory domain controllers and NoSQL or search clusters (move one VM at a time), and self-hosted CI agents on single VMs. It also cannot find compute that is not in the VM list, for example Azure Machine Learning, HDInsight, Azure Data Explorer and Synapse Spark. Change the size of that compute in the service.';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -140,7 +140,8 @@ export function stageShort(stage, capacity) {
 // What the capacity restrictions mean, with the series they apply to.
 export function capacityWords(capacity) {
     return [
-        `From ${capacity.since}, Microsoft restricts capacity growth for these series: ${capacity.names.join(', ')}.`,
+        `From ${capacity.since}, Microsoft restricts capacity growth for ${capacity.names.length} series.`,
+        `These series are ${capacity.names.join(', ')}.`,
         'A new subscription cannot deploy these series.',
         'A subscription that you have now can deploy them in its approved quota, if the region has capacity.',
         'A deployment can fail if the region does not have capacity, also when quota is available.',
