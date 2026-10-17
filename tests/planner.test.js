@@ -208,6 +208,22 @@ test('the results zip opens, holds the files unchanged, and compresses them', as
     // does not get smaller ("hello") is stored.
     const out = execFileSync('python', ['-I', '-c', 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; assert [i.compress_type for i in z.infolist()] == [8, 0]; sys.stdout.buffer.write(z.read("vm-summary.csv"))', join(dir, 'r.zip')]);
     assert.ok(zip.length < files[0].text.length / 10, `zip ${zip.length} bytes`);
+    // Python reads the sizes from the central directory: check the local header too,
+    // which streaming readers use.
+    const dv = new DataView(zip.buffer, zip.byteOffset);
+    const at = zip.length - 22, central = dv.getUint32(at + 16, true);
+    assert.equal(dv.getUint32(18, true), dv.getUint32(central + 20, true), 'compressed size');
+    assert.equal(dv.getUint32(22, true), dv.getUint32(central + 24, true), 'size');
+    assert.equal(dv.getUint32(22, true), new TextEncoder().encode(files[0].text).length);
+    // A browser without CompressionStream stores the files.
+    const saved = globalThis.CompressionStream;
+    try {
+        globalThis.CompressionStream = undefined;
+        const plain = await makeZip(files);
+        assert.equal(new DataView(plain.buffer, plain.byteOffset).getUint16(8, true), 0);
+    } finally {
+        globalThis.CompressionStream = saved;
+    }
     assert.equal(out.toString('utf8'), files[0].text);
 });
 
