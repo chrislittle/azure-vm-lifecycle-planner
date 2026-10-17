@@ -169,7 +169,8 @@ test('vm-summary.csv: Vendor and Evidence are the last columns; the other column
     assert.deepEqual([row('contoso-coh01').Vendor, row('contoso-coh01').Evidence], ['Cohesity DataPlatform Cloud Edition', 'Storage or backup appliance. The image is cohesity / cohesity-cloudtd-tool.']);
     assert.equal(row('contoso-fw01').Vendor, 'paloaltonetworks');
     assert.match(row('contoso-fw01').Evidence, /^Network virtual appliance\. The image is paloaltonetworks \/ vmseries-flex\./);
-    assert.deepEqual([row('contoso-pure01').Vendor, row('contoso-pure01').Evidence], ['', 'Managed application. "Managed by" is Managed application. The resource group of this VM belongs to a managed application.']);
+    // 0.9.0-beta: the sample gives the managed application and its Marketplace plan.
+    assert.deepEqual([row('contoso-pure01').Vendor, row('contoso-pure01').Evidence], ['contosoisv', 'Managed application. "Managed by" is Managed application. The resource group of this VM belongs to a managed application. Managed application: contoso-cbs. The Marketplace plan of the application is contosoisv / contoso-storage-app.']);
     assert.deepEqual([row('contoso-aks-np1').Vendor, row('contoso-aks-np1').Evidence], ['', '"Managed by" is AKS.']);
     assert.deepEqual([row('contoso-web02').Vendor, row('contoso-web02').Evidence], ['', ''], 'a standalone VM: both empty');
 });

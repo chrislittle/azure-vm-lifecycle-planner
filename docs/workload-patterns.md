@@ -176,10 +176,13 @@ A vendor reaches Azure in one of four ways, and the query reads each one:
 | A Marketplace image | `imageReference.publisher` and `offer` | Cohesity, Veeam, Rubrik |
 | A Marketplace purchase (any image) | the VM's `plan.publisher` and `plan.product`: they stay when the image comes from a gallery or a managed application | any vendor sold in the Marketplace |
 | The vendor's own gallery | `imageReference.communityGalleryImageId` (or `sharedGalleryImageId`, `id`) | WEKA: `/communityGalleries/WekaIO-*`, from WEKA's Terraform module |
-| A managed application | the VM's resource group is "managed by" `Microsoft.Solutions/applications`: the vendor owns the VMs | Pure Storage Cloud Block Store, Dell APEX |
+| A managed application | the VM's resource group is "managed by" `Microsoft.Solutions/applications`: the vendor owns the VMs. The application resource gives its `name` and its Marketplace plan, `plan.publisher` and `plan.product` (Microsoft's ARM template reference for `Microsoft.Solutions/applications`; `kind` is MarketPlace or ServiceCatalog, and only a Marketplace application has a plan) | Pure Storage Cloud Block Store, Dell APEX |
 
 Tested: the query reads these fields without error (16 October 2026); a test build with a
-real appliance is not possible without each vendor's licence.
+real appliance is not possible without each vendor's licence. The managed application
+name and plan (0.9.0-beta): the query runs without error and gives one row for each VM
+(17 October 2026), and a probe query proved that the join matches. Not proven on a real
+Marketplace managed application.
 
 | Vendor | Publisher | Offers that are the appliance |
 |---|---|---|
@@ -242,8 +245,13 @@ fits in these limits:
    Agent records and disks. Each record gives the key of the VM it belongs to
    (`mv-expand`). A `summarize` by the key puts each VM's records together.
 2. A second `summarize` gives "shared disk" to every VM on a shared disk.
-3. Three joins: the AVD session hosts (`desktopvirtualizationresources`), the AVD host
-   pools (`resources`) and the resource groups (`resourcecontainers`).
+3. Three joins: the AVD session hosts (`desktopvirtualizationresources`), the resource
+   groups (`resourcecontainers`, for "managed by"), and one join to `resources` that
+   reads both the AVD host pools and the managed applications
+   (`microsoft.solutions/applications`). Its key is the host pool of the session host,
+   else the managed application that owns the resource group. Each key is a resource
+   ID, so each VM keeps one row (0.9.0-beta: before, this join read only the host pools).
+   A session host in the resource group of a managed application keeps its host pool.
 
 The second test build ran `query.kql` and gave the expected answer for each resource.
 The columns that the earlier query also gave did not change on 9 VMs in two

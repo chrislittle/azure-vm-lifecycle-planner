@@ -1,9 +1,73 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.8.0-beta';
-import { likelyRow, signals } from './files.js?v=0.8.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
-import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.8.0-beta';
+import { capacityRestricted } from './planner.js?v=0.9.0-beta';
+import { likelyRow, signals } from './files.js?v=0.9.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
+import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.0-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.0-beta';
+import { gibWords } from './extras.js?v=0.9.0-beta';
+
+// ---------------------------------------------------------------------------
+// The current size beside each new size (0.9.0-beta)
+// ---------------------------------------------------------------------------
+
+export const NOT_IN_TABLE = 'Not in the size table';
+export const COMPARE_CAPTION = 'The current size and each new size, from the size table';
+export const COMPARE_HINT = 'A note under a value shows where the new size has less than the current size or this VM.';
+
+// The current size and each size that this tool shows for the VM (v5, v6, v7,
+// burstable), side by side: { caption, columns: [{ label, size }], rows: [{ label,
+// cells: [{ text, less }] }] }. less: words that say what the new size has less of,
+// or ''. null when the VM has no new size to show. Facts from data/sizes.js only.
+export function sizeComparison(m, table) {
+    if (!m.vm) return null;
+    const shown = m.rows.filter((r) => r.series !== 'gen1Route' && r.option.supported && r.option.targetSize);
+    if (!shown.length) return null;
+    const facts = (size) => (table.has(size) ? sizeFacts(table.get(size)) : null);
+    const cur = facts(m.vm.sourceSize);
+    const nics = m.vm.nicCount;
+    const disks = m.vm.dataDiskCount;
+    // The generation as the list gives it (none for a VM in AKS, ARO or Azure Databricks).
+    const gen = m.read.generation || null;
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const num = (v) => (v === null || v === undefined ? 'Not given' : String(v));
+    const active = (f) => (f.vcpusActive !== null && f.vcpusActive !== f.vcpus ? f.vcpusActive : f.vcpus);
+    const temp = (f) => (f.tempGiB === null ? 'Not given' : f.tempGiB === 0 ? 'None'
+        : `${gibWords(f.tempGiB)}${f.tempKind === 'NVMe' ? ` (NVMe${f.tempDisks > 1 ? `, ${f.tempDisks} disks` : ''})` : ''}`);
+    const gens = (f) => (f.generations ? f.generations.map((g) => g.replace(/^V/i, '')).join(', ') : 'Not given');
+    const yesNo = (v) => (v === null ? 'Not given' : v ? 'Yes' : 'No');
+    // Each row: its label, its value for a size, and what a new size has less of.
+    const ROWS = [
+        ['vCPUs', (f) => (f.vcpusActive !== null && f.vcpusActive !== f.vcpus ? `${f.vcpus} (${f.vcpusActive} active)` : num(f.vcpus)),
+            (f) => (cur && active(cur) !== null && active(f) !== null && active(f) < active(cur) ? `Less than the current size (${active(cur)}).` : '')],
+        ['Memory (GiB)', (f) => num(f.memoryGiB),
+            (f) => (cur && cur.memoryGiB !== null && f.memoryGiB !== null && f.memoryGiB < cur.memoryGiB ? `Less than the current size (${cur.memoryGiB}).` : '')],
+        ['Temporary disk (GiB)', temp,
+            (f) => (cur && cur.tempGiB > 0 && f.tempGiB !== null && f.tempGiB < cur.tempGiB ? `Less than the current size (${gibWords(cur.tempGiB)}).` : '')],
+        ['Max NICs', (f) => num(f.maxNics),
+            (f) => (nics !== undefined && f.maxNics !== null && f.maxNics < nics ? `Less than the ${plural(nics, 'NIC', 'NICs')} of this VM.` : '')],
+        ['Max data disks', (f) => num(f.maxDataDisks),
+            (f) => (disks !== undefined && f.maxDataDisks !== null && f.maxDataDisks < disks ? `Less than the ${plural(disks, 'data disk', 'data disks')} of this VM.` : '')],
+        ['Premium SSD', (f) => yesNo(f.premium),
+            (f) => (cur && cur.premium === true && f.premium === false ? 'Less than the current size (Yes).' : '')],
+        ['Generations', gens,
+            (f) => (gen && f.generations && !f.generations.some((g) => g.toUpperCase() === gen.toUpperCase()) ? `Does not take Generation ${gen.replace(/^V/i, '')}, the generation of this VM.` : '')],
+    ];
+    // The current size: its own values, and the NICs and data disks of this VM.
+    const own = { 'Max NICs': nics, 'Max data disks': disks };
+    const columns = [{ label: 'Current size', size: m.vm.sourceSize, facts: cur },
+        ...shown.map((r) => ({ label: r.series === 'burstable' ? 'Burstable' : r.series, size: r.option.targetSize, facts: facts(r.option.targetSize) }))];
+    const rows = ROWS.map(([label, value, less]) => ({
+        label,
+        cells: columns.map((c, i) => {
+            if (!c.facts) return { text: NOT_IN_TABLE, less: '' };
+            let text = value(c.facts);
+            if (i === 0 && own[label] !== undefined) text += ` (this VM: ${own[label]})`;
+            return { text, less: i === 0 ? '' : less(c.facts) };
+        }),
+    }));
+    return { caption: COMPARE_CAPTION, columns: columns.map(({ label, size }) => ({ label, size })), rows };
+}
 
 // 'v6', 'v7' -> 'v6 and v7'.
 export function seriesList(list) {
@@ -55,7 +119,8 @@ export function todo(m, g) {
 // for vendor approval, the reason; for no supported size, each reason once.
 export function whyLines(m, g, table, now = new Date()) {
     const why = [];
-    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm.sourceSize)));
+    // With the time left to a retirement date, or since it, from the day the list is planned.
+    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm.sourceSize), now));
     if (!m.vm) why.push(...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })));
     if (g === 'gate') why.push(...gateReasons(m));
     // No supported size: the reasons go here, each once, not in size cards.

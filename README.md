@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.8.0-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.0-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -43,7 +43,10 @@ the WCAG 2.2 AA contrast levels in the light and the dark theme.
 For each VM:
 
 - The lifecycle stage of the current size: Current, Extended, End of Life or Retired.
-  Current and Extended are modern sizes: Microsoft fully supports them.
+  Current and Extended are modern sizes: Microsoft fully supports them. In the details
+  and the report, a retirement date also shows the time to it, or since it, in whole
+  months from the day that you make the results, for example "15 November 2029 (in 36
+  months)". The start of the capacity growth restrictions shows the same.
 - A result group:
 
   | Group | What it means |
@@ -69,11 +72,18 @@ For each VM:
   notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
   - **Before the move** (amber): a step to do first. It does not block the move.
   - **Good to know** (blue): a fact to know, with nothing to do first.
-  - **To check** (grey): the list does not give the fact.
+  - **To check** (grey): the list does not give the fact, or the tool cannot read it.
+
+  Each note gives the value from your list that made it, for example "Hibernation" is
+  Yes, or the image that is not on the Microsoft NVMe list.
 
   Each note shows once. A note for only some series names them, for example "(v5 only)".
   A fact that is fine has no note. A VM that a service manages (AKS, Azure Red Hat
   OpenShift, Azure Databricks) has no notes: the service manages its image and disks.
+- A table with the current size beside each new size: vCPUs, memory, temporary disk,
+  the maximum NICs and data disks, Premium SSD and the generations, from the size table.
+  Where a new size has less than the current size or the VM (for example fewer NICs than
+  the VM has), a note under the value says so.
 - Network virtual appliances (NVAs). The tool finds them by their marketplace image.
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
   Appliances (NVAs) to add a MANA support tag". Ask the
@@ -104,7 +114,9 @@ For each VM:
   sign that matched: the image (publisher / offer), the Marketplace purchase plan (plan
   publisher / plan product), or the gallery image (image ID). For a network virtual
   appliance, they give the publisher ID as Azure gives it. The Microsoft list has no
-  vendor names. For a managed application, they give the "Managed by" value. For the
+  vendor names. For a managed application, they give the "Managed by" value, the name of
+  the application, and the publisher ID and product of its Marketplace plan (columns
+  from the query of 0.9.0-beta and later). For the
   other types, they give the columns that decided the type, for example "Managed by" is
   AKS, or "SQL availability group" is Yes.
 
@@ -132,7 +144,7 @@ in Excel:
 | File | Contents |
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
-| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace purchase plan when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
 | vm-not-checked.csv | The items that the tool cannot check. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |

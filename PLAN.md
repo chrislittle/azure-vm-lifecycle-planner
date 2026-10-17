@@ -965,6 +965,85 @@ as 0.7.1-beta, but for the two new columns.
   also reads the Evidence column and the definition lists. 38 mutation checks, all
   caught.
 
+## 0.9.0-beta (2026-10-17): sizes side by side, the values behind each note, the time left, the vendor of a managed application
+
+Owner, 2026-10-17: four additions in one release. No answer changes: for the three
+sample lists, a list of every note and a made-up list of 4,000 VMs, the result group,
+the workload type, the stage, each series answer, the ranked sizes, which notes show
+(topic, state, series) and the number of "Why" lines are the same as 0.8.0-beta. Only
+words, a new table and three new query columns are added.
+
+- **The current size beside each new size.** The details of each VM (page) and its card
+  in the report have a table: vCPUs, memory (GiB), temporary disk (GiB, or "None"; NVMe
+  disks say so), max NICs, max data disks, Premium SSD and generations, for the current
+  size and each size that the tool shows (v5, v6, v7, Burstable). A series with no size
+  has no column. A size that the size table does not have says "Not in the size table".
+  The current size also shows the NICs and data disks of this VM. Where a new size has
+  less than the current size or this VM (fewer vCPUs, less memory, a smaller or no
+  temporary disk, fewer NICs or data disks than the VM has, no Premium SSD, not its
+  generation), a note in words is under the value ("Less than the 3 NICs of this
+  VM."), not only a colour. A caption and headers with scope; the table scrolls on a
+  narrow screen and takes the focus. Values from `data/sizes.js` only
+  (`sizeFacts` in `js/lifecycle.js`, `sizeComparison` in `js/details.js`).
+- **The value behind each note.** Each problem, fact to know and "Check" note now
+  says the value from the list that gave it, for example "The image
+  MicrosoftWindowsServer / WindowsServer / 2016-Datacenter is not on the Microsoft list
+  of OS images that support NVMe.", '"Hibernation" is Yes.', '"Primary NIC
+  accelerated" is No.', "The current size Standard_D4s_v3 has a temporary disk of 32
+  GiB.", "The vendor is Veeam.", and in the reasons the generation or size as written
+  and the size name for "no size with the same name". Where the value is missing, the
+  note says so, as before. The NVMe note for an image that the list gives, but that is
+  not on the Microsoft list either way, said "the list does not give the OS image": it
+  now says "this tool cannot tell if the image ... supports NVMe", and the "To check"
+  hint (page) and the about file say "or this tool cannot read them". The reason codes
+  and which notes show did not change; the note columns of the CSV files changed in
+  their words only (vm-summary.csv Before the move, Good to know, Notes;
+  vm-target-sizes.csv the note columns and Reason; vm-not-checked.csv Why). The
+  "Current stage" column does not change.
+- **The time left to a date.** On the page ("Why") and in the report, a retirement date
+  says how long is left, or how long ago it was, in whole months from the day that the
+  list is planned: "Microsoft retires this series on 15 November 2029 (in 36 months).",
+  "Retired. Microsoft retired this series on 30 September 2025 (12 months ago).",
+  "less than 1 month" under a month. The start of the capacity growth restrictions
+  (Microsoft gives only "July 2026") counts from the first day of that month: "From July
+  2026 (3 months ago)". Also in the report notes and the about file. The CSV files and
+  the stage in the results table keep their words. No other date is added.
+- **The vendor of a managed application.** The query gives three new last columns:
+  "Managed application" (the application name), "Application plan publisher" and
+  "Application plan product" (`plan.publisher` and `plan.product` of the
+  `Microsoft.Solutions/applications` resource, from Microsoft's ARM template reference).
+  No new join: the join that gave the AVD host pool now reads host pools and managed
+  applications, by one key (the host pool, else the managed application that owns the
+  resource group). The resource groups join comes before it. Still three joins and two
+  mv-expand. A VM in a managed application now says "Managed application. The publisher
+  ID is contosoisv." with "Managed application: contoso-cbs. The Marketplace plan of
+  the application is contosoisv / contoso-storage-app."; the Vendor column and
+  "Appliances by vendor" use that publisher ID (no company name is made up). An
+  application with no plan (a service catalog application) says so. A list without the
+  new columns works as before ("The list does not give the vendor."). Sample:
+  contoso-pure01.
+  - Run on the owner's Azure (2026-10-17, read only): the new query parses and runs;
+    2 VMs, one row each, the 35 earlier columns the same as the 0.8.0-beta query. A
+    probe copy that also joined the VMs themselves through the new join gave one row
+    for each VM, with the name from the joined row: the join works with a match.
+  - **Not proven on a real Marketplace managed application**, and the AVD host pool
+    through the changed join is not proven on a real host pool (the owner's Azure has
+    neither today). A test needs: a pooled AVD host pool with one session host (as in
+    the test build of 2026-10-10, about $0.05), and a managed application. A service
+    catalog application from our own definition with an empty template costs nothing and
+    proves the name; only a Marketplace offer has a plan, and its cost depends on the
+    offer (what it deploys, for under one hour).
+  - Edge case: an AVD session host in the resource group of a managed application keeps
+    its host pool, and the list then does not give the application (it is a vendor
+    appliance either way).
+- Tests: `tests/values.test.js` (size facts, the table and each "less" note, every
+  changed note with its value and with the value missing, the reasons, whole months and
+  each countdown, the stage with and without `now`, the query columns and limits, the
+  managed application with and without a plan, an old list). The STE check also reads
+  the size table notes, the countdown words and the new evidence. 53 mutation checks of the code and 4 of the STE check, all caught (3 caught only
+  after new tests: the current size never gets a note, an equal value is not less, the
+  capacity line in the report).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

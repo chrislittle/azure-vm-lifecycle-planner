@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.8.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
-import capacity from '../data/capacity.js?v=0.8.0-beta';
-import nvme from '../data/nvme-images.js?v=0.8.0-beta';
-import query from './query.js?v=0.8.0-beta';
-import sample from './sample.js?v=0.8.0-beta';
-import { SizeTable } from './lifecycle.js?v=0.8.0-beta';
-import { COLUMNS, readList } from './input.js?v=0.8.0-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.8.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.8.0-beta';
-import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.8.0-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.8.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.8.0-beta';
-import * as F from './files.js?v=0.8.0-beta';
-import { makeZip } from './zip.js?v=0.8.0-beta';
-import version from './version.js?v=0.8.0-beta';
+import sizes from '../data/sizes.js?v=0.9.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.0-beta';
+import capacity from '../data/capacity.js?v=0.9.0-beta';
+import nvme from '../data/nvme-images.js?v=0.9.0-beta';
+import query from './query.js?v=0.9.0-beta';
+import sample from './sample.js?v=0.9.0-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.0-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.0-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
+import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.9.0-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.9.0-beta';
+import * as F from './files.js?v=0.9.0-beta';
+import { makeZip } from './zip.js?v=0.9.0-beta';
+import version from './version.js?v=0.9.0-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -346,7 +346,7 @@ function details(m) {
         if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
         else if (n.actions.length) section('Before the move', list('act', n.actions));
         if (n.attention.length) section('Good to know', list('att', n.attention));
-        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts.' }), list('chk', n.checks, true));
+        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts, or this tool cannot read them.' }), list('chk', n.checks, true));
     }
     // Sizes.
     // A hard gate has no size: "Why" gives the reason once.
@@ -373,6 +373,9 @@ function details(m) {
         if (g === 'pool' && serviceManaged(m)) hints.push('Use a size that the service offers.');
         if (processorChange) hints.push(PROCESSOR_NOTE);
         if (hints.length) box.append(el('p', { class: 'hint', text: hints.join(' ') }));
+        // The current size beside each new size (0.9.0-beta).
+        const cmp = sizeComparison(m, table);
+        if (cmp) box.append(compareTable(cmp));
     }
 
     if (m.notes.length) box.append(el('p', { class: 'hint', text: `Notes about the list: ${m.notes.join(' ')}` }));
@@ -388,6 +391,21 @@ function details(m) {
                 el('dl', {}, gr.facts.flatMap((f) => [el('dt', { text: f.column }), el('dd', { class: f.given ? '' : 'missing', text: f.value })])))))));
     }
     return el('tr', { class: 'details' }, td);
+}
+
+// The current size and each new size, side by side. The table scrolls on a narrow
+// screen: it takes the focus, so the keyboard can scroll it too. A value where the
+// new size has less shows a note in words, not only a colour.
+function compareTable(c) {
+    const table = el('table', { class: 'compare' },
+        el('caption', { text: c.caption }),
+        el('thead', {}, el('tr', {}, el('th', { scope: 'col', text: 'Fact' }),
+            c.columns.map((col) => el('th', { scope: 'col' }, el('span', { class: 'col-label', text: col.label }), el('span', { class: 'size-name', title: col.size, text: shortSize(col.size) }))))),
+        el('tbody', {}, c.rows.map((r) => el('tr', {}, el('th', { scope: 'row', text: r.label }),
+            r.cells.map((cell) => el('td', {}, cell.text, cell.less ? el('strong', { class: 'less', text: cell.less }) : null))))));
+    return el('div', { class: 'compare-box' },
+        el('div', { class: 'compare-wrap', tabindex: '0', role: 'region', 'aria-label': c.caption }, table),
+        el('p', { class: 'hint', text: COMPARE_HINT }));
 }
 
 // ---------------------------------------------------------------------------

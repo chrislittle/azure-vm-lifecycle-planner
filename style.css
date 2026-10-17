@@ -205,6 +205,21 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 .d ul.list .topic { font-weight: 600; }
 .d ul.list .only { color: var(--muted); }
 .series p { margin: 0 0 8px; }
+/* The current size beside each new size. It scrolls sideways on a narrow screen. */
+.compare-box { margin: 12px 0 0; }
+.compare-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.compare-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#table table.compare, table.compare { display: table; width: 100%; font-size: 13px; }
+#table table.compare thead { display: table-header-group; }
+#table table.compare tbody { display: table-row-group; }
+table.compare caption { text-align: left; padding: 8px 10px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+table.compare th, table.compare td { padding: 5px 10px; }
+table.compare thead th { position: static; white-space: normal; }
+table.compare tbody th { color: var(--muted); white-space: nowrap; }
+table.compare .col-label { display: block; color: var(--muted); font-size: 12px; }
+table.compare .size-name { display: block; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; white-space: nowrap; }
+table.compare strong.less { display: block; color: var(--check); font-size: 12px; }
+.compare-box .hint { margin: 4px 0 0; }
 /* "Facts from your list": closed at first; the summary is a normal button for the keyboard. */
 .d details.facts { margin: 16px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 .d details.facts > summary { cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
