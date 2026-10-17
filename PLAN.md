@@ -890,6 +890,14 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
   themes and in the report, a label for each control, headings in order, table
   headers with scope, the row button, live regions, reduced motion.
 
+## After 0.7.1-beta (2026-10-17)
+
+- The README Sources section said 1,496 sizes read on 9 October: the table was
+  refreshed to 1,498 on 16 October, and the README was not. A test now compares the
+  README size count and date with `data/sizes.js`.
+- The tests ran only on main, after a merge: `.github/workflows/tests.yml` now runs
+  them on each pull request (read only, no secret).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

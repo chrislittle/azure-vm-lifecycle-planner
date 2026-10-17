@@ -161,13 +161,13 @@ work in that open tab. (It does not load again while you are offline.)
 
 ## Sources
 
-- **Size facts:** a table of 1,496 Azure VM sizes, read from Azure on 9 October 2026
+- **Size facts:** a table of 1,498 Azure VM sizes, read from Azure on 16 October 2026
   ([data/sizes.js](data/sizes.js)). The page does not connect to Azure.
 - **Lifecycle stages and retirement dates:** the Microsoft
   [lifecycle overview](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/lifecycle-overview),
   [End of Life list](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/end-of-life-sizes-list) and
   [retirements and capacity growth restrictions](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions),
-  read on 9 October 2026.
+  read on 9 and 10 October 2026.
 - **Target sizes:** the Microsoft
   [v6 and v7 modernization overview](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-overview)
   and the
@@ -175,6 +175,12 @@ work in that open tab. (It does not load again while you are offline.)
 - **NVMe support of the OS:** the Microsoft
   [list of OS images that support NVMe](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-interface),
   read on 9 October 2026.
+
+Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
+NVA policy and the Marketplace catalog again, and compares them with the data in this
+repo. If a source changed, it opens a
+GitHub issue. The data changes only in a pull request, after a person checks the
+change. The dates above are the dates of the data, not of the last weekly check.
 
 ## Feedback
 
@@ -185,7 +191,9 @@ generation only, for example "Standard_D4s_v3, Generation 2".
 ## For developers
 
 - The code is plain JavaScript modules. There is nothing to install.
-- Tests: `node --test` (Node 20 or later). The tests make no network requests.
+- Tests: `node --test` (Node 20 or later). The tests make no network requests. GitHub
+  runs them on each pull request (`.github/workflows/tests.yml`) and again before each
+  publish.
 - Speed: `node tools/time-large-list.mjs 20000 50000` makes made-up contoso lists of
   that size (`tests/large-list.js`) and shows the time of each step. With `--write
   <folder>` it also saves the lists as CSV files, to load in the page. Do not commit them.
