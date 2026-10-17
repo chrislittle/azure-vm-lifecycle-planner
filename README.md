@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.6.0-beta). The results are advice. They are not a check
+**Status:** beta (version 0.7.0-beta). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -191,9 +191,14 @@ generation only, for example "Standard_D4s_v3, Generation 2".
   removed, or comments on the open issue when the difference is new. When the page and
   the snapshot agree again, it closes the issue. It does not change the data. After you
   update the data files, run `node tools/watch-sources.mjs --update` in the same pull
-  request. The size table and the Azure lists (the NVA policy, the Marketplace images)
-  are not in this check yet. GitHub turns off a scheduled workflow after 60 days with
-  no activity in a public repo: turn it on again in the Actions tab.
+  request. The same workflow then reads Azure (`tools/azure-sources.mjs`): the VM size
+  list (`data/sizes.js`), the NVA policy (`data/nva-images.js`) and the Marketplace
+  catalog for the storage and backup appliances (`data/storage-appliance-images.js`,
+  including possible new vendors). It signs in as a read-only identity with no stored
+  password (a federated credential), which only the `azure-read` environment on `main`
+  can use. To refresh the size table and the NVA list yourself: `az login`, then
+  `node tools/azure-sources.mjs --update`. GitHub turns off a scheduled workflow after
+  60 days with no activity in a public repo: turn it on again in the Actions tab.
 - `tools/` runs on GitHub or on a computer, never in the page. The page does not load
   it, so its network access does not change the page's "no data leaves your browser"
   promise. `tools/source-snapshot.json` holds text from Microsoft Learn pages

@@ -1,5 +1,7 @@
 # Each Monday: reads the Microsoft Learn pages that the tool's data and words come
-# from (tools/sources.mjs) and compares them with tools/source-snapshot.json.
+# from (tools/sources.mjs) and compares them with tools/source-snapshot.json; then
+# reads Azure itself (tools/azure-sources.mjs): the size list, the NVA policy and the
+# Marketplace catalog, and compares them with the data files.
 # For a page that changed, or that it cannot read, it opens one GitHub issue (label
 # source-watch), or comments on the open one. When the page and the snapshot agree
 # again, it closes that issue. It never changes the data: a person updates the data in
@@ -24,10 +26,14 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
+    # The read-only Azure sign-in exists only in this environment, and the environment
+    # allows only the main branch. A fork or a pull request cannot sign in.
+    environment: azure-read
     permissions:
       contents: read
       issues: write
+      id-token: write   # for the Azure sign-in without a stored password (OIDC)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,7 +44,27 @@ jobs:
       # No token here: this step reads public pages only.
       - name: Read the pages
         run: node tools/watch-sources.mjs
+      # Sign in to Azure as the read-only identity (role "VM Lifecycle Planner source
+      # reader": VM sizes, Marketplace publishers and offers, policy definitions,
+      # regions; no resources). If the sign-in fails, the next step reports each Azure
+      # source as "cannot read", so the problem gets an issue.
+      - name: Sign in to Azure (read only)
+        id: azure
+        continue-on-error: true
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # The role cannot list subscriptions (it does not need to): do not ask for it.
+          allow-no-subscriptions: true
+      - name: Read Azure
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: node tools/azure-sources.mjs
+      # Always, also when a step before failed: the reports that exist still get issues.
       - name: Open, comment on or close the issues
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -78,7 +104,7 @@ jobs:
             title="$(head -n 1 "$f")"
             number="$(open_issue "$title")"
             if [ -n "$number" ]; then
-              gh issue close "$number" --comment "The weekly check found that the page and tools/source-snapshot.json agree again. Closing."                 && echo "Closed #$number: $title" || { echo "::error::Cannot close #$number"; errors=$((errors+1)); }
+              gh issue close "$number" --comment "The weekly check found that this source and the data of this repo agree again. Closing."                 && echo "Closed #$number: $title" || { echo "::error::Cannot close #$number"; errors=$((errors+1)); }
             fi
           done
           exit "$errors"

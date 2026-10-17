@@ -748,7 +748,52 @@ job limit; one failed issue call does not skip the other pages.
   secret), a read-only custom role on one subscription, used only by the scheduled job
   on main.
 
-**Next:** phase 2 of the source watch (reads from Azure); plan it with the owner first.
+## 0.7.0-beta (2026-10-16): watch the sources, phase 2 (Azure)
+
+The weekly workflow also reads Azure (`tools/azure-sources.mjs`, plain HTTPS to Azure
+Resource Manager with a token from the Azure CLI):
+- **The size list:** the resource SKU list of all 63 physical regions, merged with the
+  safer value (as `data/sizes.js` was made). `--update` rebuilds `data/sizes.js` in its
+  own layout and order (locale order, pinned to English), so a refresh shows only the
+  sizes that changed. First run (2026-10-16), against the table of 2026-10-09: 2 new
+  sizes (Standard_M16s_v3, Standard_M32ts_v3) and 9 F v7 sizes whose NIC limit is now
+  the same higher value in every region. The table is refreshed in this release.
+- **The NVA policy:** read from Azure (version 1.4.0, the same lists).
+- **The Marketplace catalog:** each listed vendor's offers (East US and West Europe):
+  a new offer to review, or a pattern that matches nothing; and possible new vendors
+  (publisher names that look like storage or backup). Decisions are kept in the list
+  (`reviewed`, `notVendors`), so they are not reported again. First run: 53 findings,
+  all decided: added Veritas, BackupAssure, Dell Australia and Canada, a second Druva
+  publisher, NetApp's internal ONTAP image; the rest are tests, consoles, connectors,
+  Microsoft extensions or publishers with no VM image.
+- **Sign-in (owner approved the commands, 2026-10-16):** an app registration
+  "vm-lifecycle-planner-source-reader" with no secret or certificate; a federated
+  credential for `repo:chrislittle/azure-vm-lifecycle-planner:environment:azure-read`;
+  a custom role "VM Lifecycle Planner source reader" with 5 read actions (VM sizes,
+  Marketplace publishers and offers, policy definitions, regions), assignable and
+  assigned only on the ChrisLittle subscription. The IDs are GitHub environment secrets,
+  never in the repo. The `azure-read` environment allows only `main`. The workflow job
+  uses `azure/login` v3.1.0 (pinned), `id-token: write`, and a failed sign-in becomes a
+  "cannot read" issue.
+
+- **Security check and review agent (owner asked, 2026-10-16):** the security check found
+  no vulnerability (no command injection path; no way for a fork or a pull request to
+  get the Azure token; no credential in the code). The review agent found, and this
+  release fixes: a failed sign-in stopped the job before any issue (now three "cannot
+  sign in" reports, and the issue step runs unless the run is cancelled; proven with no
+  Azure CLI); an Azure error could put the subscription ID in a public issue (now
+  replaced with `<subscription>`; tested); `azure/login` would ask for subscription-list
+  rights that the role does not have (`allow-no-subscriptions`); an error was read as
+  "no offers" (only HTTP 404 is); publishers marked "not a vendor" were never checked
+  again (now a new image from one is reported - the first run found StorSimple, a
+  Microsoft storage appliance, now on the list); short vendor words matched other names
+  (now only at the start); list pages (nextLink), network retries and Retry-After.
+- **Not changed (to see on the first run):** reading the built-in NVA policy may not need
+  `Microsoft.Authorization/policyDefinitions/read`; if the first run reads it, that
+  permission can go.
+
+**Next:** run the workflow once by hand after the merge (the Azure sign-in works only on
+`main`).
 
 ## Next
 

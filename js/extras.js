@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.6.0-beta';
-import nvaImages from '../data/nva-images.js?v=0.6.0-beta';
-import nvme from '../data/nvme-images.js?v=0.6.0-beta';
-import { readCount } from './planner.js?v=0.6.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.7.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.7.0-beta';
+import nvme from '../data/nvme-images.js?v=0.7.0-beta';
+import { readCount } from './planner.js?v=0.7.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {

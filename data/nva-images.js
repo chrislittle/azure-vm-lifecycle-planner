@@ -1,6 +1,6 @@
 // Network virtual appliance (NVA) images: Microsoft's own list, from an Azure built-in policy.
 export default {
-  "readUtc": "2026-10-09",
+  "readUtc": "2026-10-16",
   "source": "Azure built-in policy: Configure Marketplace Network Virtual Appliances (NVAs) to add a MANA support tag",
   "policyDefinitionId": "/providers/Microsoft.Authorization/policyDefinitions/e87a87f5-e6dd-4919-be21-abb0a4ea4630",
   "policyVersion": "1.4.0",

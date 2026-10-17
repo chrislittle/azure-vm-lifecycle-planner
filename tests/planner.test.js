@@ -613,3 +613,40 @@ test('a storage or backup appliance is found by its image, its purchase plan or 
     assert.equal(byName(p, 'contoso-weka01').short.v6, 'No - storage or backup appliance', 'vendor approval is the first reason');
     assert.equal(byName(p, 'contoso-pure01').short.v6, 'No - managed application');
 });
+
+// ---- Reading Azure (0.7.0-beta) ----
+
+test('the size table is rebuilt in its own layout, with the safer value where regions disagree', async () => {
+    const { mergeRegions, sizesText, diffSizes } = await import('../tools/azure-sources.mjs');
+    // Same table, same text: a refresh changes only the lines that changed.
+    const head = read('data/sizes.js').split('export default')[0];
+    const lf = (t) => t.replace(/\r\n/g, '\n');
+    assert.equal(lf(head + sizesText(sizes.readUtc, sizes.how, sizes)), lf(read('data/sizes.js')));
+    const a = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '4', HyperVGenerations: 'V1,V2', PremiumIO: 'True' } } };
+    const b = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '2', HyperVGenerations: 'V2', PremiumIO: 'False' } } };
+    const m = mergeRegions([a, b]);
+    assert.deepEqual(m.sizes.Standard_X2_v9.capabilities, { vCPUs: '2', PremiumIO: 'False', HyperVGenerations: 'V2', MaxNetworkInterfaces: '2' });
+    assert.deepEqual(m.differsByRegion, ['Standard_X2_v9']);
+    assert.deepEqual(diffSizes(a, { ...b, Standard_Y1: b.Standard_X2_v9 }), [
+        'Added: Standard_Y1', 'Changed: Standard_X2_v9 HyperVGenerations V1,V2 -> V2',
+        'Changed: Standard_X2_v9 MaxNetworkInterfaces 4 -> 2', 'Changed: Standard_X2_v9 PremiumIO True -> False']);
+});
+
+test('the Marketplace check reports new offers and possible new vendors, but not reviewed ones', async () => {
+    const { catalogFindings } = await import('../tools/azure-sources.mjs');
+    const list = { vendors: [{ vendor: 'Contoso Storage', publisher: 'contoso', offers: ['vault*'] }], reviewed: ['contoso/vault-console-ignored'], notVendors: ['contoso.backup.extension'] };
+    const lines = catalogFindings(list, {
+        allPublishers: ['contoso', 'contoso.backup.extension', 'fabrikam-backup', 'canonical'],
+        offers: { contoso: ['vault-edge', 'vault-console-ignored', 'vaultfs-new', 'monitor'] },
+    });
+    assert.deepEqual(lines, ['New offer to review: Contoso Storage: contoso/monitor', 'Possible new vendor: publisher fabrikam-backup']);
+});
+
+test('an Azure error never puts the subscription ID in an issue, and "not a vendor" publishers are checked again', async () => {
+    const { safePath, catalogFindings } = await import('../tools/azure-sources.mjs');
+    assert.equal(safePath('/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=x'),
+        '/subscriptions/<subscription>/providers/Microsoft.Compute/skus');
+    const lines = catalogFindings({ vendors: [], reviewed: ['contoso.ext/old'], notVendors: ['contoso.ext'] },
+        { allPublishers: ['contoso.ext'], offers: { 'contoso.ext': ['old', 'new-appliance'] } });
+    assert.deepEqual(lines, ['New image from a publisher marked "not a vendor": contoso.ext/new-appliance']);
+});
