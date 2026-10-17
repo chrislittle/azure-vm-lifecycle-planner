@@ -5,7 +5,8 @@
 //     Marketplace image catalog, and possible new vendors
 //
 //   node tools/azure-sources.mjs              check: one report for each source that changed
-//   node tools/azure-sources.mjs --update     rebuild data/sizes.js and data/nva-images.js
+//   node tools/azure-sources.mjs --update     rebuild data/sizes.js and data/nva-images.js,
+//                                             and write the README facts (tools/readme-facts.mjs)
 //                                             (the appliance list is ours: change it by hand)
 //
 // It takes one sign-in token from the Azure CLI (on a computer after `az login`, in
@@ -15,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { factsFrom, factText, readmeSection, writeReadme } from './readme-facts.mjs';
 
 const root = new URL('../', import.meta.url);
 const today = new Date().toISOString().slice(0, 10);
@@ -225,12 +227,28 @@ export function catalogFindings(list, catalog) {
 // ---------------------------------------------------------------------------
 
 const code = (t) => `\`${String(t).replace(/`/g, "'")}\``;
-function report(id, title, intro, lines, todo) {
+// The text of a report. The fingerprint is over the lines only: the README section
+// does not change it, so the same difference is not posted twice.
+export function reportText(title, intro, lines, todo, readme = []) {
     const print = createHash('sha256').update(JSON.stringify(lines)).digest('hex').slice(0, 16);
     const shown = lines.slice(0, 400);
     const body = [intro, '', ...shown.map((l) => `- ${code(l)}`), lines.length > shown.length ? `\n... and ${lines.length - shown.length} more.` : '',
-        '', '## What to do', '', ...todo, '', `<!-- source-check-fingerprint: ${print} -->`].join('\n');
-    writeFileSync(new URL(`watch-report/${id}.md`, root), `# Source check: ${title}\n${body}\n`);
+        ...readme, '', '## What to do', '', ...todo, '', `<!-- source-check-fingerprint: ${print} -->`].join('\n');
+    return `# Source check: ${title}\n${body}\n`;
+}
+function report(id, title, intro, lines, todo, readme = []) {
+    writeFileSync(new URL(`watch-report/${id}.md`, root), reportText(title, intro, lines, todo, readme));
+}
+
+// The data file of each Azure source, for the README facts that come from it.
+const DATA_FILE = { 'azure-sizes': 'data/sizes.js', 'azure-nva': 'data/nva-images.js', 'azure-catalog': 'data/storage-appliance-images.js' };
+
+// The "## README" section of a report. For the size list, also the fact text that
+// the sizes of this check give (--update writes it).
+export function readmeFor(id, readme, sizesNow, day = today) {
+    const next = id === 'azure-sizes' && sizesNow
+        ? { sizes: factText('sizes', { sizes: { readUtc: day, sizeCount: Object.keys(sizesNow).length, sizes: sizesNow } }) } : {};
+    return readmeSection(factsFrom([DATA_FILE[id]]), readme, next);
 }
 const ok = (id, title) => writeFileSync(new URL(`watch-report/${id}.ok`, root), `Source check: ${title}\n`);
 
@@ -252,6 +270,7 @@ async function main() {
     const sizesFile = (await import(new URL('data/sizes.js', root))).default;
     const nvaFile = (await import(new URL('data/nva-images.js', root))).default;
     const storageFile = (await import(new URL('data/storage-appliance-images.js', root))).default;
+    const readme = readFileSync(new URL('README.md', root), 'utf8');
 
     // The size table.
     const t = 'Azure VM sizes (data/sizes.js)';
@@ -264,7 +283,8 @@ async function main() {
         } else {
             const lines = diffSizes(sizesFile.sizes, now.sizes);
             if (lines.length) report('azure-sizes', t, `**Azure's size list changed.** The weekly check on ${today} found ${lines.length} differences from data/sizes.js (read ${sizesFile.readUtc}).`, lines,
-                ['1. Run `node tools/azure-sources.mjs --update` (after `az login`) to rebuild data/sizes.js.', '2. Run the tests, and check the planner with the sample lists, in a pull request.']);
+                ['1. Run `node tools/azure-sources.mjs --update` (after `az login`) to rebuild data/sizes.js. It also writes the README facts.', '2. Run the tests, and check the planner with the sample lists, in a pull request.'],
+                readmeFor('azure-sizes', readme, now.sizes));
             else ok('azure-sizes', t);
         }
     } catch (e) { report('azure-sizes', t, `**This check cannot read Azure's size list.** Reason: ${e.message.split('\n')[0]}`, [], ['Check the Azure sign-in of the workflow.']); console.log(`sizes: ${e.message.split('\n')[0]}`); }
@@ -289,7 +309,8 @@ async function main() {
                 for (const x of a) if (!b.includes(x)) lines.push(`Removed ${k}: ${x}`);
             }
             if (lines.length) report('azure-nva', n, `**The NVA policy changed.** The weekly check on ${today} found a difference from data/nva-images.js.`, lines,
-                ['1. Run `node tools/azure-sources.mjs --update` to rebuild data/nva-images.js.', '2. Check the NetApp entry: the policy lists the storage vendor NetApp (see docs/workload-patterns.md).']);
+                ['1. Run `node tools/azure-sources.mjs --update` to rebuild data/nva-images.js.', '2. Check the NetApp entry: the policy lists the storage vendor NetApp (see docs/workload-patterns.md).'],
+                readmeFor('azure-nva', readme));
             else ok('azure-nva', n);
         }
     } catch (e) { report('azure-nva', n, `**This check cannot read the NVA policy.** Reason: ${e.message.split('\n')[0]}`, [], ['Check the Azure sign-in of the workflow.']); console.log(`nva: ${e.message.split('\n')[0]}`); }
@@ -302,9 +323,15 @@ async function main() {
             const lines = catalogFindings(storageFile, now);
             console.log(`catalog: ${now.allPublishers.length} publishers, ${lines.length} findings`);
             if (lines.length) report('azure-catalog', c, `**The Marketplace has offers or publishers to review.** The weekly check on ${today} compared the catalog (${CATALOG_REGIONS.join(', ')}) with data/storage-appliance-images.js.`, lines,
-                ['1. For each line, decide: an appliance (add it to `vendors`), or not (add `publisher/offer` to `reviewed`, or the publisher to `notVendors`).', '2. Change data/storage-appliance-images.js in a pull request.']);
+                ['1. For each line, decide: an appliance (add it to `vendors`), or not (add `publisher/offer` to `reviewed`, or the publisher to `notVendors`).', '2. Change data/storage-appliance-images.js in a pull request. Then run `node tools/readme-facts.mjs`.'],
+                readmeFor('azure-catalog', readme));
             else ok('azure-catalog', c);
         } catch (e) { report('azure-catalog', c, `**This check cannot read the Marketplace catalog.** Reason: ${e.message.split('\n')[0]}`, [], ['Check the Azure sign-in of the workflow.']); console.log(`catalog: ${e.message.split('\n')[0]}`); }
+    }
+    if (update) {
+        // The size facts in the README come only from data/sizes.js: write them now.
+        const changed = await writeReadme();
+        console.log(changed.length ? `README facts written: ${changed.join(', ')}.` : 'README facts agree with the data.');
     }
 }
 

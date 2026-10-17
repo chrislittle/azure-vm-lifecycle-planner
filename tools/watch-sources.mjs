@@ -2,7 +2,8 @@
 // tools/source-snapshot.json, the facts we read at the last refresh.
 //
 //   node tools/watch-sources.mjs              check: one report for each page
-//   node tools/watch-sources.mjs --update     after a refresh: save what the pages say now
+//   node tools/watch-sources.mjs --update     after a refresh: save what the pages say now,
+//                                             and write the README facts of the data
 //
 // The check never changes the data files. For each page it writes to watch-report/:
 //   <id>.md   the page changed, or this check cannot read it (the workflow opens or
@@ -12,6 +13,7 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { SOURCES, readSource, diffFacts } from './sources.mjs';
+import { factsFrom, readmeSection, writeReadme } from './readme-facts.mjs';
 
 const root = new URL('../', import.meta.url);
 const snapshotUrl = new URL('tools/source-snapshot.json', root);
@@ -47,11 +49,15 @@ export function changeReport(s, before, now, today) {
         many ? '\nMany lines changed. Microsoft can have reorganized the page: compare the page by hand.' : '',
     ];
     const section = (title, items) => (items.length ? [`\n## ${title} (${items.length})\n`, ...items.map((f) => `- ${code(f)}`)] : []);
+    const cited = citedBy(s.url);
     const tail = [
+        // The README facts that come from the files that cite this page. Not in the
+        // fingerprint: the same page change keeps the same fingerprint.
+        ...readmeSection(factsFrom(cited), readFileSync(new URL('README.md', root), 'utf8')),
         '\n## What to do\n',
-        `1. Check the change on the page. These files cite it: ${citedBy(s.url).join(', ') || '(none)'}.`,
+        `1. Check the change on the page. These files cite it: ${cited.join(', ') || '(none)'}.`,
         '2. Update the data or the words in a pull request, so that the tests run.',
-        '3. In the same pull request, run `node tools/watch-sources.mjs --update` to save the new snapshot.',
+        '3. In the same pull request, run `node tools/watch-sources.mjs --update` to save the new snapshot. It also writes the README facts of the data.',
         '4. The next weekly check closes this issue when the page and the snapshot agree.',
     ];
     // The same difference gives the same fingerprint: the workflow does not post it twice.
@@ -154,6 +160,9 @@ async function main() {
         if (failed) { console.log('Snapshot NOT saved: fix the pages above first.'); process.exit(1); }
         writeFileSync(snapshotUrl, JSON.stringify({ about: 'Text read from Microsoft Learn pages (c) Microsoft, kept only to find changes. See tools/sources.mjs.', ...next }, null, 2) + '\n');
         console.log('Snapshot saved.');
+        // The README facts (read dates) come from the data files: write them too.
+        const changed = await writeReadme();
+        console.log(changed.length ? `README facts written: ${changed.join(', ')}.` : 'README facts agree with the data.');
         return;
     }
     console.log(`${needLook} page(s) need a look.`);

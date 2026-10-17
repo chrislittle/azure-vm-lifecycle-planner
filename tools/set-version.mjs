@@ -5,6 +5,7 @@
 // ones it keeps in its cache. This is not a build step: it only edits the
 // version text in the files, which stay plain and readable.
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { writeReadme } from './readme-facts.mjs';
 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/.test(version || '')) {
@@ -26,4 +27,6 @@ for (const f of readdirSync(new URL('js/', root))) {
 edit('index.html', (s) => s
     .replace(/(href="style\.css)(\?v=[^"]*)?"/, `$1?v=${version}"`)
     .replace(/(src="js\/page\.js)(\?v=[^"]*)?"/, `$1?v=${version}"`));
+// The README gives the version too (a README fact).
+await writeReadme();
 console.log(`Version set to ${version}.`);

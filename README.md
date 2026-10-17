@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version 0.7.1-beta). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.7.1-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -79,7 +79,7 @@ For each VM:
   Appliances (NVAs) to add a MANA support tag". Ask the
   vendor which sizes they certify. Then deploy a new appliance beside the old one.
 - Storage and backup appliances (for example NetApp, Pure Storage, Rubrik, Silk, Nasuni,
-  Dell, Cohesity, WEKA, Veeam, Commvault, and 9 more vendors). The tool finds them by
+  Dell, Cohesity, WEKA, Veeam, Commvault, and <!-- fact:storage-vendors -->12 more vendors<!-- /fact -->). The tool finds them by
   their Marketplace image, by their Marketplace purchase plan, or by the vendor's own
   gallery image, from our own list
   ([data/storage-appliance-images.js](data/storage-appliance-images.js)). This is not a
@@ -161,20 +161,20 @@ work in that open tab. (It does not load again while you are offline.)
 
 ## Sources
 
-- **Size facts:** a table of 1,498 Azure VM sizes, read from Azure on 16 October 2026
+- **Size facts:** a table of <!-- fact:sizes -->1,498 Azure VM sizes, read from Azure on 16 October 2026<!-- /fact -->
   ([data/sizes.js](data/sizes.js)). The page does not connect to Azure.
 - **Lifecycle stages and retirement dates:** the Microsoft
   [lifecycle overview](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/lifecycle-overview),
   [End of Life list](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/end-of-life-sizes-list) and
   [retirements and capacity growth restrictions](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions),
-  read on 9 and 10 October 2026.
+  read on <!-- fact:lifecycle-read -->9 and 10 October 2026<!-- /fact -->.
 - **Target sizes:** the Microsoft
   [v6 and v7 modernization overview](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-overview)
   and the
   [retired sizes modernization guide](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirement/retired-sizes-modernization-guide).
 - **NVMe support of the OS:** the Microsoft
   [list of OS images that support NVMe](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-interface),
-  read on 9 October 2026.
+  read on <!-- fact:nvme-read -->9 October 2026<!-- /fact -->.
 
 Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
 NVA policy and the Marketplace catalog again, and compares them with the data in this
@@ -222,6 +222,16 @@ generation only, for example "Standard_D4s_v3, Generation 2".
   workflow on again with the GitHub API (job `keep-on`), and makes no commit. GitHub does
   not say that this resets the 60 days. If GitHub still turns the workflow off, it sends
   an email: turn the workflow on again in the Actions tab.
+- README facts: some facts in this README come from the data files. These are the
+  version, the size count and its read date, the read dates of the Microsoft pages,
+  and the number of storage and backup vendors. Each fact is between two HTML comment
+  marks that GitHub does not show. `node tools/readme-facts.mjs` writes
+  the facts from the data files. With `--check`, it only compares them. A test fails
+  when the README and the data do not agree. `node tools/azure-sources.mjs --update`,
+  `node tools/watch-sources.mjs --update` and `node tools/set-version.mjs` also write
+  the facts. Each issue of the weekly check has a section "README". It gives the facts
+  that come from the source and the text in the README now. For the size list, it
+  also gives the text that the new data makes.
 - `tools/` runs on GitHub or on a computer, never in the page. The page does not load
   it, so its network access does not change the page's "no data leaves your browser"
   promise. `tools/source-snapshot.json` holds text from Microsoft Learn pages

@@ -895,6 +895,24 @@ list, and no file of it is kept. `node tools/time-large-list.mjs` times each ste
 - The README Sources section said 1,496 sizes read on 9 October: the table was
   refreshed to 1,498 on 16 October, and the README was not. A test now compares the
   README size count and date with `data/sizes.js`.
+- README facts (2026-10-17): the README also said "9 more vendors" when the list had
+  12 more. Each README fact that comes from a file is now between two marks that
+  GitHub does not show (`<!-- fact:sizes -->...<!-- /fact -->`), and
+  `tools/readme-facts.mjs` writes it from the file: the version (`js/version.js`), the
+  size count and read date (`data/sizes.js`), the read dates of the lifecycle pages
+  (`data/end-of-life.js`, `data/capacity.js`) and of the NVMe list
+  (`data/nvme-images.js`), and the number of storage and backup vendors after the ten
+  that the README names (`data/storage-appliance-images.js`; a vendor is a company,
+  the first word of its name, so Dell with four publishers counts once, and WEKA's
+  gallery counts). A mark is never at the start of a line: GitHub then shows the line
+  as HTML. The size test is now one test for all facts: README.md must be what the
+  tool writes. `tools/azure-sources.mjs --update`, `tools/watch-sources.mjs --update`
+  and `tools/set-version.mjs` run the tool; `--check` only compares.
+- Each weekly issue has a section "README": the facts that come from the data of the
+  source (for a Learn page, from the data files that cite it), with the README text
+  now. For the size list, also the text that the data of the check gives. The NVA
+  policy has no README fact: the section says so. The section is not in the
+  fingerprint, so the same difference is still posted once.
 - The tests ran only on main, after a merge: `.github/workflows/tests.yml` now runs
   them on each pull request (read only, no secret).
 
