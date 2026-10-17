@@ -764,7 +764,7 @@ job limit; one failed issue call does not skip the other pages.
   repos) and sends an email: turn it on again in the Actions tab. Since 2026-10-17 each
   run also calls the REST API "Enable a workflow" for itself (job `keep-on`: only
   `actions: write`, no environment, no secret, no checkout, no commit). GitHub does not
-  define "activity"; other public repos report that this call keeps a workflow on. If
+  define "activity" or say that this call resets the 60 days (it is a common practice). If
   GitHub still turns it off, the email comes as before.
 - Phase 2 (to plan with the owner): the size table, the NVA policy and the Marketplace
   appliance images, read from Azure with a GitHub federated credential (no stored

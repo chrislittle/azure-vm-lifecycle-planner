@@ -30,15 +30,15 @@ jobs:
   # repository activity has occurred in 60 days." (docs.github.com, Disabling and
   # enabling a workflow). This job calls "Enable a workflow"
   # (PUT /repos/{owner}/{repo}/actions/workflows/{workflow_id}/enable) for this
-  # workflow each week, with no commit. GitHub does not say what counts as activity;
-  # other public repos report that this call keeps a workflow on after 60 days. If it
+  # workflow each week, with no commit. GitHub does not say what counts as activity,
+  # or that this call resets the 60 days (a common practice, not documented). If it
   # does not, GitHub sends its email as before. It is a separate job so that it has
   # only actions: write, and no Azure environment or secret; the watch job keeps its
   # own permissions. It does not need the code, so there is no checkout. It runs only
-  # on the default branch, and does not wait for the watch job (an Azure failure does
+  # on main, and does not wait for the watch job (an Azure failure does
   # not stop it).
   keep-on:
-    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
