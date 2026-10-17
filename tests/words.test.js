@@ -16,7 +16,7 @@ import { SizeTable } from '../js/lifecycle.js';
 import { readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { REASONS, reasonFor } from '../js/reasons.js';
-import { todo, whyLines } from '../js/details.js';
+import { COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE, sizeComparison, todo, whyLines } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import * as W from '../js/words.js';
 import * as F from '../js/files.js';
@@ -76,6 +76,9 @@ function collect() {
             const t = todo(m, g);
             add(`${name}: what to do`, t.main, t.more, whyLines(m, g, table, NOW), m.notes);
             if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.rebuild, Boolean(m.vm.os)), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
+            // The current size beside each new size: the labels and each note.
+            const c = sizeComparison(m, table);
+            if (c) add(`${name}: size table`, c.rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
         }
         add(`${name}: about-these-results.txt`, F.aboutText(p, list, name, NOW).split('\r\n')
             .filter((l) => !/ <- '/.test(l)).map((l) => l.replace(/^\s*[\w.-]+\.(csv|html|txt)\s{2,}/, '')));
@@ -98,6 +101,7 @@ function collect() {
         { ...known, imagePublisher: '', imageId: '/communityGalleries/WekaIO-00000000-0000-0000-0000-000000000000/images/weka/versions/1.0.0' },
         { ...known, managedBy: 'Managed application' }, { ...known, managedBy: 'Managed application', planPublisher: 'contosoisv', planProduct: 'contoso-app' },
         { ...known, managedBy: 'Managed application', planPublisher: 'contosoisv' },
+        { ...known, managedBy: 'Managed application', appName: 'contoso-app', appPlanPublisher: 'contosoisv', appPlanProduct: 'contoso-app' }, { ...known, managedBy: 'Managed application', appName: 'contoso-app' },
         { ...known, managedBy: 'AKS' }, { ...known, managedBy: 'ARO' }, { ...known, resourceType: 'Scale set' }, { ...known, scaleSet: true },
         { ...known, virtualDesktop: true, hostPoolType: 'Pooled' }, { ...known, managedBy: 'Databricks' },
         { ...known, sqlServer: 'Enterprise', imagePublisher: 'MicrosoftSQLServer', sqlGroup: true, sharedDisk: true, sap: true },
@@ -106,11 +110,18 @@ function collect() {
         add(`evidence.js: ${w.name}`, w.lead, w.shown, w.evidence, w.kind ? `${w.kind}. ${w.evidence}` : '');
     }
     add('evidence.js', NOT_IN_LIST, NO_VALUE, FACT_GROUPS.map(([group]) => group));
+    add('details.js', COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE);
+    // Each note of the size table, with made-up facts: a VM with more NICs, data disks and an older generation than a small new size.
+    {
+        const m = plan([toMachine(['contoso-z', 'Standard_D4s_v3', 'V1', 'Linux', '3', '9'], { 'VM name': 0, 'Current size': 1, 'Generation': 2, 'OS': 3, 'NIC count': 4, 'Data-disk count': 5 }, 2, table, NOW)], table, NOW).machines[0];
+        for (const size of ['Standard_D2s_v5', 'Standard_A4_v2', 'Standard_D4s_v6']) add('details.js: size table', sizeComparison({ ...m, rows: [{ series: 'v5', option: { supported: true, targetSize: size } }] }, table).rows.map((r) => r.cells.map((x) => x.less)));
+    }
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
         W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),
         ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].map((os) => W.moveWords(s, rb, os)))),
-        ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01'].flatMap((d) => [null, capacity].map((c) => W.stageWords({ stage, retiresUtc: d }, c)))));
+        ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01', '2025-09-30'].flatMap((d) => [null, capacity].flatMap((c) => [null, NOW].map((now) => W.stageWords({ stage, retiresUtc: d }, c, now))))),
+        W.capacityWords(capacity, NOW));
     // The page: index.html, and the texts in js/page.js.
     add('index.html', htmlText(read('index.html').replace(/<head>[\s\S]*?<\/head>/, '').replace(/<pre[\s\S]*?<\/pre>/g, '')));
     add('js/page.js', pageStrings(read('js/page.js')));

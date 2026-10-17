@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.8.0-beta';
-import nvaImages from '../data/nva-images.js?v=0.8.0-beta';
-import nvme from '../data/nvme-images.js?v=0.8.0-beta';
-import { readCount } from './planner.js?v=0.8.0-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.0-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.0-beta';
+import nvme from '../data/nvme-images.js?v=0.9.0-beta';
+import { readCount } from './planner.js?v=0.9.0-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -49,6 +49,10 @@ export function readExtras(cell) {
         imageId: cell('Image ID') || null,
         planPublisher: cell('Plan publisher') || null,
         planProduct: cell('Plan product') || null,
+        // The managed application of the resource group, and its Marketplace plan.
+        appName: cell('Managed application') || null,
+        appPlanPublisher: cell('Application plan publisher') || null,
+        appPlanProduct: cell('Application plan product') || null,
     };
 }
 
@@ -237,6 +241,17 @@ const check = (text) => ({ state: 'check', text });
 const attention = (text) => ({ state: 'attention', text });
 const none = { state: '', text: '' };
 
+// The value of a column as the list gives it, in words: '"Hibernation" is Yes.'
+// Each note says the value that made it (0.9.0-beta), so that a customer can see
+// why the note is there.
+const said = (column, value = 'Yes') => `"${column}" is ${value}.`;
+// The image as the list gives it: 'MicrosoftWindowsServer / WindowsServer / 2016-Datacenter'.
+const imageWords = (x) => [x.imagePublisher, x.imageOffer, x.imageSku].filter((v) => v).join(' / ');
+// 32 -> '32', 1.5 -> '1.5'.
+export const gibWords = (n) => String(Math.round(n * 10) / 10);
+// The temporary disk of the current size, in words, or '' when the size table does not give it.
+const currentTempDisk = (vm) => (vm.sourceTempDiskGiB > 0 ? `The current size ${vm.sourceSize} has a temporary disk of ${gibWords(vm.sourceTempDiskGiB)} GiB. ` : '');
+
 // The caveats for one option of one machine. Agreed wording (PLAN.md).
 export function caveats(vm, x, option) {
     const series = option.option;
@@ -250,8 +265,10 @@ export function caveats(vm, x, option) {
     else {
         const ok = imageSupportsNvme(x.imagePublisher, x.imageOffer, x.imageSku);
         out['NVMe'] = ok === true ? fine('The OS supports NVMe.')
-            : ok === false ? problem('Update the OS to a version on the Microsoft NVMe list, or rebuild from a newer image.')
-            : check('Check: the list does not give the OS image. The OS must support NVMe.');
+            : ok === false ? problem(`The image ${imageWords(x)} is not on the Microsoft list of OS images that support NVMe. Update the OS to a version on the Microsoft NVMe list, or rebuild from a newer image.`)
+            // An image that the list names, but that this tool cannot find on the Microsoft list.
+            : x.imagePublisher ? check(`Check: this tool cannot tell if the image ${imageWords(x)} supports NVMe. The OS must support NVMe.`)
+            : check(`Check: the list does not give the OS image. The OS must support NVMe.${x.imageId ? ` The image ID is ${x.imageId}.` : ''}`);
     }
 
     // Azure Disk Encryption.
@@ -259,43 +276,47 @@ export function caveats(vm, x, option) {
         // Microsoft: Azure Disk Encryption retires on 15 September 2028; the move to
         // encryption at host makes new disks and a new VM (disk-encryption-migrate page,
         // read 2026-10-10).
-        : x.diskEncryption === true ? problem(isNvme ? 'v6 and v7 do not support Azure Disk Encryption. Move to encryption at host with the Microsoft migration steps. They make new disks and a new VM.'
-            : 'Use a resize: a resize keeps Azure Disk Encryption. Microsoft retires Azure Disk Encryption on 15 September 2028, so also plan the move to encryption at host.')
+        : x.diskEncryption === true ? problem(`${said('Azure Disk Encryption')} ${isNvme ? 'v6 and v7 do not support Azure Disk Encryption. Move to encryption at host with the Microsoft migration steps. They make new disks and a new VM.'
+            : 'Use a resize: a resize keeps Azure Disk Encryption. Microsoft retires Azure Disk Encryption on 15 September 2028, so also plan the move to encryption at host.'}`)
         : check('Check: the list does not say if the VM uses Azure Disk Encryption.');
 
     // Temporary disk (from the size table).
     if (!hasTarget) out['Temporary disk'] = none;
     else if (vm.sourceTempDisks === 0) out['Temporary disk'] = fine('No temporary disk.');
-    else if (vm.sourceTempDisks > 0 && option.tempDisksTo === 0) out['Temporary disk'] = attention('The new size has no temporary disk. The move deletes the data on the current temporary disk.');
-    else if (vm.sourceTempDisks > 0) out['Temporary disk'] = attention('The move deletes the data on the temporary disk. Keep nothing there that you need.');
-    else out['Temporary disk'] = check('Check: the size table does not give the temporary disk. You lose the data on it when you move.');
+    else if (vm.sourceTempDisks > 0 && option.tempDisksTo === 0) out['Temporary disk'] = attention(`${currentTempDisk(vm)}The new size has no temporary disk. The move deletes the data on the current temporary disk.`);
+    else if (vm.sourceTempDisks > 0) out['Temporary disk'] = attention(`${currentTempDisk(vm)}The move deletes the data on the temporary disk. Keep nothing there that you need.`);
+    else out['Temporary disk'] = check(`Check: the size table does not give the temporary disk of ${vm.sourceSize}. You lose the data on it when you move.`);
 
     // Accelerated networking (from the target logic).
     const an = option.acceleratedNetworking;
+    const count = vm.acceleratedNicCount !== undefined && vm.acceleratedNicCount !== null ? vm.acceleratedNicCount : null;
     if (!hasTarget) out['Accelerated networking'] = none;
     else if (an.required === false) out['Accelerated networking'] = fine('The new size does not need it.');
-    else if (an.turnsOn === true) out['Accelerated networking'] = problem('Turn on accelerated networking before the move. The new size needs it.');
+    // The value that shows it is off: the primary NIC, else no NIC with it on.
+    else if (an.turnsOn === true) out['Accelerated networking'] = problem(`${vm.primaryNicAccelerated === false ? said('Primary NIC accelerated', 'No') : said('Accelerated NICs', String(count))} Turn on accelerated networking before the move. The new size needs it.`);
     else if (an.required === true && an.turnsOn === false) out['Accelerated networking'] = fine('On.');
-    else out['Accelerated networking'] = check('Check: the list does not say if accelerated networking is on. The new size needs it.');
+    else out['Accelerated networking'] = check(count === null ? 'Check: the list does not say if accelerated networking is on. The new size needs it.'
+        // Some NICs have it on, but the list does not say which NIC is the primary NIC.
+        : `Check: the list does not say if accelerated networking is on for the primary NIC. ${said('Accelerated NICs', String(count))} ${vm.nicCount !== undefined ? said('NIC count', String(vm.nicCount)) : 'The list does not give the NIC count.'} The new size needs it.`);
 
     // NICs and data disks: the target was chosen to hold them.
     out['NICs'] = !hasTarget ? none : vm.nicCount !== undefined ? fine(`${vm.nicCount} NIC${vm.nicCount === 1 ? '' : 's'}. The new size holds ${vm.nicCount === 1 ? 'it' : 'them'}.`) : check('Check: the list does not give the NIC count. This tool chose the size for 1 NIC.');
     out['Data disks'] = !hasTarget ? none : vm.dataDiskCount !== undefined ? fine(`${vm.dataDiskCount} data disk${vm.dataDiskCount === 1 ? '' : 's'}. The new size holds ${vm.dataDiskCount === 1 ? 'it' : 'them'}.`) : check('Check: the list does not give the data-disk count. This tool chose the size for 0 data disks.');
 
-    out['Hibernation'] = x.hibernation === false ? fine('Off.') : x.hibernation === true ? problem('Turn off hibernation before the move.') : check('Check: the list does not say if hibernation is on.');
+    out['Hibernation'] = x.hibernation === false ? fine('Off.') : x.hibernation === true ? problem(`${said('Hibernation')} Turn off hibernation before the move.`) : check('Check: the list does not say if hibernation is on.');
 
     // A scale set and a pooled host: "What to do" gives the move, so no note here.
     out['Scale set / AKS / AVD'] = x.scaleSet === true ? none
         // A personal desktop is the VM of one user: it moves as a normal VM.
-        : x.virtualDesktop === true && /^personal$/i.test(x.hostPoolType || '') ? attention('A personal desktop. The user cannot use it during the move. Tell the user first.')
+        : x.virtualDesktop === true && /^personal$/i.test(x.hostPoolType || '') ? attention(`A personal desktop: ${said('AVD host pool type', x.hostPoolType)} The user cannot use it during the move. Tell the user first.`)
         : x.virtualDesktop === true && /^pooled$/i.test(x.hostPoolType || '') ? none
-        : x.virtualDesktop === true ? check('Check: the list does not say if the host pool is pooled or personal. For a pooled host pool, make new session hosts from the image.')
+        : x.virtualDesktop === true ? check(`Check: the list does not say if the host pool is pooled or personal.${x.hostPoolType ? ` ${said('AVD host pool type', x.hostPoolType)}` : ''} For a pooled host pool, make new session hosts from the image.`)
         : x.scaleSet === false && x.virtualDesktop === false ? fine('Not in a scale set.')
         : check('Check: the list does not say if this VM is in a scale set or in Azure Virtual Desktop.');
 
-    out['SAP'] = x.sap === false ? fine('Not SAP.') : x.sap === true ? problem('Confirm that SAP certifies the new size (SAP Note 1928533).') : check('Check: the list does not say if this VM runs SAP.');
-    out['Unmanaged disks'] = x.unmanagedDisks === false ? fine('Managed disks.') : x.unmanagedDisks === true ? problem('Convert the unmanaged disks to managed disks first.') : check('Check: the list does not say if the disks are managed disks.');
-    out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem('The data on an ephemeral OS disk does not stay when the VM moves. Deploy a new VM at the new size.') : check('Check: the list does not say if the OS disk is ephemeral.');
+    out['SAP'] = x.sap === false ? fine('Not SAP.') : x.sap === true ? problem(`${said('SAP')} Confirm that SAP certifies the new size (SAP Note 1928533).`) : check('Check: the list does not say if this VM runs SAP.');
+    out['Unmanaged disks'] = x.unmanagedDisks === false ? fine('Managed disks.') : x.unmanagedDisks === true ? problem(`${said('Unmanaged disks')} Convert the unmanaged disks to managed disks first.`) : check('Check: the list does not say if the disks are managed disks.');
+    out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem(`${said('Ephemeral OS disk')} The data on an ephemeral OS disk does not stay when the VM moves. Deploy a new VM at the new size.`) : check('Check: the list does not say if the OS disk is ephemeral.');
 
     // A system-assigned identity is kept on a resize and lost on a rebuild.
     if (x.systemIdentity === false) out['Identity'] = fine('No system-assigned identity.');
@@ -303,21 +324,23 @@ export function caveats(vm, x, option) {
         // On v6 and v7 the move is a new VM (deploy in parallel), which gets a new identity.
         const newVm = isNvme || option.rebuild;
         out['Identity'] = !hasTarget ? none
-            : newVm ? problem('Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.')
+            : newVm ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
             : !vm.os ? check('Check: the list does not give the OS. A rebuild removes the system-assigned identity.')
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(isNvme || option.rebuild
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${isNvme || option.rebuild
             // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
-            : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.') : check('Check: the list does not say if the VM is in an availability set.');
+            : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.'}`) : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
-    out['Network virtual appliance'] = isAppliance(x)
-        ? problem('Ask the vendor which sizes they certify.') : none;
+    const nva = applianceSign(x);
+    out['Network virtual appliance'] = nva
+        ? problem(`${nva.sign === 'image' ? 'The image' : 'The Marketplace purchase plan'} is ${nva.publisher} / ${nva.offer}. Ask the vendor which sizes they certify.`) : none;
     // Only on a storage or backup appliance.
-    out['Storage or backup appliance'] = !isAppliance(x) && isStorageAppliance(x)
-        ? problem('Ask the vendor which sizes they certify.') : none;
+    const storage = nva ? null : storageApplianceSign(x);
+    out['Storage or backup appliance'] = storage
+        ? problem(`The vendor is ${storage.vendor}. Ask the vendor which sizes they certify.`) : none;
     out['Zone'] = x.zone ? fine(/^none$/i.test(x.zone) ? 'No zone.' : `Zone ${x.zone}.`) : check('Check: the list does not give the zone. The new size must be available in it.');
     return out;
 }

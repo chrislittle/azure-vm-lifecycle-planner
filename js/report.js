@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.8.0-beta';
-import { capacityRestricted } from './planner.js?v=0.8.0-beta';
-import * as F from './files.js?v=0.8.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
-import { seriesList, todo, whyLines } from './details.js?v=0.8.0-beta';
-import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.8.0-beta';
-import { appliancesByVendor, workloadFound } from './evidence.js?v=0.8.0-beta';
-import version from './version.js?v=0.8.0-beta';
+import capacity from '../data/capacity.js?v=0.9.0-beta';
+import { capacityRestricted } from './planner.js?v=0.9.0-beta';
+import * as F from './files.js?v=0.9.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.9.0-beta';
+import { appliancesByVendor, workloadFound } from './evidence.js?v=0.9.0-beta';
+import version from './version.js?v=0.9.0-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -49,6 +49,12 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     ${appliances.map((a) => `<tr><td>${vendorCell(a)}</td><td>${esc(a.kind)}</td><td>${a.machines.length}</td><td>${a.machines.map((x) => `${nameLink(x.m)}${x.where ? ` <span class="muted">(${esc(x.where)})</span>` : ''}`).join(', ')}</td></tr>`).join('')}
     </tbody></table>`;
 
+    // The current size beside each new size (details.js), with each note in words.
+    function compareHtml(c) {
+        if (!c) return '';
+        return `<div class="scroll"><table class="compare"><caption>${esc(c.caption)}</caption><thead><tr><th scope="col">Fact</th>${c.columns.map((col) => `<th scope="col">${esc(col.label)}<br><span class="mono">${esc(short(col.size))}</span></th>`).join('')}</tr></thead><tbody>${c.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((cell) => `<td>${esc(cell.text)}${cell.less ? `<br><b class="less">${esc(cell.less)}</b>` : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="muted">${esc(COMPARE_HINT)}</p>`;
+    }
+
     function vmCard(m) {
         const g = F.groupOf(m); const t = todo(m, g); const n = F.allNotes(m);
         const notes = (title, items, cls, strip) => items.length ? `<h4>${title}</h4><ul class="${cls}">${items.map((x) => `<li><b>${esc(x.topic)}:</b> ${esc(strip ? x.text.replace(/^Check: /, '') : x.text)}${x.series.length ? ` <span class="muted">(${seriesList(x.series)} only)</span>` : ''}</li>`).join('')}</ul>` : '';
@@ -63,6 +69,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span></td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');
             sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;
+            sizesHtml += compareHtml(sizeComparison(m, table));
         }
         return `<section class="vm">
       <header><h3>${esc(m.read.name)}</h3><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></header>
@@ -117,6 +124,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     ul { margin: 0; padding-left: 18px; } li { margin: 2px 0; }
     ul.act li::marker { color: var(--act); } ul.att li::marker { color: var(--accent); } ul.chk li::marker { color: var(--muted); }
     table.sizes th:first-child { width: 80px; }
+    table.compare caption { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 0; } table.compare tbody th { color: var(--muted); white-space: nowrap; } .scroll { overflow-x: auto; } .mono { font: 12px ui-monospace, Consolas, monospace; } b.less { color: var(--act); font-size: 12px; }
     .rid { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
     @media (max-width: 700px) { .three { grid-template-columns: 1fr; } }
     @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
@@ -150,7 +158,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     <ul>
       <li>${esc(NOT_FOUND)}</li>
       <li>This tool does not check if a size is available in your region.</li>
-      <li>Capacity growth restrictions: ${esc(capacityWords(capacity).join(' '))}</li>
+      <li>Capacity growth restrictions: ${esc(capacityWords(capacity, now).join(' '))}</li>
       <li>Lifecycle stages: <a href="${GUIDANCE.lifecycle}">Microsoft lifecycle overview</a>, <a href="${GUIDANCE.endOfLife}">End of Life list</a>, <a href="${GUIDANCE.retirements}">retirements and capacity growth restrictions</a>.</li>
     </ul>
     </main></body></html>

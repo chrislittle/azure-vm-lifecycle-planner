@@ -108,21 +108,58 @@ export function dateWords(iso, short = false) {
     return `${parseInt(m[3], 10)} ${month} ${m[1]}`;
 }
 
-// The current size's stage, in words. capacity: the capacity data, or null.
-export function stageWords(stage, capacity) {
+// Whole calendar months from one day to a later day ('2026-10-17' to '2029-11-15': 36).
+// A month counts only when it is full. Same days, same answer: no clock is read.
+export function wholeMonths(fromIso, toIso) {
+    const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromIso);
+    const b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toIso);
+    if (!a || !b) return null;
+    const n = (+b[1] - +a[1]) * 12 + (+b[2] - +a[2]) - (+b[3] < +a[3] ? 1 : 0);
+    return Math.max(0, n);
+}
+
+// How long until a day, or how long since it, counted from the day the list is
+// planned (now): 'in 25 months', 'in less than 1 month', '3 months ago', 'less than
+// 1 month ago'. '' when the day or now is not known.
+export function countdownWords(dayIso, now) {
+    if (!now || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayIso ?? ''))) return '';
+    const today = now.toISOString().slice(0, 10);
+    const future = dayIso > today;
+    const n = future ? wholeMonths(today, dayIso) : wholeMonths(dayIso, today);
+    const span = n < 1 ? 'less than 1 month' : `${n} ${n === 1 ? 'month' : 'months'}`;
+    return future ? `in ${span}` : `${span} ago`;
+}
+
+// 'July 2026' (as Microsoft gives the start of the capacity growth restrictions) ->
+// '2026-07-01'; null for other text.
+export function monthDay(text) {
+    const m = /^([A-Z][a-z]+) (\d{4})$/.exec(String(text ?? '').trim());
+    const i = m ? LONG_MONTHS.indexOf(m[1]) : -1;
+    return i < 0 ? null : `${m[2]}-${String(i + 1).padStart(2, '0')}-01`;
+}
+// ' (3 months ago)' for the start of the capacity growth restrictions, or ''.
+const sinceWords = (capacity, now) => { const c = countdownWords(monthDay(capacity.since), now); return c ? ` (${c})` : ''; };
+
+// The current size's stage, in words. capacity: the capacity data, or null. now: the
+// day the list is planned; with it, a date also says how long until it or since it
+// (the page and the report). The CSV files call this without now.
+export function stageWords(stage, capacity, now = null) {
+    const left = (day) => { const c = countdownWords(day, now); return c ? ` (${c})` : ''; };
     let w;
     switch (stage.stage) {
         case 'Current': w = 'Current. This is the newest series, and Microsoft fully supports it.'; break;
         case 'Extended': w = 'Extended. Microsoft fully supports this series. Newer series are available.'; break;
         case 'Current or Extended': w = 'Current or Extended. Microsoft has not announced a retirement date.'; break;
-        case 'End of Life': w = stage.retiresUtc ? `End of Life. Microsoft retires this series on ${dateWords(stage.retiresUtc)}. Plan a move before that date.` : 'End of Life. Plan a move.'; break;
-        case 'Retired': w = stage.retiresUtc ? `Retired on ${dateWords(stage.retiresUtc)}. A VM on this size cannot run.` : 'Retired. A VM on this size cannot run.'; break;
+        case 'End of Life': w = stage.retiresUtc ? `End of Life. Microsoft retires this series on ${dateWords(stage.retiresUtc)}${left(stage.retiresUtc)}. Plan a move before that date.` : 'End of Life. Plan a move.'; break;
+        case 'Retired': w = !stage.retiresUtc ? 'Retired. A VM on this size cannot run.'
+            : left(stage.retiresUtc) ? `Retired. Microsoft retired this series on ${dateWords(stage.retiresUtc)}${left(stage.retiresUtc)}. A VM on this size cannot run.`
+            : `Retired on ${dateWords(stage.retiresUtc)}. A VM on this size cannot run.`; break;
         case null: case undefined: return 'Not checked. This tool cannot identify this size.';
         default: w = String(stage.stage);
     }
     // Microsoft's term: "capacity growth restrictions" (owner, 2026-10-10: say only
     // what the Microsoft page says).
-    if (capacity) w += ` From ${capacity.since}, Microsoft restricts capacity growth for this series: a new subscription cannot deploy it, and Azure approves no more quota.`;
+    if (capacity) w += ` From ${capacity.since}${sinceWords(capacity, now)}, Microsoft restricts capacity growth for this series: a new subscription cannot deploy it, and Azure approves no more quota.`;
     return w;
 }
 
@@ -140,9 +177,11 @@ export function stageShort(stage, capacity) {
 }
 
 // What the capacity restrictions mean, with the series they apply to.
-export function capacityWords(capacity) {
+// now: the day the list is planned (the report and the about file), or null (the page
+// before a list is planned).
+export function capacityWords(capacity, now = null) {
     return [
-        `From ${capacity.since}, Microsoft restricts capacity growth for ${capacity.names.length} series.`,
+        `From ${capacity.since}${sinceWords(capacity, now)}, Microsoft restricts capacity growth for ${capacity.names.length} series.`,
         `These series are ${capacity.names.join(', ')}.`,
         'A new subscription cannot deploy these series.',
         'A subscription that you have now can deploy them in its approved quota, if the region has capacity.',

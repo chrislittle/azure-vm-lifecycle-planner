@@ -45,6 +45,7 @@ const TEXT = [
     ['accent', 'none-bg', 'a note tag'], ['accent-text', 'accent', 'the primary buttons'],
     ['fine', 'fine-bg', 'the "ready" and "no move" pills'], ['fine', 'panel', 'a supported size in the table'], ['fine', 'row-hover', 'a supported size in an open row'],
     ['check', 'check-bg', 'the "do this first" and "vendor approval" pills, the capacity tag'],
+    ['check', 'panel', 'a "less" note in the size table'],
     ['problem', 'problem-bg', 'the "no supported size" pill'], ['pool', 'pool-bg', 'the "service or pool" pill'],
 ];
 // Parts of a control and of the focus ring on their background: 3:1.

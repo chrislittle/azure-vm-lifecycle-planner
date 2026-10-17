@@ -6,9 +6,9 @@ export default String.raw`// VM Lifecycle Planner for Azure - the VM list.
 //
 // One pass over the Resources table gives each VM and scale set, and the records
 // that point to it: NICs, extensions, the SQL IaaS Agent record, shared disks.
-// Joins add the AVD host pool and the resource group "managed by" a service.
-// (Resource Graph allows three joins, with one other table besides the resource
-// groups: here AVD.)
+// Joins add the AVD session host, the resource group "managed by" a service, and the
+// AVD host pool or the managed application. (Resource Graph allows three joins, with
+// one other table besides the resource groups: here AVD.)
 Resources
 | where type in~ ('microsoft.compute/virtualmachines', 'microsoft.compute/virtualmachinescalesets',
                   'microsoft.network/networkinterfaces', 'microsoft.compute/virtualmachines/extensions',
@@ -142,16 +142,26 @@ Resources
     | project key = tolower(tostring(properties.resourceId)), hostPoolId = tolower(tostring(split(id, '/sessionhosts/')[0]))
   ) on key
 | join kind=leftouter (
-    Resources
-    | where type =~ 'microsoft.desktopvirtualization/hostpools'
-    | project hostPoolId = tolower(id), hostPoolType = tostring(properties.hostPoolType)
-  ) on hostPoolId
-| join kind=leftouter (
     ResourceContainers
     | where type =~ 'microsoft.resources/subscriptions/resourcegroups'
     | project rgKey = strcat(subscriptionId, '/', tolower(name)), managedBy = tolower(tostring(managedBy))
   ) on rgKey
 | extend managedByType = tostring(split(managedBy, '/providers/')[1])
+// One join gives the AVD host pool, or the managed application that owns the resource
+// group: its name and its Marketplace plan (publisher ID and product). A session host
+// keeps its host pool.
+| extend linkKey = case(isnotempty(hostPoolId), hostPoolId,
+    managedByType startswith 'microsoft.solutions/applications', managedBy, '')
+| join kind=leftouter (
+    Resources
+    | where type in~ ('microsoft.desktopvirtualization/hostpools', 'microsoft.solutions/applications')
+    | extend isApp = type =~ 'microsoft.solutions/applications'
+    | project linkKey = tolower(id),
+        hostPoolType = iff(isApp, '', tostring(properties.hostPoolType)),
+        appName = iff(isApp, name, ''),
+        appPlanPublisher = iff(isApp, tostring(plan.publisher), ''),
+        appPlanProduct = iff(isApp, tostring(plan.product), '')
+  ) on linkKey
 | project
     ['VM name'] = name,
     Region = location,
@@ -203,6 +213,11 @@ Resources
     ['Resource ID'] = rid,
     ['Image ID'] = imageId,
     ['Plan publisher'] = planPublisher,
-    ['Plan product'] = planProduct
+    ['Plan product'] = planProduct,
+    // A VM in a managed application: the application, and its Marketplace plan
+    // (blank for an application that is not from the Marketplace).
+    ['Managed application'] = appName,
+    ['Application plan publisher'] = appPlanPublisher,
+    ['Application plan product'] = appPlanProduct
 | order by ['VM name'] asc
 `;

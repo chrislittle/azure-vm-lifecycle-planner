@@ -45,6 +45,11 @@ export const COLUMNS = [
     { name: 'Image ID' },
     { name: 'Plan publisher' },
     { name: 'Plan product' },
+    // The managed application that owns the resource group of the VM, and its Marketplace
+    // plan: the vendor of the application (query 0.9.0-beta and later). Optional.
+    { name: 'Managed application' },
+    { name: 'Application plan publisher' },
+    { name: 'Application plan product' },
 ];
 
 // A header as it is compared: case, spaces, dashes, underscores and dots ignored.

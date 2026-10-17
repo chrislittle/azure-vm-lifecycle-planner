@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.8.0-beta';
-import families from '../data/families.js?v=0.8.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
-import capacity from '../data/capacity.js?v=0.8.0-beta';
-import nvme from '../data/nvme-images.js?v=0.8.0-beta';
-import { capacityRestricted } from './planner.js?v=0.8.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.8.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.8.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.8.0-beta';
-import { workloadFound } from './evidence.js?v=0.8.0-beta';
+import sizes from '../data/sizes.js?v=0.9.0-beta';
+import families from '../data/families.js?v=0.9.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.0-beta';
+import capacity from '../data/capacity.js?v=0.9.0-beta';
+import nvme from '../data/nvme-images.js?v=0.9.0-beta';
+import { capacityRestricted } from './planner.js?v=0.9.0-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.9.0-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.0-beta';
+import { workloadFound } from './evidence.js?v=0.9.0-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -302,7 +302,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  These notes are the readiness signals in the Microsoft guide for the move to v6 and v7.',
         '  Before the move: a step to do before the move. It does not block the move.',
         '  Good to know: a fact to know, with nothing to do first. A VM with only these notes is ready.',
-        '  To check: the list does not give the fact.',
+        '  To check: the list does not give the fact, or this tool cannot judge it from what the list gives.',
         '  A VM that a service manages (AKS, Azure Red Hat OpenShift, Azure Databricks) has no notes.',
         '  The service manages its image and its disks.',
         '  A fact that is fine has no note.',
@@ -311,7 +311,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  If the list has no data-disk count, this tool selects the size for 0 data disks.',
         '',
         'CAPACITY GROWTH RESTRICTIONS',
-        ...capacityWords(capacity).map((l) => `  ${l}`),
+        ...capacityWords(capacity, now).map((l) => `  ${l}`),
         `  Source: ${capacity.source}`,
         '',
         'MICROSOFT GUIDANCE',

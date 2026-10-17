@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.8.0-beta';
-import { dateWords, stageWords } from './words.js?v=0.8.0-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.0-beta';
+import { dateWords, stageWords } from './words.js?v=0.9.0-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -40,7 +40,7 @@ export const REASONS = {
     'ephemeral-os-disk': () => 'This VM has an ephemeral OS disk. That disk is on the host, so its data does not stay when the VM moves to other hardware. This tool gives no target size for this VM.',
 
     // ---- No size fits (a fact) ----
-    'not-in-region': ({ series }) => `Azure has no ${series} size with the same name as this size. Other ${series} sizes can fit, but they can change the processor or the number of active vCPUs. Select a ${series} size by hand.`,
+    'not-in-region': ({ series, vm }) => `Azure has no ${series} size with the same name as this size${vm?.sourceSize ? ` (${vm.sourceSize})` : ''}. Other ${series} sizes can fit, but they can change the processor or the number of active vCPUs. Select a ${series} size by hand.`,
     // A size that is not in the size table is not known: say that, not a fact about its family.
     'family-not-in-region': ({ series, facts, vm, table }) => (vm && table && !table.has(vm.sourceSize)
         ? 'Not checked. This tool cannot identify this size.'
@@ -67,8 +67,8 @@ export const REASONS = {
     // ---- A row that this tool cannot read ----
     'machine-name-empty': () => 'The VM name is empty.',
     'size-empty': () => 'The current size is empty.',
-    'size-unreadable': () => 'This tool cannot read the current size. Use the Azure name, for example Standard_D4s_v3.',
-    'generation-missing': () => 'The generation is empty or not valid. Run the Azure Resource Graph query in step 1 again, or type the generation (1 or 2) for this VM.',
+    'size-unreadable': ({ problem }) => `This tool cannot read the current size${problem?.value ? ` "${problem.value}"` : ''}. Use the Azure name, for example Standard_D4s_v3.`,
+    'generation-missing': ({ problem }) => `The generation is empty or not valid.${problem?.value ? ` The list gives "${problem.value}".` : ''} Run the Azure Resource Graph query in step 1 again, or type the generation (1 or 2) for this VM.`,
     'scale-set-generation-missing': () => 'Azure Resource Graph does not give the generation of a scale set. Type the generation (1 or 2) of the scale set image in the Generation column.',
     'generation-conflicts-with-security-type': ({ problem }) => `The list gives Generation 1, but ${problem?.securityWords || 'this security type'} needs Generation 2. Check the two values.`,
 

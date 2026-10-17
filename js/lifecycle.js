@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.8.0-beta';
-import seriesRules from '../data/series-rules.js?v=0.8.0-beta';
+import families from '../data/families.js?v=0.9.0-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.0-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -360,6 +360,29 @@ function skuShape(entry) {
     let vcpus = read('vCPUsAvailable');
     if (vcpus === null) vcpus = read('vCPUs');
     return { vcpus, memoryGB: read('MemoryGB') };
+}
+
+// The facts of one size that the page and the report show, from the size table, or
+// null when the size is not in the table: { name, vcpus, vcpusActive, memoryGiB,
+// tempGiB, tempKind, tempDisks, maxNics, maxDataDisks, premium, generations }. Each
+// is null when the table does not give it. tempGiB: 0 for no temporary disk; the
+// table gives MiB (MaxResourceVolumeMB is MiB, as Azure reports it). tempKind:
+// 'SCSI' or 'NVMe'. generations: ['V1', 'V2'].
+export function sizeFacts(entry) {
+    if (!entry) return null;
+    const num = (name) => { const v = cap(entry, name); return v === null ? null : parseFloatStrict(v); };
+    const scsi = capInt(entry, 'MaxResourceVolumeMB');
+    const nvmeTotal = capInt(entry, 'NvmeDiskSizeInMiB');
+    const nvmePer = capInt(entry, 'NvmeSizePerDiskInMiB');
+    let tempGiB = null, tempKind = null, tempDisks = null;
+    if (scsi !== null && scsi > 0) { tempGiB = scsi / 1024; tempKind = 'SCSI'; tempDisks = 1; }
+    else if (nvmeTotal !== null && nvmeTotal > 0) { tempGiB = nvmeTotal / 1024; tempKind = 'NVMe'; tempDisks = nvmePer > 0 ? Math.floor(nvmeTotal / nvmePer) : null; }
+    else if (scsi === 0) { tempGiB = 0; tempDisks = 0; }
+    return {
+        name: entry.name, vcpus: num('vCPUs'), vcpusActive: num('vCPUsAvailable'), memoryGiB: num('MemoryGB'),
+        tempGiB, tempKind, tempDisks, maxNics: skuMaxNics(entry), maxDataDisks: skuMaxDataDisks(entry),
+        premium: diskPremiumCapable(entry), generations: skuHyperVGenerations(entry),
+    };
 }
 
 // 'smaller' | 'fits' | 'unknown'.

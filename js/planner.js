@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.8.0-beta';
-import capacity from '../data/capacity.js?v=0.8.0-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.0-beta';
+import capacity from '../data/capacity.js?v=0.9.0-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
-    sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
+    sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.8.0-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.8.0-beta';
-import { patternOf } from './patterns.js?v=0.8.0-beta';
+} from './lifecycle.js?v=0.9.0-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.0-beta';
+import { patternOf } from './patterns.js?v=0.9.0-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -130,7 +130,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
 
     const sizeText = cell('Current size');
     const size = readSizeName(sizeText, table);
-    if (!size.size) problems.push({ what: `Current size '${sizeText}'`, why: sizeText ? 'size-unreadable' : 'size-empty' });
+    if (!size.size) problems.push({ what: `Current size '${sizeText}'`, why: sizeText ? 'size-unreadable' : 'size-empty', value: sizeText });
     if (size.note) notes.push(size.note);
 
     const securityText = cell('Security type');
@@ -165,7 +165,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         notes.push('The generation is empty. The service makes the new nodes from its own image, so this tool does not need the generation.');
     } else if (!gen) {
         // Azure Resource Graph does not give the generation of a scale set.
-        problems.push({ what: `Generation '${genText}'`, why: extra.resourceType === 'Scale set' ? 'scale-set-generation-missing' : 'generation-missing' });
+        problems.push({ what: `Generation '${genText}'`, why: extra.resourceType === 'Scale set' ? 'scale-set-generation-missing' : 'generation-missing', value: genText });
     } else if (gen === 'V1' && needsGen2) {
         problems.push({ what: `Generation '${genText}' with security type '${securityText}'`, why: 'generation-conflicts-with-security-type', securityWords });
     }
@@ -230,6 +230,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         classification: blockers.length ? 'Blocked' : controller === 'NVMe' ? 'ReadyNow' : 'ReadyAfterPrep',
         blockers, prepNeeded: [], platformManaged: false,
         diskController: controller || '', sourceDiskArch, sourceTempDisks,
+        // The size of the temporary disk, for the words of the notes (0.9.0-beta).
+        sourceTempDiskGiB: entry ? sizeFacts(entry).tempGiB : null,
     };
     if (nic.value !== null) vm.nicCount = nic.value;
     if (disks.value !== null) vm.dataDiskCount = disks.value;

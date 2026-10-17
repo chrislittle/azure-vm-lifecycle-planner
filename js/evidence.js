@@ -2,8 +2,8 @@
 // an appliance, the facts behind a workload type, and every fact as the list gives
 // it. One source for the page, the files and the report.
 
-import { patternFound } from './patterns.js?v=0.8.0-beta';
-import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.8.0-beta';
+import { patternFound } from './patterns.js?v=0.9.0-beta';
+import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.9.0-beta';
 
 // The workload type of a VM and why: { pattern, name, kind, vendor, lead, evidence }.
 // kind: the kind of appliance in words, or ''. vendor: the vendor of a storage or
@@ -16,12 +16,16 @@ export function workloadFound(m) {
     const name = PATTERNS[f.pattern].name;
     const kind = f.kind ? APPLIANCE_KINDS[f.kind] : '';
     const s = f.sign;
-    // A managed application: the publisher of its Marketplace purchase plan, when the list gives it.
-    const plan = f.kind === 'managed-application' && m.extra.planPublisher ? m.extra : null;
-    const vendor = f.kind === 'storage' ? s.vendor : f.kind === 'nva' ? s.publisher : plan ? plan.planPublisher : '';
+    // A managed application: the publisher ID of the Marketplace plan of the application
+    // (query 0.9.0-beta and later), else of the purchase plan of the VM, when the list
+    // gives one. An older list gives neither: "The list does not give the vendor."
+    const app = f.kind === 'managed-application' ? m.extra : null;
+    const plan = app && app.planPublisher ? app : null;
+    const vendor = f.kind === 'storage' ? s.vendor : f.kind === 'nva' ? s.publisher
+        : app && app.appPlanPublisher ? app.appPlanPublisher : plan ? plan.planPublisher : '';
     const lead = f.kind === 'storage' ? `${kind}: ${vendor}.`
         : f.kind === 'nva' ? `${kind}. The publisher ID is ${vendor}.`
-        : f.kind === 'managed-application' ? (plan ? `${kind}. The publisher ID is ${vendor}.` : `${kind}. The list does not give the vendor.`)
+        : f.kind === 'managed-application' ? (vendor ? `${kind}. The publisher ID is ${vendor}.` : `${kind}. The list does not give the vendor.`)
         : `${name}.`;
     const words = [];
     if (s) {
@@ -33,6 +37,13 @@ export function workloadFound(m) {
     if (f.pattern === '') words.push(`The list does not give ${f.facts.map((x) => `"${x.column}"`).join(', ')}.`);
     else words.push(...f.facts.map((x) => `"${x.column}" is ${x.value}.`));
     if (f.kind === 'managed-application') words.push('The resource group of this VM belongs to a managed application.');
+    // The managed application by name, and its Marketplace plan (none for an
+    // application that is not from the Marketplace).
+    if (app && app.appName) {
+        words.push(`Managed application: ${app.appName}.`);
+        words.push(app.appPlanPublisher ? `The Marketplace plan of the application is ${app.appPlanPublisher} / ${app.appPlanProduct || NO_VALUE}.`
+            : 'The list does not give a Marketplace plan for the application.');
+    }
     if (plan) words.push(`The Marketplace purchase plan is ${plan.planPublisher} / ${plan.planProduct || NO_VALUE}.`);
     const evidence = f.pattern === '' ? '' : words.join(' ');
     // On the page: the reason for "Type not checked" too.
@@ -47,7 +58,7 @@ export const FACT_GROUPS = [
     ['Disks and network', ['Data-disk count', 'Unmanaged disks', 'Ephemeral OS disk', 'Shared disk', 'NIC count', 'Accelerated NICs', 'Primary NIC accelerated']],
     ['Security', ['Security type', 'Azure Disk Encryption', 'System-assigned identity']],
     ['Workload', ['Resource type', 'Instances', 'Scale set', 'Managed by', 'Azure Virtual Desktop', 'AVD host pool type', 'SQL Server', 'SQL availability group', 'SAP']],
-    ['Image and Marketplace', ['Image publisher', 'Image offer', 'Image SKU', 'Image ID', 'Plan publisher', 'Plan product']],
+    ['Image and Marketplace', ['Image publisher', 'Image offer', 'Image SKU', 'Image ID', 'Plan publisher', 'Plan product', 'Managed application', 'Application plan publisher', 'Application plan product']],
     ['Location and IDs', ['VM name', 'Region', 'Zone', 'Availability set', 'Resource ID']],
 ];
 export const NOT_IN_LIST = 'Not in the list';
