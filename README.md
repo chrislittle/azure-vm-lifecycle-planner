@@ -176,8 +176,9 @@ work in that open tab. (It does not load again while you are offline.)
   [list of OS images that support NVMe](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-interface),
   read on 9 October 2026.
 
-Each Monday, a GitHub workflow reads these Microsoft pages and the Azure size list
-again, and compares them with the data in this repo. If a source changed, it opens a
+Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
+NVA policy and the Marketplace catalog again, and compares them with the data in this
+repo. If a source changed, it opens a
 GitHub issue. The data changes only in a pull request, after a person checks the
 change. The dates above are the dates of the data, not of the last weekly check.
 
