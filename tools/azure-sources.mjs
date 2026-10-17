@@ -26,8 +26,8 @@ export const NVA_POLICY = 'e87a87f5-e6dd-4919-be21-abb0a4ea4630';
 // Regions for the Marketplace catalog: offers can differ by region.
 const CATALOG_REGIONS = ['eastus', 'westeurope'];
 // Publisher names that can be a storage or backup vendor (to find a new one).
-// Short names count only at the start of the name, so that "dellpoc" or "silkroad" does
-// not match.
+// Short names count only at the start of the name, so that "contoso-dell" or
+// "contosomodell" does not match.
 const VENDOR_WORDS = /netapp|purestorage|rubrik|^silk|nasuni|^dell|veeam|commvault|cohesity|^weka|ctera|druva|hammerspace|hitachi|ibm.*storage|lightbits|panzura|softnas|buurst|zerto|qumulo|nutanix|veritas|arctera|^minio|datadobi|clumio|kasten|infinidat|^quantum|backup|storage/i;
 
 // One sign-in token from the Azure CLI (it has no special characters, so no shell

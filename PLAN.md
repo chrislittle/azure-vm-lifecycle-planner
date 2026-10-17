@@ -133,6 +133,18 @@ a contradiction in the NIC and data-disk reasons, three Microsoft links broken b
 word replacement (a test now checks every link), "Supported" used for a lifecycle
 stage, "Check:" used as an instruction, and mixed terms.
 
+Since 2026-10-17 part of that check runs with the tests (`tests/words.test.js`, in
+`node --test`): it collects every text that the page, the four files and the report
+show for the sample lists (and every reason, with made-up facts), and fails on a
+contraction, a semicolon, a sentence longer than 20 words (an instruction) or 25 words
+(other text), or a word from a short list that STE does not approve ("gate", "ensure",
+"utilize", "via", "e.g." and others). Microsoft's term "hard gate" is allowed in
+quotes, where the about file names it as Microsoft's term. The first run found three
+long sentences, now two sentences each: the advice for a node pool or scale set, the
+workloads that this tool cannot find, and the capacity growth restrictions with their
+19 series names. The check does not test -ing words, passive voice or meaning: a person
+still reads each changed line.
+
 The PowerShell tool speaks to the owner's team ("needs team review", "before this goes to
 a customer"). Every outcome, reason, caveat and file name gets customer words, agreed
 with the owner one by one. The answers behind the words do not change.
@@ -269,6 +281,13 @@ tests/              node --test
 - **No network:** a test that no file calls `fetch`, `XMLHttpRequest`, `WebSocket`,
   `sendBeacon`, or loads anything from another site, and that the CSP is present.
 - **Same answer twice:** each list run twice, results identical.
+- **Each rule has a test that fails when the rule breaks (2026-10-17).** 121 mutations,
+  one at a time (a condition flipped, a branch or a list entry removed, a limit
+  changed), each followed by `node --test`. For 68 of them no test failed; 67 now have
+  a test that fails. One mutation still passes: "a supported size whose target stage
+  is not known is not checked". Today every target series is in the lifecycle table,
+  so no list can reach that rule. The mutation script is not kept in the repo.
+- **The STE check** (`tests/words.test.js`): see "Words for a customer".
 - Node's built-in test runner: nothing to install.
 - Then the owner runs the query in Azure, pastes the result, and checks the Network tab.
 
