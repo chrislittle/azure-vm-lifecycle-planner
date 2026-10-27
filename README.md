@@ -47,6 +47,14 @@ For each VM:
   and the report, a retirement date also shows the time to it, or since it, in whole
   months from the day that you make the results, for example "15 November 2029 (in 36
   months)". The start of the capacity growth restrictions shows the same.
+- The generation of the VM, in the results table, the report and the CSV files:
+
+  | Value | What it means |
+  |---|---|
+  | 1 or 2 | The list gives Generation 1 or Generation 2. The CSV files show "Generation 1" or "Generation 2". |
+  | 2* | The list does not give the generation. The tool uses Generation 2 because of the image SKU or the security type (Trusted launch or a confidential VM). The notes of the VM give the reason. The CSV files show "Generation 2 (from the image SKU)" or "Generation 2 (from the security type)". |
+  | Not given | The list does not give a generation that the tool can read. The tool does not check the VM. |
+  | Not needed | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
 - A result group:
 
   | Group | What it means |
@@ -144,10 +152,10 @@ in Excel:
 
 | File | Contents |
 |---|---|
-| vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
+| vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
 | vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
-| vm-not-checked.csv | The items that the tool cannot check. |
+| vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 
 ## Privacy

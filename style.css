@@ -172,6 +172,8 @@ ol.ranked { margin: 0 0 6px; padding-left: 20px; }
 ol.ranked .size-name { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
 .caveats li.action::before { background: var(--check); }
 .caveats li.attention::before { background: var(--accent); }
+td.gen { white-space: nowrap; }
+td.gen-other { color: var(--muted); }
 td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; max-width: 150px; }
 .pill.no-move { background: var(--fine-bg); color: var(--fine); }

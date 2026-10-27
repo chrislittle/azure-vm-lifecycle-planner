@@ -20,7 +20,7 @@ import { COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE, sizeComparison, todo, whyL
 import { reportHtml } from '../js/report.js';
 import * as W from '../js/words.js';
 import * as F from '../js/files.js';
-import { FACT_GROUPS, NO_VALUE, NOT_IN_LIST, workloadFound } from '../js/evidence.js';
+import { FACT_GROUPS, GENERATION_GROUPS, GENERATION_HINT, NO_VALUE, NOT_IN_LIST, workloadFound } from '../js/evidence.js';
 
 const table = new SizeTable(sizes.sizes);
 const NOW = new Date('2026-10-09T12:00:00Z');
@@ -38,7 +38,9 @@ const EXTRA_LISTS = [
     + ',,V2,Linux,,,,,,\n'
     + 'contoso-x7,not a size,V2,Linux,,,,,,\n'
     + 'contoso-x8,Standard_D2s_v3,V2,Linux,,4,40,,,\n'
-    + 'contoso-x9,Standard_B2ms,V1,Windows,,1,0,,Microsoft.Batch,\n',
+    + 'contoso-x9,Standard_B2ms,V1,Windows,,1,0,,Microsoft.Batch,\n'
+    + 'contoso-x10,Standard_D4s_v3,3,Linux,TrustedLaunch,1,0,,,\n'
+    + 'contoso-x11,Standard_D4s_v3,3,Linux,Standard,1,0,22_04-lts-gen2,,\n',
     'VM name,Machine name,Current size,Generation\ncontoso-d1,contoso-d2,Standard_D2s_v3,V2\n',
     '',
 ];
@@ -60,7 +62,7 @@ function collect() {
         if (list.stops.length) continue;
         const p = plan(list.rows.map((r, i) => toMachine(r, list.map, i + 2, table, NOW)), table, NOW);
         for (const r of F.summaryRows(p)) {
-            add(`${name}: vm-summary.csv`, ['Current stage', 'Move needed', 'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Needs review', 'Evidence'].map((c) => r[c]));
+            add(`${name}: vm-summary.csv`, ['Generation', 'Current stage', 'Move needed', 'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Needs review', 'Evidence'].map((c) => r[c]));
             // Lists joined with "; " or ", ": each item is one text.
             for (const c of ['Before the move', 'Good to know', 'Notes']) add(`${name}: vm-summary.csv ${c}`, r[c].split('; '));
             add(`${name}: vm-summary.csv To check`, r['To check'].split(', '));
@@ -70,7 +72,7 @@ function collect() {
             add(`${name}: vm-target-sizes.csv`, F.TARGET_COLUMNS.filter((c) => !skip.has(c)).map((c) => r[c]));
             add(`${name}: vm-target-sizes.csv Ranked sizes`, String(r['Ranked sizes'] ?? '').split('; ').map((x) => x.replace(/^\d+\. \S+ \((.*)\)$/, '$1')));
         }
-        for (const r of F.notCheckedRows(p, table, NOW)) add(`${name}: vm-not-checked.csv`, r['What'], r['Why']);
+        for (const r of F.notCheckedRows(p, table, NOW)) add(`${name}: vm-not-checked.csv`, r['Generation'], r['What'], r['Why']);
         for (const m of p.machines) {
             const g = F.groupOf(m);
             const t = todo(m, g);
@@ -109,7 +111,7 @@ function collect() {
         const w = workloadFound({ extra, read: { name: 'contoso-x' } });
         add(`evidence.js: ${w.name}`, w.lead, w.shown, w.evidence, w.kind ? `${w.kind}. ${w.evidence}` : '');
     }
-    add('evidence.js', NOT_IN_LIST, NO_VALUE, FACT_GROUPS.map(([group]) => group));
+    add('evidence.js', NOT_IN_LIST, NO_VALUE, FACT_GROUPS.map(([group]) => group), GENERATION_GROUPS, GENERATION_HINT);
     add('details.js', COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE);
     // Each note of the size table, with made-up facts: a VM with more NICs, data disks and an older generation than a small new size.
     {

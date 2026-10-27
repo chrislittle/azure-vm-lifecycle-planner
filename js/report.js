@@ -8,7 +8,7 @@ import * as F from './files.js?v=0.9.0-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
 import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
 import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.9.0-beta';
-import { appliancesByVendor, workloadFound } from './evidence.js?v=0.9.0-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationShown, workloadFound } from './evidence.js?v=0.9.0-beta';
 import version from './version.js?v=0.9.0-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
@@ -26,6 +26,16 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const count = (g) => p.machines.filter((m) => F.groupOf(m) === g).length;
     const ORDER = ['first', 'ready', 'pool', 'gate', 'nopath', 'unchecked', 'modern'];
     const TONE = { modern: 'ok', ready: 'ok', first: 'act', pool: 'pool', gate: 'act', nopath: 'no', unchecked: 'muted' };
+
+    // The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
+    // Not given, Not needed. The hint says what 2* and the words mean: it shows under
+    // a table only when a VM in it has one of them.
+    const gen = new Map(p.machines.map((m) => [m, generationShown(m)]));
+    const genHint = (ms) => (ms.some((m) => !/^[12]$/.test(gen.get(m).value)) ? `<p class="muted">${esc(GENERATION_HINT)}</p>` : '');
+    // One count for each value, always in the same order; a value with no VM is left out.
+    const genCount = () => { const c = new Map(); for (const g of gen.values()) c.set(g.group, (c.get(g.group) || 0) + 1); return GENERATION_GROUPS.filter((k) => c.has(k)).map((k) => [k, c.get(k)]); };
+    // In a VM card: the value, and for 2* and "Not needed" the note that says why.
+    const genLine = (m) => { const g = gen.get(m); return `<p class="meta">Generation: ${esc(g.value)}${g.note ? ` <span class="muted">${g.found ? '* ' : ''}${esc(g.note)}</span>` : ''}</p>`; };
 
     // The workload type and the facts behind it (evidence.js).
     function workloadHtml(m) {
@@ -74,6 +84,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
         return `<section class="vm">
       <header><h3>${esc(m.read.name)}</h3><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></header>
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
+      ${genLine(m)}
       <div class="todo"><b>What to do:</b> ${esc(t.main)} ${t.more.map(esc).join(' ')}</div>
       ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
       ${workloadHtml(m)}
@@ -85,12 +96,15 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     </section>`;
     }
 
-    const actionTables = ORDER.filter((g) => g !== 'modern' && count(g)).map((g) => `
+    const actionTables = ORDER.filter((g) => g !== 'modern' && count(g)).map((g) => {
+        const ms = p.machines.filter((m) => F.groupOf(m) === g);
+        return `
     <h3 class="grp"><span class="tag ${TONE[g]}">${count(g)}</span> ${esc(GROUPS[g].short)}</h3>
     <p class="muted">${esc(GROUPS[g].long)}</p>
-    <table><thead><tr><th scope="col">VM</th><th scope="col">Where</th><th scope="col">Size</th><th scope="col">Lifecycle stage</th><th scope="col">Target</th><th scope="col">What to do</th></tr></thead><tbody>
-    ${p.machines.filter((m) => F.groupOf(m) === g).map((m) => `<tr><td><a href="#vm-${m.read.row}">${esc(m.read.name)}</a></td><td class="muted">${esc(where(m))}</td><td>${esc(short(m.read.size || m.read.sizeAsWritten))}</td><td>${stageCell(m)}</td><td>${esc(target(m, g))}</td><td>${esc(todo(m, g).main)}</td></tr>`).join('')}
-    </tbody></table>`).join('');
+    <table><thead><tr><th scope="col">VM</th><th scope="col">Where</th><th scope="col">Size</th><th scope="col">Generation</th><th scope="col">Lifecycle stage</th><th scope="col">Target</th><th scope="col">What to do</th></tr></thead><tbody>
+    ${ms.map((m) => `<tr><td><a href="#vm-${m.read.row}">${esc(m.read.name)}</a></td><td class="muted">${esc(where(m))}</td><td>${esc(short(m.read.size || m.read.sizeAsWritten))}</td><td>${esc(gen.get(m).value)}</td><td>${stageCell(m)}</td><td>${esc(target(m, g))}</td><td>${esc(todo(m, g).main)}</td></tr>`).join('')}
+    </tbody></table>${genHint(ms)}`;
+    }).join('');
 
     const modern = p.machines.filter((m) => F.groupOf(m) === 'modern');
     return `<!doctype html>
@@ -112,7 +126,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     .tag { display: inline-block; padding: 0 8px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
     .tag.ok { background: var(--ok-bg); color: var(--ok); } .tag.act { background: var(--act-bg); color: var(--act); } .tag.no { background: var(--no-bg); color: var(--no); }
     .tag.pool { background: var(--pool-bg); color: var(--pool); } .tag.muted { background: var(--bg); color: var(--muted); }
-    .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .sums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 4px 0 8px; }
     th, td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--line); }
     thead th { background: var(--bg); font-size: 12px; }
@@ -126,7 +140,8 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     table.sizes th:first-child { width: 80px; }
     table.compare caption { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 0; } table.compare tbody th { color: var(--muted); white-space: nowrap; } .scroll { overflow-x: auto; } .mono { font: 12px ui-monospace, Consolas, monospace; } b.less { color: var(--act); font-size: 12px; }
     .rid { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
-    @media (max-width: 700px) { .three { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .sums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 700px) { .sums { grid-template-columns: 1fr; } }
     @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
     </style></head><body><main>
     <div class="cover">
@@ -137,10 +152,11 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
 
     <h2>1. Summary</h2>
     <div class="tiles">${ORDER.map((g) => `<div class="tile"><b>${count(g)}</b><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></div>`).join('')}</div>
-    <div class="three">
+    <div class="sums">
       <div><h3 class="label">Workload type</h3><table><thead><tr><th scope="col">Workload type</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => PATTERNS[m.pattern || ''].name).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
       <div><h3 class="label">Region</h3><table><thead><tr><th scope="col">Region</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.region).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
       <div><h3 class="label">Resource group</h3><table><thead><tr><th scope="col">Resource group</th><th scope="col">VMs</th></tr></thead><tbody>${by((m) => m.read.resourceGroup).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table></div>
+      <div><h3 class="label">Generation</h3><table><thead><tr><th scope="col">Generation</th><th scope="col">VMs</th></tr></thead><tbody>${genCount().map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</tbody></table>${genHint(p.machines)}</div>
     </div>
 
     ${appliancesHtml}

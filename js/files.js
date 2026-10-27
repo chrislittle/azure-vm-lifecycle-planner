@@ -14,7 +14,7 @@ import { capacityRestricted } from './planner.js?v=0.9.0-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
 import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.9.0-beta';
 import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.0-beta';
-import { workloadFound } from './evidence.js?v=0.9.0-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.0-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -53,7 +53,9 @@ function base(m) {
         'Resource group': r.resourceGroup || '',
         'Resource ID': r.resourceId || '',
         'Current size': r.size || r.sizeAsWritten,
-        'Generation': r.generation ? r.generation.replace('V', 'Generation ') : r.generationAsWritten,
+        // Generation 1 or 2 from the list; Generation 2 (from the image SKU or the
+        // security type) when this tool found it; Not given; Not needed (evidence.js).
+        'Generation': generationShown(m).csv,
         'OS': r.os || 'Not checked',
         'Security type': SECURITY[r.securityType] || 'Not checked',
     };
@@ -214,7 +216,7 @@ export function targetRows(p, table, now = new Date()) {
     return out;
 }
 
-export const NOT_CHECKED_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Series', 'What', 'Why', 'Resource ID'];
+export const NOT_CHECKED_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'Series', 'What', 'Why', 'Resource ID'];
 
 export function notCheckedRows(p, table, now = new Date()) {
     // By row, not by name: two VMs can have the same name.
@@ -227,7 +229,7 @@ export function notCheckedRows(p, table, now = new Date()) {
             const problem = m && m.problems.find((pr) => pr.why === code);
             return reasonFor(code, { vm, series: row ? row.series : '', table, now, option: row ? row.option : null, stage: m && m.stage, problem });
         }).join(' ');
-        return { 'VM name': r.machine, 'Region': r.region, 'Subscription ID': m ? m.read.subscriptionId : '', 'Resource group': m ? m.read.resourceGroup : '', 'Resource ID': m ? m.read.resourceId : '', 'Current size': r.size, 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
+        return { 'VM name': r.machine, 'Region': r.region, 'Subscription ID': m ? m.read.subscriptionId : '', 'Resource group': m ? m.read.resourceGroup : '', 'Resource ID': m ? m.read.resourceId : '', 'Current size': r.size, 'Generation': m ? generationShown(m).csv : '', 'Series': r.series === 'Gen1 to Gen2 route' ? 'Generation 1 to 2' : r.series, 'What': r.what.replace(/''/g, '(blank)'), 'Why': why };
     });
 }
 
