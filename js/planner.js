@@ -148,27 +148,39 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     const genText = cell('Generation');
     let gen = readGeneration(genText);
     let genNotNeeded = false;
+    // Where the generation comes from, so that the page, the report and the files
+    // never show a value that this tool found as a value that the list gave
+    // (evidence.js, generationShown): 'list', 'security-type', 'image-sku',
+    // 'not-needed', or '' when nothing gives it. genNote: the note that says why.
+    let genFrom = gen ? 'list' : '';
+    let genNote = '';
+    // An empty cell is "empty"; a value that this tool cannot read is not.
+    const genStart = genText ? `This tool cannot read the generation '${genText}'.` : 'The generation is empty.';
     // A Generation 2 marketplace image says so in its SKU (for example 22_04-lts-gen2).
     const gen2Image = /(^|[-_])(gen2|g2)($|[-_])|gensecond/i.test(extra.imageSku || '');
     if (!gen && needsGen2) {
         gen = 'V2';
-        notes.push(`The generation is empty. ${securityWords[0].toUpperCase() + securityWords.slice(1)} needs Generation 2, so this tool uses Generation 2.`);
+        genFrom = 'security-type';
+        genNote = `${genStart} ${securityWords[0].toUpperCase() + securityWords.slice(1)} needs Generation 2, so this tool uses Generation 2.`;
     } else if (!gen && gen2Image) {
         gen = 'V2';
-        notes.push(`The generation is empty. The image SKU '${extra.imageSku}' is a Generation 2 image, so this tool uses Generation 2.`);
+        genFrom = 'image-sku';
+        genNote = `${genStart} The image SKU '${extra.imageSku}' is a Generation 2 image, so this tool uses Generation 2.`;
     } else if (!gen && /^(aks|aro|databricks)$/i.test(extra.managedBy || '') && (pattern === 'A' || pattern === 'C')) {
         // A known service (AKS, ARO, Databricks) makes the new nodes from its own image:
         // the generation of the current nodes does not change the move (owner,
         // 2026-10-10). The sizes are for Generation 2, as on every v6 and v7 size.
         gen = 'V2';
         genNotNeeded = true;
-        notes.push('The generation is empty. The service makes the new nodes from its own image, so this tool does not need the generation.');
+        genFrom = 'not-needed';
+        genNote = `${genStart} The service makes the new nodes from its own image, so this tool does not need the generation.`;
     } else if (!gen) {
         // Azure Resource Graph does not give the generation of a scale set.
         problems.push({ what: `Generation '${genText}'`, why: extra.resourceType === 'Scale set' ? 'scale-set-generation-missing' : 'generation-missing', value: genText });
     } else if (gen === 'V1' && needsGen2) {
         problems.push({ what: `Generation '${genText}' with security type '${securityText}'`, why: 'generation-conflicts-with-security-type', securityWords });
     }
+    if (genNote) notes.push(genNote);
 
     const osText = cell('OS');
     const os = readOs(osText);
@@ -181,7 +193,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
 
     const read = {
         row: rowNumber, name, region, regionAsWritten: cell('Region'), sizeAsWritten: sizeText, size: size.size,
-        generation: genNotNeeded ? null : gen, generationAsWritten: genText, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
+        generation: genNotNeeded ? null : gen, generationAsWritten: genText, generationFrom: genFrom, generationNote: genNote, securityType: security, os, nicCount: nic.value, dataDiskCount: disks.value,
         resourceType: extra.resourceType, instances: extra.instances,
         ...readResourceId(cell('Resource ID')),
     };

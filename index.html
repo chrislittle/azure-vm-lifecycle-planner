@@ -91,7 +91,7 @@
     <p class="hint open-hint">Select a VM to see what to do, the steps before the move, and the sizes.</p>
     <div class="table-wrap results-wrap">
       <table id="table">
-        <thead><tr><th scope="col">VM</th><th scope="col">Current size</th><th scope="col">Lifecycle stage</th><th scope="col">Result</th><th scope="col">v5</th><th scope="col">v6</th><th scope="col">v7</th><th scope="col">Burstable</th></tr></thead>
+        <thead><tr><th scope="col">VM</th><th scope="col">Current size</th><th scope="col">Generation</th><th scope="col">Lifecycle stage</th><th scope="col">Result</th><th scope="col">v5</th><th scope="col">v6</th><th scope="col">v7</th><th scope="col">Burstable</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -102,6 +102,7 @@
       <li>A move is a resize, a rebuild or a new VM in parallel. In a resize, Azure changes the size of the same VM. In a rebuild, you make a new VM with the same disks. For v6 and v7, you deploy a new VM in parallel and move the workload to it. A new VM gets a new system-assigned identity, and a rebuild removes Azure Disk Encryption.</li>
       <li>This tool does not check if a size is available in your region.</li>
       <li>The workload type under each VM name tells you how to move the VM. The query gives each scale set and AKS node pool as one row.</li>
+      <li id="generation-hint"></li>
       <li id="not-found"></li>
     </ul>
   </section>

@@ -51,6 +51,28 @@ export function workloadFound(m) {
     return { pattern: f.pattern, name, kind, vendor, lead, evidence, shown };
 }
 
+// The generation of a VM, one source for the page, the report and the three CSV
+// files: { value, group, csv, note, found }. value: what the page and the report
+// show: '1' or '2' from the list, '2*' when this tool found Generation 2 (from the
+// image SKU or the security type), 'Not given', or 'Not needed' (a service makes the
+// new nodes). group: the row of the count in the report. csv: the CSV value, which
+// says where a value that this tool found comes from. note: the note that says why
+// (planner.js), for '2*' and 'Not needed'. A value that this tool found never
+// looks like a value that the list gave.
+export const GENERATION_GROUPS = ['Generation 1', 'Generation 2', 'Generation 2*', 'Not given', 'Not needed'];
+export const GENERATION_HINT = 'In the Generation column, 2* means that the list does not give the generation. This tool uses Generation 2 because of the image SKU or the security type. The notes of the VM give the reason. "Not given" means that the list does not give a generation that this tool can read. "Not needed" means that the service makes the new nodes from its own image.';
+export function generationShown(m) {
+    const r = m.read || {};
+    const found = (from) => ({ value: '2*', group: 'Generation 2*', csv: `Generation 2 (from the ${from})`, note: r.generationNote || '', found: true });
+    switch (r.generationFrom) {
+        case 'list': { const n = String(r.generation).replace(/^V/, ''); return { value: n, group: `Generation ${n}`, csv: `Generation ${n}`, note: '', found: false }; }
+        case 'image-sku': return found('image SKU');
+        case 'security-type': return found('security type');
+        case 'not-needed': return { value: 'Not needed', group: 'Not needed', csv: 'Not needed', note: r.generationNote || '', found: false };
+        default: return { value: 'Not given', group: 'Not given', csv: 'Not given', note: '', found: false };
+    }
+}
+
 // The facts that the answer reads, in groups. "Disk controller" is not here: the
 // tool takes the disk controller from the size, not from the list.
 export const FACT_GROUPS = [

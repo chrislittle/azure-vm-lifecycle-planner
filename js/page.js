@@ -13,7 +13,7 @@ import { COLUMNS, readList } from './input.js?v=0.9.0-beta';
 import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.0-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
 import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
-import { factsRead, whereWords, workloadFound } from './evidence.js?v=0.9.0-beta';
+import { GENERATION_HINT, factsRead, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.0-beta';
 import { REPORT_NAME, reportHtml } from './report.js?v=0.9.0-beta';
 import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.9.0-beta';
 import * as F from './files.js?v=0.9.0-beta';
@@ -216,6 +216,7 @@ $('theme').addEventListener('change', (e) => {
 });
 $('pattern-filter').addEventListener('change', (e) => { patternFilter = e.target.value; renderTable(); });
 $('not-found').textContent = NOT_FOUND;
+$('generation-hint').textContent = GENERATION_HINT;
 $('find').addEventListener('input', () => renderTable());
 $('more').addEventListener('click', () => addRows());
 
@@ -264,6 +265,7 @@ function machineRow(m) {
             same.length > 1 ? el('span', { class: 'sub where', text: whereWords(m, same) }) : null,
             el('span', { class: 'sub', text: vmSub(m) })),
         el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
+        generationCell(m),
         stageCell(m),
         el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
         answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
@@ -298,6 +300,14 @@ function vmSub(m) {
     return `${set}${m.pattern ? PATTERNS[m.pattern].name : PATTERNS[''].name}`;
 }
 
+// The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
+// "Not given" or "Not needed". The hint under the table says what 2* means; the
+// cell also gives the note that says why, as its title.
+function generationCell(m) {
+    const g = generationShown(m);
+    return el('td', { class: `gen${/^[12]$/.test(g.value) ? '' : ' gen-other'}`, title: g.note || null, text: g.value });
+}
+
 // The stage, short: the name, the date, and a tag when Microsoft restricts capacity growth.
 function stageCell(m) {
     if (!m.stage) return el('td', {});
@@ -311,7 +321,7 @@ function stageCell(m) {
 // last the sizes, which are long. Each note shows once, with its series.
 function details(m) {
     const { now } = current;
-    const td = el('td', { colspan: '8' });
+    const td = el('td', { colspan: '9' });
     const box = el('div', { class: 'd' });
     td.append(box);
     const g = F.groupOf(m);

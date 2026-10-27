@@ -1052,6 +1052,41 @@ words, a new table and three new query columns are added.
   after new tests: the current size never gets a note, an equal value is not less, the
   capacity line in the report).
 
+## After 0.9.0-beta (2026-10-27): the generation everywhere
+
+Owner, 2026-10-27: show the generation of each VM clearly, everywhere. Before, only
+"Facts from your list" (page) and the Generation column of vm-summary.csv and
+vm-target-sizes.csv showed it, and those columns showed the cell as written when the
+tool found Generation 2 itself, or when a service did not need it.
+
+- **One source** (`generationShown` in `js/evidence.js`) for the page, the report and
+  the three CSV files. `js/planner.js` keeps where the generation came from
+  (`generationFrom`: the list, the security type, the image SKU, not needed, or
+  nothing) and the note that says why (`generationNote`, still in the notes).
+- **The values.** Page and report: "1" or "2" from the list; "2*" when the list does
+  not give it and the tool uses Generation 2 because of the image SKU or the security
+  type (Trusted launch, confidential VM); "Not given" (blank or not readable: the VM
+  stays "Not checked", with its reason); "Not needed" (AKS, ARO, Azure Databricks). The
+  CSV files: "Generation 1", "Generation 2", "Generation 2 (from the image SKU)",
+  "Generation 2 (from the security type)", "Not given", "Not needed". No new column,
+  so the other columns keep their place. A value that the tool found never looks like
+  a value that the list gave.
+- **Where.** The results table: a Generation column after "Current size", and a hint
+  under the table that says what 2*, "Not given" and "Not needed" mean; the cell's
+  title gives the note. The report: a Generation column after "Size" in each table of
+  section 2, a "Generation" count in the summary (always in the order Generation 1,
+  Generation 2, Generation 2*, Not given, Not needed; a value with no VM is left out),
+  and a line under the name in each VM card, with the note for 2* and "Not needed". The
+  same hint shows under a table that has one of these values. vm-not-checked.csv: a
+  Generation column after "Current size".
+- **A note fixed:** a generation that the tool cannot read (for example "3") with
+  Trusted launch, or with a Generation 2 image SKU, said "The generation is empty." It
+  now says "This tool cannot read the generation '3'."
+- Tests: `tests/generation.test.js` (each rule on each surface, the order of the count,
+  the sample). The STE check also reads the Generation column, the hint and the new
+  notes. 36 mutation checks, all caught (one only after a new test: the hint under the
+  summary count).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen
