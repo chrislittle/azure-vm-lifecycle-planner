@@ -54,7 +54,7 @@ For each VM:
   | 1 or 2 | The list gives Generation 1 or Generation 2. The CSV files show "Generation 1" or "Generation 2". |
   | 2* | The list does not give the generation. The tool uses Generation 2 because of the image SKU or the security type (Trusted launch or a confidential VM). The notes of the VM give the reason. The CSV files show "Generation 2 (from the image SKU)" or "Generation 2 (from the security type)". |
   | Not given | The list does not give a generation that the tool can read. The tool does not check the VM. |
-  | Not needed | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
+  | Set by the service | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
 - A result group:
 
   | Group | What it means |

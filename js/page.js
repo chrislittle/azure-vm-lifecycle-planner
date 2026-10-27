@@ -13,7 +13,7 @@ import { COLUMNS, readList } from './input.js?v=0.9.0-beta';
 import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.0-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
 import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
-import { GENERATION_HINT, factsRead, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.0-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.0-beta';
 import { REPORT_NAME, reportHtml } from './report.js?v=0.9.0-beta';
 import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.9.0-beta';
 import * as F from './files.js?v=0.9.0-beta';
@@ -179,6 +179,11 @@ function indexOf(p) {
 function showResults() {
     const p = current.plan;
     $('results-section').hidden = false;
+    // The hint under the table says what 2*, "Not given" and "Set by the service"
+    // mean. It shows only when a VM in this list has one of them (evidence.js).
+    const hint = generationHint(p.machines);
+    $('generation-hint').textContent = hint;
+    $('generation-hint').hidden = !hint;
 
     // Counts, which also filter.
     const n = {};
@@ -216,7 +221,6 @@ $('theme').addEventListener('change', (e) => {
 });
 $('pattern-filter').addEventListener('change', (e) => { patternFilter = e.target.value; renderTable(); });
 $('not-found').textContent = NOT_FOUND;
-$('generation-hint').textContent = GENERATION_HINT;
 $('find').addEventListener('input', () => renderTable());
 $('more').addEventListener('click', () => addRows());
 
@@ -301,7 +305,7 @@ function vmSub(m) {
 }
 
 // The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
-// "Not given" or "Not needed". The hint under the table says what 2* means; the
+// "Not given" or "Set by the service". The hint under the table says what 2* means; the
 // cell also gives the note that says why, as its title.
 function generationCell(m) {
     const g = generationShown(m);

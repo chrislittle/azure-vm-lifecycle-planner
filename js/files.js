@@ -54,7 +54,7 @@ function base(m) {
         'Resource ID': r.resourceId || '',
         'Current size': r.size || r.sizeAsWritten,
         // Generation 1 or 2 from the list; Generation 2 (from the image SKU or the
-        // security type) when this tool found it; Not given; Not needed (evidence.js).
+        // security type) when this tool found it; Not given; Set by the service (evidence.js).
         'Generation': generationShown(m).csv,
         'OS': r.os || 'Not checked',
         'Security type': SECURITY[r.securityType] || 'Not checked',
