@@ -1052,7 +1052,7 @@ words, a new table and three new query columns are added.
   after new tests: the current size never gets a note, an equal value is not less, the
   capacity line in the report).
 
-## After 0.9.0-beta (2026-10-27): the generation everywhere
+## 0.9.1-beta (2026-10-27): the generation everywhere
 
 Owner, 2026-10-27: show the generation of each VM clearly, everywhere. Before, only
 "Facts from your list" (page) and the Generation column of vm-summary.csv and
