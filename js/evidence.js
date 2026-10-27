@@ -2,8 +2,8 @@
 // an appliance, the facts behind a workload type, and every fact as the list gives
 // it. One source for the page, the files and the report.
 
-import { patternFound } from './patterns.js?v=0.9.0-beta';
-import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.9.0-beta';
+import { patternFound } from './patterns.js?v=0.9.1-beta';
+import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.9.1-beta';
 
 // The workload type of a VM and why: { pattern, name, kind, vendor, lead, evidence }.
 // kind: the kind of appliance in words, or ''. vendor: the vendor of a storage or
@@ -54,13 +54,19 @@ export function workloadFound(m) {
 // The generation of a VM, one source for the page, the report and the three CSV
 // files: { value, group, csv, note, found }. value: what the page and the report
 // show: '1' or '2' from the list, '2*' when this tool found Generation 2 (from the
-// image SKU or the security type), 'Not given', or 'Not needed' (a service makes the
-// new nodes). group: the row of the count in the report. csv: the CSV value, which
-// says where a value that this tool found comes from. note: the note that says why
-// (planner.js), for '2*' and 'Not needed'. A value that this tool found never
-// looks like a value that the list gave.
-export const GENERATION_GROUPS = ['Generation 1', 'Generation 2', 'Generation 2*', 'Not given', 'Not needed'];
-export const GENERATION_HINT = 'In the Generation column, 2* means that the list does not give the generation. This tool uses Generation 2 because of the image SKU or the security type. The notes of the VM give the reason. "Not given" means that the list does not give a generation that this tool can read. "Not needed" means that the service makes the new nodes from its own image.';
+// image SKU or the security type), 'Not given', or 'Set by the service' (a service
+// makes the new nodes; not "Not needed", which the 'Series result' column uses with
+// another meaning). group: the row of the count in the report. csv: the CSV value,
+// which says where a value that this tool found comes from. note: the note that
+// says why (planner.js), for '2*' and 'Set by the service'. A value that this tool
+// found never looks like a value that the list gave.
+export const GENERATION_GROUPS = ['Generation 1', 'Generation 2', 'Generation 2*', 'Not given', 'Set by the service'];
+export const GENERATION_HINT = 'In the Generation column, 2* means that the list does not give the generation. This tool uses Generation 2 because of the image SKU or the security type. The notes of the VM give the reason. "Not given" means that the list does not give a generation that this tool can read. "Set by the service" means that the service makes the new nodes from its own image.';
+// The hint, only when a VM in the results shows 2*, "Not given" or "Set by the
+// service": otherwise ''. The page and the report use it.
+export function generationHint(machines) {
+    return machines.some((m) => !/^[12]$/.test(generationShown(m).value)) ? GENERATION_HINT : '';
+}
 export function generationShown(m) {
     const r = m.read || {};
     const found = (from) => ({ value: '2*', group: 'Generation 2*', csv: `Generation 2 (from the ${from})`, note: r.generationNote || '', found: true });
@@ -68,7 +74,7 @@ export function generationShown(m) {
         case 'list': { const n = String(r.generation).replace(/^V/, ''); return { value: n, group: `Generation ${n}`, csv: `Generation ${n}`, note: '', found: false }; }
         case 'image-sku': return found('image SKU');
         case 'security-type': return found('security type');
-        case 'not-needed': return { value: 'Not needed', group: 'Not needed', csv: 'Not needed', note: r.generationNote || '', found: false };
+        case 'not-needed': return { value: 'Set by the service', group: 'Set by the service', csv: 'Set by the service', note: r.generationNote || '', found: false };
         default: return { value: 'Not given', group: 'Not given', csv: 'Not given', note: '', found: false };
     }
 }

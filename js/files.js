@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.0-beta';
-import families from '../data/families.js?v=0.9.0-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.0-beta';
-import capacity from '../data/capacity.js?v=0.9.0-beta';
-import nvme from '../data/nvme-images.js?v=0.9.0-beta';
-import { capacityRestricted } from './planner.js?v=0.9.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.9.0-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.0-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.0-beta';
+import sizes from '../data/sizes.js?v=0.9.1-beta';
+import families from '../data/families.js?v=0.9.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.1-beta';
+import capacity from '../data/capacity.js?v=0.9.1-beta';
+import nvme from '../data/nvme-images.js?v=0.9.1-beta';
+import { capacityRestricted } from './planner.js?v=0.9.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.9.1-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.1-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.1-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -54,7 +54,7 @@ function base(m) {
         'Resource ID': r.resourceId || '',
         'Current size': r.size || r.sizeAsWritten,
         // Generation 1 or 2 from the list; Generation 2 (from the image SKU or the
-        // security type) when this tool found it; Not given; Not needed (evidence.js).
+        // security type) when this tool found it; Not given; Set by the service (evidence.js).
         'Generation': generationShown(m).csv,
         'OS': r.os || 'Not checked',
         'Security type': SECURITY[r.securityType] || 'Not checked',

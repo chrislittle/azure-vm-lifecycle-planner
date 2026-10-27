@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.0-beta';
-import { capacityRestricted } from './planner.js?v=0.9.0-beta';
-import * as F from './files.js?v=0.9.0-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.0-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.0-beta';
-import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.9.0-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationShown, workloadFound } from './evidence.js?v=0.9.0-beta';
-import version from './version.js?v=0.9.0-beta';
+import capacity from '../data/capacity.js?v=0.9.1-beta';
+import { capacityRestricted } from './planner.js?v=0.9.1-beta';
+import * as F from './files.js?v=0.9.1-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.1-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.9.1-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.1-beta';
+import version from './version.js?v=0.9.1-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -28,13 +28,13 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     const TONE = { modern: 'ok', ready: 'ok', first: 'act', pool: 'pool', gate: 'act', nopath: 'no', unchecked: 'muted' };
 
     // The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
-    // Not given, Not needed. The hint says what 2* and the words mean: it shows under
+    // Not given, Set by the service. The hint says what 2* and the words mean: it shows under
     // a table only when a VM in it has one of them.
     const gen = new Map(p.machines.map((m) => [m, generationShown(m)]));
-    const genHint = (ms) => (ms.some((m) => !/^[12]$/.test(gen.get(m).value)) ? `<p class="muted">${esc(GENERATION_HINT)}</p>` : '');
+    const genHint = (ms) => (generationHint(ms) ? `<p class="muted">${esc(GENERATION_HINT)}</p>` : '');
     // One count for each value, always in the same order; a value with no VM is left out.
     const genCount = () => { const c = new Map(); for (const g of gen.values()) c.set(g.group, (c.get(g.group) || 0) + 1); return GENERATION_GROUPS.filter((k) => c.has(k)).map((k) => [k, c.get(k)]); };
-    // In a VM card: the value, and for 2* and "Not needed" the note that says why.
+    // In a VM card: the value, and for 2* and "Set by the service" the note that says why.
     const genLine = (m) => { const g = gen.get(m); return `<p class="meta">Generation: ${esc(g.value)}${g.note ? ` <span class="muted">${g.found ? '* ' : ''}${esc(g.note)}</span>` : ''}</p>`; };
 
     // The workload type and the facts behind it (evidence.js).
