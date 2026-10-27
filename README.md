@@ -155,7 +155,7 @@ in Excel:
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
 | vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
 | vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
-| vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. |
+| vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 
 ## Privacy

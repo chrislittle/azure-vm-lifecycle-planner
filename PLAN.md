@@ -1068,8 +1068,9 @@ tool found Generation 2 itself, or when a service did not need it.
   type (Trusted launch, confidential VM); "Not given" (blank or not readable: the VM
   stays "Not checked", with its reason); "Not needed" (AKS, ARO, Azure Databricks). The
   CSV files: "Generation 1", "Generation 2", "Generation 2 (from the image SKU)",
-  "Generation 2 (from the security type)", "Not given", "Not needed". No new column,
-  so the other columns keep their place. A value that the tool found never looks like
+  "Generation 2 (from the security type)", "Not given", "Not needed". vm-summary.csv and
+  vm-target-sizes.csv keep their columns. vm-not-checked.csv gets a new Generation
+  column after "Current size", so its later columns move one place right. A value that the tool found never looks like
   a value that the list gave.
 - **Where.** The results table: a Generation column after "Current size", and a hint
   under the table that says what 2*, "Not given" and "Not needed" mean; the cell's
