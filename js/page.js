@@ -376,7 +376,7 @@ function details(m) {
             if (o.supported && m.moveRequired === 'Yes' && !pool) {
                 // With the preview feature VMTempDiskResizePreview, the link to the Microsoft page that names it.
                 const preview = tempDiskPreview(m, r);
-                card.append(el('p', { class: 'hint' }, moveWords(r.series, o.rebuild, Boolean(m.vm.os), preview),
+                card.append(el('p', { class: 'hint' }, moveWords(r.series, o.rebuild, Boolean(m.vm.os), o.tempDiskChange),
                     preview ? ' ' : null, preview ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
             }
             if (o.supported) {

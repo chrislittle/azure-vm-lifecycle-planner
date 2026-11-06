@@ -77,7 +77,7 @@ function collect() {
             const g = F.groupOf(m);
             const t = todo(m, g);
             add(`${name}: what to do`, t.main, t.more, whyLines(m, g, table, NOW), m.notes);
-            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), W.tempDiskPreview(m, r)), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
+            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
             // The current size beside each new size: the labels and each note.
             const c = sizeComparison(m, table);
             if (c) add(`${name}: size table`, c.rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
@@ -121,7 +121,7 @@ function collect() {
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
         W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),
-        ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].flatMap((os) => [false, true].map((pv) => W.moveWords(s, rb, os, pv))))), W.PREVIEW_LINK,
+        ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].flatMap((os) => [true, false, null].map((ch) => W.moveWords(s, rb, os, ch))))), W.PREVIEW_WORDS, W.PREVIEW_LINK,
         ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01', '2025-09-30'].flatMap((d) => [null, capacity].flatMap((c) => [null, NOW].map((now) => W.stageWords({ stage, retiresUtc: d }, c, now))))),
         W.capacityWords(capacity, NOW));
     // The page: index.html, and the texts in js/page.js.

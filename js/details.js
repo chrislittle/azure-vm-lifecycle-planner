@@ -108,7 +108,8 @@ export function todo(m, g) {
             : s.actions.length ? 'Do the steps in "Before the move" first.' : 'Check the facts in "To check" first.');
     }
     // A resize on Linux can be a rebuild on Windows (the temporary disk changes type).
-    if (!m.vm.os && !o.rebuild && r.series !== 'v6' && r.series !== 'v7') more.push('The list does not give the OS. For a Windows VM, a rebuild can be necessary.');
+    // Not when the size table shows that the temporary disk keeps its type (0.9.2-beta).
+    if (!m.vm.os && !o.rebuild && o.tempDiskChange !== false && r.series !== 'v6' && r.series !== 'v7') more.push('The list does not give the OS. For a Windows VM, a rebuild can be necessary.');
     if (m.pattern === 'F') more.push(PATTERNS.F.advice);
     const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
     if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);

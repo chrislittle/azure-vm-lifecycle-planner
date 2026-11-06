@@ -72,12 +72,12 @@ For each VM:
 - How to move, by series, as Microsoft recommends. On v5, resize the current VM when
   Azure supports it. On v6 and v7, deploy a new VM in parallel and move the workload.
   Microsoft says that a move to v6 or v7 is "not a normal VM resize".
-  A Windows VM needs a rebuild when the temporary disk changes type. Microsoft names a
-  preview feature, `VMTempDiskResizePreview`, for a size change in place when the
-  temporary disk changes type
-  ([Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux)).
-  To use it, register it on the subscription. The tool tells you about the preview
-  feature for these VMs. Its answers do not change.
+  On v6 and v7, when the temporary disk changes type, the tool also says:
+  "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview,
+  registered on the subscription, when the temporary disk changes type."
+  The source is a note on the Microsoft page
+  [Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux).
+  This is a preview. The answers of the tool do not change.
 - Ranked sizes: up to five sizes for each series, best first. Each one passes the same
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).

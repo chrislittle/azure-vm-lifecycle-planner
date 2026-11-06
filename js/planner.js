@@ -242,6 +242,9 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         classification: blockers.length ? 'Blocked' : controller === 'NVMe' ? 'ReadyNow' : 'ReadyAfterPrep',
         blockers, prepNeeded: [], platformManaged: false,
         diskController: controller || '', sourceDiskArch, sourceTempDisks,
+        // The size table gives the temporary disk of the current size (0.9.2-beta): only
+        // then can the words say that it changes type. A name alone does not tell.
+        sourceTempDiskKnown: maxMb !== null && Number.isFinite(maxMb),
         // The size of the temporary disk, for the words of the notes (0.9.0-beta).
         sourceTempDiskGiB: entry ? sizeFacts(entry).tempGiB : null,
     };
