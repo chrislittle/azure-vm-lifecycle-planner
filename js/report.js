@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.1-beta';
-import { capacityRestricted } from './planner.js?v=0.9.1-beta';
-import * as F from './files.js?v=0.9.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.1-beta';
-import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords } from './words.js?v=0.9.1-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.1-beta';
-import version from './version.js?v=0.9.1-beta';
+import capacity from '../data/capacity.js?v=0.9.2-beta';
+import { capacityRestricted } from './planner.js?v=0.9.2-beta';
+import * as F from './files.js?v=0.9.2-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.2-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords, PREVIEW_LINK, previewWords, tempDiskPreview } from './words.js?v=0.9.2-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.2-beta';
+import version from './version.js?v=0.9.2-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -76,7 +76,9 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
                 const ranked = F.rankedFor(m, r, table, now);
                 const how = POOL_PATTERNS.includes(m.pattern) ? '' : moveWords(r.series, o.rebuild, Boolean(m.vm.os)).split('. ')[0] + '.';
-                return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span></td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
+                // The preview feature VMTempDiskResizePreview, with the link to the Microsoft page that names it.
+                const preview = tempDiskPreview(m, r) ? `<br><span class="muted">${esc(previewWords(r.series))} <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a></span>` : '';
+                return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span>${preview}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');
             sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;
             sizesHtml += compareHtml(sizeComparison(m, table));

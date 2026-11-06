@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.9.1-beta';
-import seriesRules from '../data/series-rules.js?v=0.9.1-beta';
+import families from '../data/families.js?v=0.9.2-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.2-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -855,6 +855,9 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         move: generationController(series) === 'NVMe' ? 'nvme-conversion' : 'scsi-resize',
         rebuild: false,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
+        // The temporary disk changes type (none, SCSI, NVMe) on the target size; null
+        // when there is no target size. Words only (the preview feature, words.js).
+        tempDiskChange: null,
         tempDisksTo: null, targetStage: null, stageChange: 'unknown',
         acceleratedNetworking: { required: null, mayUseMana: null, turnsOn: null },
         stops: [], sizeChoices: [], premiumDisks: null, burstableEnds: null,
@@ -885,6 +888,7 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         option.premiumDisks = diskPremiumCapable(table.has(size) ? table.get(size) : null);
         option.sizeUnverified = t.mapping.code === 'mapped-unverified';
         option.tempDisksTo = t.tempDisks;
+        option.tempDiskChange = vm.sourceDiskArch && t.diskArch ? !eqI(vm.sourceDiskArch, t.diskArch) : null;
         option.move = t.controller === 'NVMe' ? 'nvme-conversion' : sizeGeneration(size) === 'v5' ? 'scsi-resize' : 'scsi-reversion';
         option.targetStage = adviceStage(size);
         option.stageChange = lifecycleChange(vm.sourceSize, size);
@@ -972,6 +976,7 @@ export function burstableOption(vm, table, now = new Date()) {
         targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
         move: 'scsi-resize', rebuild: false,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
+        tempDiskChange: null,
         tempDisksTo: null, targetStage: null, stageChange: 'unknown',
         acceleratedNetworking: { required: null, mayUseMana: null, turnsOn: null },
         stops: [], sizeChoices: [], premiumDisks: null, burstableEnds: null, facts: null,
@@ -1015,6 +1020,7 @@ export function burstableOption(vm, table, now = new Date()) {
     option.path = rebuild ? 'B' : 'A';
     option.rebuild = rebuild;
     option.tempDisksTo = tempDiskCount(entry, best.size);
+    option.tempDiskChange = vm.sourceDiskArch ? !eqI(vm.sourceDiskArch, targetArch) : null;
     option.premiumDisks = diskPremiumCapable(entry);
     option.targetStage = { ...burstableStage };
     option.stageChange = sizeLifecycleStage(vm.sourceSize) ? 'up' : 'unknown';

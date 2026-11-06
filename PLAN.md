@@ -1094,6 +1094,61 @@ tool found Generation 2 itself, or when a service did not need it.
   page now shows the hint only when the report would (`generationHint` in
   `js/evidence.js`, one rule for both).
 
+## 0.9.2-beta (2026-11-06): the temporary-disk preview
+
+Owner, 2026-11-06: Microsoft documents a preview feature, `VMTempDiskResizePreview`.
+The tool told a Windows VM whose temporary disk changes type that it needs a rebuild,
+with no word about the preview. Words only, plus the source list. **No answer
+changes:** for the three sample lists and a made-up list of 4,000 VMs, the result
+group, the workload type, the stage, each series answer and its reason codes, the
+defaults, the Azure Disk Encryption refusals, the ranked sizes, each note (topic,
+state, series, words), vm-summary.csv, vm-not-checked.csv and every column of
+vm-target-sizes.csv but "How to move" are the same as 0.9.1-beta.
+
+- **The source.** A Note on the Microsoft page "Convert SCSI to NVMe for Linux and
+  Windows VMs" (https://learn.microsoft.com/azure/virtual-machines/nvme-linux, in
+  "3. Usage"): a conversion between sizes with "different resource (temporary) disk
+  support" needs the subscription "registered for the VMTempDiskResizePreview feature".
+  It names no series. Microsoft gives no terms, limits or date of general availability
+  for the preview, so the words say only that it is a preview, what it is for, and that
+  the subscription must have it: no "supported", no list of series, nothing about Linux
+  or Generation 1. The page "Convert a VM from SCSI to NVMe in place" also mentions the
+  feature in a Tip that contradicts itself: watched, not cited. Both pages are in
+  `tools/sources.mjs` (now 25 pages). Only their two entries were added to the snapshot (read
+  2026-11-06), so the weekly check still compares the other pages with 16 October.
+  The second page moved (from `/migration/sizes/` to `/migration/`): the list has
+  the new address, because the check never follows a move.
+- **The rule** (`tempDiskPreview` in `js/words.js`, one rule for the page, the report
+  and vm-target-sizes.csv). The same facts that make a rebuild: a Windows VM, and a
+  temporary disk that changes type (none, SCSI or NVMe).
+  - v5 and Burstable, a rebuild: "Rebuild from a current image. A Windows VM needs a
+    rebuild here because the temporary disk changes type." gets "Microsoft names a
+    preview feature, VMTempDiskResizePreview, for a size change in place when the
+    temporary disk changes type. To use it, register it on the subscription."
+  - v5 and Burstable, OS not in the list: the words already say "If it is a Windows
+    VM, a rebuild can be necessary". The same two sentences come after them, only when
+    the temporary disk changes type (`tempDiskChange`, a new fact on each option).
+  - v6 and v7, a Windows VM whose current size has a SCSI temporary disk (owner): after
+    "You can also change the size of the current VM, but that has more steps and more
+    risk." comes "For this VM, a size change in place also needs the preview feature
+    VMTempDiskResizePreview, registered on the subscription."
+  - v6 and v7 with no OS in the list: no words (no guess). The Rebuild column still says
+    "Not checked". Linux, a VM in a pool or a service, a size that this tool does not
+    know, and a series with no supported size: no words.
+- **Where.** The page: in each size card, after the move words, with the link
+  "Convert SCSI to NVMe (Microsoft)". The report: under the move in the sizes table of
+  the VM card, with the same link (the report shows only the first sentence of the move
+  words, so the preview has its own line). vm-target-sizes.csv: "How to move". The
+  about file: an entry "Preview" in HOW TO MOVE, with the page. The README: after "How
+  to move".
+- Tests: four in `tests/planner.test.js` (the words and the link; the rule for each
+  case; the CSV file, the report and the about file; for the three sample lists, each
+  "How to move" is the 0.9.1-beta words with the preview after them only where the rule
+  says so). The STE check also reads the preview words. 29 mutation checks, all caught
+  (4 only after a new test with made-up facts: a rebuild already means Windows, and on
+  v6 and v7 a SCSI temporary disk on Windows already means a rebuild, so the lists
+  cannot reach those conditions alone).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen
