@@ -77,7 +77,7 @@ For each VM:
   registered on the subscription, when the temporary disk changes type."
   The source is a note on the Microsoft page
   [Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux).
-  This is a preview. The answers of the tool do not change.
+  The feature is a preview. The answers of the tool do not change.
 - Ranked sizes: up to five sizes for each series, best first. Each one passes the same
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
