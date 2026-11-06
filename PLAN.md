@@ -1334,8 +1334,10 @@ see why. Three changes:
 - **Where the sign shows.** "Facts from your list" (Workload group). The workload type
   evidence: `"SAP" is Yes. "SAP sign" is "...".` (the page, the report, the Evidence
   column of vm-summary.csv). A new last column "SAP sign" in vm-summary.csv and in
-  vm-target-sizes.csv, so the other columns keep their place. The about file has a
-  section SAP.
+  vm-target-sizes.csv, so the other columns keep their place. It has the sign only when
+  "SAP" is Yes, as the page (review, 2026-11-06). The about file has a section SAP: it
+  also says that a blank or unreadable SAP value gives no note, and that a list without
+  SAP can give "Type not checked" (the README says the same).
 - **"What to do" and "Why" for SAP** (owner, 2026-11-06: the page must show the sign and
   how to clear it). A SAP VM has no size, so the page and the report show no notes for
   it: the words are in "What to do" (`js/details.js`), on the page and in the report.

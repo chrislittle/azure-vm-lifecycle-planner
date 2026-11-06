@@ -23,9 +23,10 @@ function vendorAndEvidence(m) {
 }
 
 // The sign that the query found for SAP (query 0.9.4-beta and later), as the list gives
-// it, or ''. The "SAP" column of vm-target-sizes.csv has the SAP note, which shows only
-// when the list says Yes: it is blank for No and for no value, as the page shows nothing.
-const sapSign = (m) => (m.extra && m.extra.sapSign) || '';
+// it, only when the list says SAP is Yes, else ''. The "SAP" column of vm-target-sizes.csv
+// has the SAP note, which shows only for Yes too: both are blank for No and for no value,
+// as the page shows nothing (review, 2026-11-06).
+const sapSign = (m) => (m.extra && m.extra.sap === true && m.extra.sapSign) || '';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF. A cell that
 // starts with = + - @ (or a tab or CR) and is longer than one character gets a ' in
@@ -346,6 +347,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  The SAP note shows only when the "SAP" column of your list is Yes.',
         '  "SAP sign" gives the fact that the query found: the Azure VM extension for SAP solutions, an SAP licence type or an SAP image.',
         '  If a VM does not run SAP, set "SAP" to No in your list. Then load the list again.',
+        '  A blank SAP value, or a value that this tool cannot read, gives no SAP note, as for the appliances.',
+        '  If your list does not give SAP, a VM that is in no other workload type shows "Type not checked".',
         '',
         'CAPACITY GROWTH RESTRICTIONS',
         ...capacityWords(capacity, now).map((l) => `  ${l}`),

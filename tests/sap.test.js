@@ -188,14 +188,17 @@ test('vm-summary.csv and vm-target-sizes.csv: "SAP sign" is the last column; "SA
         { 'VM name': 'contoso-s1', 'SAP': 'Yes', 'SAP sign': EXT },
         { 'VM name': 'contoso-s2', 'SAP': 'No' },
         { 'VM name': 'contoso-s3', 'SAP': '' },
+        // Review, 2026-11-06: a sign with "SAP" No (the customer set it) shows no sign, as on the page.
+        { 'VM name': 'contoso-s4', 'SAP': 'No', 'SAP sign': EXT },
+        { 'VM name': 'contoso-s5', 'SAP': 'maybe', 'SAP sign': EXT },
     ]));
     const target = F.targetRows(p, table, NOW);
     const v5 = (n) => target.find((r) => r['VM name'] === n && r['Series'] === 'v5');
     assert.equal(v5('contoso-s1')['SAP sign'], EXT);
     assert.match(v5('contoso-s1')['SAP'], /^"SAP" is Yes\. "SAP sign" is /);
-    for (const n of ['contoso-s2', 'contoso-s3']) assert.deepEqual([v5(n)['SAP'], v5(n)['SAP sign']], ['', '']);
+    for (const n of ['contoso-s2', 'contoso-s3', 'contoso-s4', 'contoso-s5']) assert.deepEqual([v5(n)['SAP'], v5(n)['SAP sign']], ['', '']);
     const summary = F.summaryRows(p);
-    assert.deepEqual(summary.map((r) => r['SAP sign']), [EXT, '', '']);
+    assert.deepEqual(summary.map((r) => r['SAP sign']), [EXT, '', '', '', '']);
     assert.ok(F.toCsv(F.TARGET_COLUMNS, target).split('\r\n')[0].endsWith('"Resource ID","SAP sign"'));
 });
 
@@ -207,7 +210,15 @@ test('about-these-results.txt: what the SAP note and "SAP sign" mean', () => {
     assert.ok(about.includes('  The SAP note shows only when the "SAP" column of your list is Yes.'));
     assert.ok(about.includes('  "SAP sign" gives the fact that the query found: the Azure VM extension for SAP solutions, an SAP licence type or an SAP image.'));
     assert.ok(about.includes('  If a VM does not run SAP, set "SAP" to No in your list. Then load the list again.'));
+    // Review, 2026-11-06: what a blank value and a missing column do.
+    assert.ok(about.includes(`\r\n  ${BLANK_WORDS}\r\n`));
+    assert.ok(about.includes(`\r\n  ${MISSING_WORDS}\r\n`));
+    const readme = read('README.md').replace(/\s+/g, ' ');
+    assert.ok(readme.includes(BLANK_WORDS) && readme.includes(MISSING_WORDS), 'the README says the same');
 });
+
+const BLANK_WORDS = 'A blank SAP value, or a value that this tool cannot read, gives no SAP note, as for the appliances.';
+const MISSING_WORDS = 'If your list does not give SAP, a VM that is in no other workload type shows "Type not checked".';
 
 // ---------------------------------------------------------------------------
 // What to do and Why on the page and in the report (0.9.4-beta, owner)
