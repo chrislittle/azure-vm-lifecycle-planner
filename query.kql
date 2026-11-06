@@ -14,6 +14,20 @@ Resources
 | extend t = tolower(type)
 | extend isVm = t == 'microsoft.compute/virtualmachines', isVmss = t == 'microsoft.compute/virtualmachinescalesets'
 | extend extType = tostring(properties.type), extPublisher = tostring(properties.publisher)
+// The Azure VM extension for SAP solutions has no other purpose: it means SAP. Each
+// publisher with its own types. The new version: Microsoft.AzureCAT.AzureEnhancedMonitoring,
+// MonitorX64Windows or MonitorX64Linux. The standard version: the same publisher with
+// AzureCATExtensionHandler on Windows (its install folder is publisher.type), and
+// Microsoft.OSTCExtensions, AzureEnhancedMonitorForLinux on Linux.
+// https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-new
+// https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-standard
+// A number for each type, so that a VM with more than one gives the same type each time.
+| extend sapExt = case(t != 'microsoft.compute/virtualmachines/extensions', 0,
+    extPublisher =~ 'Microsoft.AzureCAT.AzureEnhancedMonitoring' and extType =~ 'MonitorX64Windows', 4,
+    extPublisher =~ 'Microsoft.AzureCAT.AzureEnhancedMonitoring' and extType =~ 'MonitorX64Linux', 3,
+    extPublisher =~ 'Microsoft.AzureCAT.AzureEnhancedMonitoring' and extType =~ 'AzureCATExtensionHandler', 2,
+    extPublisher =~ 'Microsoft.OSTCExtensions' and extType =~ 'AzureEnhancedMonitorForLinux', 1,
+    0)
 // The key of the VM or scale set that each record belongs to. A VM also gives
 // the ID of each of its data disks, and a disk gives its own ID: so a disk's group
 // knows the disk and every VM on it. (Resource Graph does not have the disk's list
@@ -65,9 +79,8 @@ Resources
     primaryAccelerated = countif(t == 'microsoft.network/networkinterfaces' and tobool(properties.enableAcceleratedNetworking) == true and tobool(properties.primary) == true),
     adeOsDisk = anyif(tostring(properties.storageProfile.osDisk.encryptionSettings.enabled), (isVm) and tolower(id) == key),
     adeExtension = countif(t == 'microsoft.compute/virtualmachines/extensions' and extType in~ ('AzureDiskEncryption', 'AzureDiskEncryptionForLinux')),
-    // The Azure VM extension for SAP solutions has no other purpose: it means SAP.
-    sapExtension = countif(t == 'microsoft.compute/virtualmachines/extensions' and extPublisher in~ ('Microsoft.AzureCAT.AzureEnhancedMonitoring', 'Microsoft.OSTCExtensions')
-                           and extType in~ ('MonitorX64Linux', 'MonitorX64Windows', 'AzureEnhancedMonitorForLinux')),
+    // The extension for SAP solutions (above): the highest number, 0 for none.
+    sapExtension = max(sapExt),
     hibernation = anyif(tobool(properties.additionalCapabilities.hibernationEnabled), (isVm) and tolower(id) == key),
     scaleSet = anyif(tostring(properties.virtualMachineScaleSet.id), (isVm) and tolower(id) == key),
     licenseType = anyif(tostring(vmp.licenseType), (isVm or isVmss) and tolower(id) == key),
@@ -133,6 +146,25 @@ Resources
     hasSelf = max(self)
     by key = key2
 | where hasSelf == 1
+// SAP: the extension for SAP solutions (a VM's extension records, or a scale set's model),
+// a licence type that puts the machine on SAP repositories, or an SAP marketplace image
+// (Microsoft's Azure Hybrid Benefit page). In a scale set's model the order of the fields
+// is not fixed: the publisher and the type are found in the same list of extensions.
+| extend vmssSapNew = vmssExtensions matches regex @'(?i)"publisher":"Microsoft\.AzureCAT\.AzureEnhancedMonitoring"',
+    vmssSapStd = vmssExtensions matches regex @'(?i)"publisher":"Microsoft\.OSTCExtensions"'
+| extend sapExtensionType = case(
+    sapExtension == 4 or (vmssSapNew and vmssExtensions matches regex @'(?i)"type":"MonitorX64Windows"'), 'MonitorX64Windows',
+    sapExtension == 3 or (vmssSapNew and vmssExtensions matches regex @'(?i)"type":"MonitorX64Linux"'), 'MonitorX64Linux',
+    sapExtension == 2 or (vmssSapNew and vmssExtensions matches regex @'(?i)"type":"AzureCATExtensionHandler"'), 'AzureCATExtensionHandler',
+    sapExtension == 1 or (vmssSapStd and vmssExtensions matches regex @'(?i)"type":"AzureEnhancedMonitorForLinux"'), 'AzureEnhancedMonitorForLinux',
+    '')
+// The sign that was found, in a fixed order: the extension, the licence type, the image.
+| extend sapSign = case(
+    isnotempty(sapExtensionType), strcat('Azure VM extension for SAP solutions (', sapExtensionType, ')'),
+    licenseType in~ ('RHEL_SAPAPPS', 'RHEL_SAPHA', 'RHEL_BASESAPAPPS', 'RHEL_BASESAPHA', 'SLES_SAP'), strcat('Licence type ', licenseType),
+    imagePublisher =~ 'RedHat' and imageOffer in~ ('rhel-sap-apps', 'rhel-sap-ha'), strcat('Image ', imagePublisher, ' ', imageOffer),
+    imagePublisher =~ 'SUSE' and tolower(imageOffer) startswith 'sles-sap', strcat('Image ', imagePublisher, ' ', imageOffer),
+    '')
 | extend rgKey = strcat(sub, '/', rg)
 | join kind=leftouter (
     desktopvirtualizationresources
@@ -181,13 +213,9 @@ Resources
     Hibernation = iff(hibernation == true, 'Yes', 'No'),
     ['Scale set'] = iff(isVmss == 1 or isnotempty(scaleSet), 'Yes', 'No'),
     ['Azure Virtual Desktop'] = iff(isnotempty(hostPoolId), 'Yes', 'No'),
-    // SAP: the extension for SAP solutions, a licence type that puts the machine on SAP
-    // repositories, or an SAP marketplace image (Microsoft's Azure Hybrid Benefit page).
-    SAP = iff(sapExtension > 0
-              or vmssExtensions matches regex @'"type":"(MonitorX64Linux|MonitorX64Windows|AzureEnhancedMonitorForLinux)"'
-              or licenseType in~ ('RHEL_SAPAPPS', 'RHEL_SAPHA', 'RHEL_BASESAPAPPS', 'RHEL_BASESAPHA', 'SLES_SAP')
-              or (imagePublisher =~ 'RedHat' and imageOffer in~ ('rhel-sap-apps', 'rhel-sap-ha'))
-              or (imagePublisher =~ 'SUSE' and tolower(imageOffer) startswith 'sles-sap'), 'Yes', 'No'),
+    // SAP: Yes when the query found a sign (above); "SAP sign" says which.
+    SAP = iff(isnotempty(sapSign), 'Yes', 'No'),
+    ['SAP sign'] = sapSign,
     ['Unmanaged disks'] = iff(isnotempty(osDiskVhd) or dataDisks contains '"vhd"', 'Yes', 'No'),
     ['Ephemeral OS disk'] = iff(osDiskOption =~ 'Local', 'Yes', 'No'),
     ['System-assigned identity'] = iff(identityType contains 'SystemAssigned', 'Yes', 'No'),

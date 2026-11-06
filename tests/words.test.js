@@ -44,6 +44,11 @@ const EXTRA_LISTS = [
     'VM name,Machine name,Current size,Generation\ncontoso-d1,contoso-d2,Standard_D2s_v3,V2\n',
     // 0.9.3-beta: a Windows Generation 2 rebuild on Burstable (the preview feature) and a Generation 1 one.
     'VM name,Current size,Generation,OS,System-assigned identity,Availability set\ncontoso-w1,Standard_B2ms,V2,Windows,Yes,Yes\ncontoso-w2,Standard_B2ms,V1,Windows,Yes,Yes\n',
+    // Each kind of SAP sign (0.9.4-beta).
+    'VM name,Current size,Generation,OS,SAP,SAP sign\n'
+    + 'contoso-sap-x1,Standard_D4s_v3,V2,Windows,Yes,Azure VM extension for SAP solutions (MonitorX64Windows)\n'
+    + 'contoso-sap-x2,Standard_E16s_v3,V2,Linux,Yes,Licence type SLES_SAP\n'
+    + 'contoso-sap-x3,Standard_E16s_v3,V2,Linux,Yes,\n',
     '',
 ];
 

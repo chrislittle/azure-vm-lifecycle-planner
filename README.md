@@ -145,6 +145,13 @@ For each VM:
   other types, they give the columns that decided the type, for example "Managed by" is
   AKS, or "SQL availability group" is Yes.
 
+  For SAP, they also give the "SAP sign" column (from the query of 0.9.4-beta and later).
+  It tells you why "SAP" is Yes: the Azure VM extension for SAP solutions (the standard
+  or the new version, with its type), an SAP licence type, or an SAP image. The SAP note
+  shows only when "SAP" is Yes. If a VM does not run SAP, set "SAP" to No in your list,
+  and load the list again. If the sign is the extension, you can also remove the
+  extension from the VM.
+
   The details of each VM also have **Facts from your list**. It is closed at first.
   It shows each column that the tool used, with its value from your list. "Not in the
   list" means that your list does not have the column. "No value" means that the cell
@@ -169,8 +176,8 @@ in Excel:
 | File | Contents |
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
-| vm-summary.csv | One row for each VM, to sort and filter in Excel. The last two columns are Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. |
-| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. Near the end are the columns Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. The last column is SAP sign: the "SAP sign" value from your list. |
+| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. The last column is SAP sign: the "SAP sign" value from your list. |
 | vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 
@@ -226,6 +233,10 @@ work in that open tab. (It does not load again while you are offline.)
 - **NVMe support of the OS:** the Microsoft
   [list of OS images that support NVMe](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-interface),
   read on <!-- fact:nvme-read -->9 October 2026<!-- /fact -->.
+- **The SAP extension in the query:** the Microsoft pages of the Azure VM extension for SAP
+  solutions, the [new version](https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-new)
+  and the [standard version](https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-standard),
+  read on 6 November 2026.
 
 Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
 NVA policy and the Marketplace catalog again, and compares them with the data in this

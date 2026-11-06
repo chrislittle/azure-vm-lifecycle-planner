@@ -160,10 +160,10 @@ test('facts from your list: every column of the query is in one group, except "D
     assert.deepEqual([...grouped].sort(), COLUMNS.map((c) => c.name).filter((c) => c !== 'Disk controller').sort());
 });
 
-test('vm-summary.csv: Vendor and Evidence are the last columns; the other columns keep their place', () => {
+test('vm-summary.csv: Vendor, Evidence and SAP sign are the last columns; the other columns keep their place', () => {
     assert.deepEqual(F.SUMMARY_COLUMNS, ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
         'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know',
-        'To check', 'Needs review', 'Notes', 'Resource ID', 'Vendor', 'Evidence']);
+        'To check', 'Needs review', 'Notes', 'Resource ID', 'Vendor', 'Evidence', 'SAP sign']);
     const rows = F.summaryRows(run(sample));
     const row = (n) => rows.find((r) => r['VM name'] === n);
     assert.deepEqual([row('contoso-coh01').Vendor, row('contoso-coh01').Evidence], ['Cohesity DataPlatform Cloud Edition', 'Storage or backup appliance. The image is cohesity / cohesity-cloudtd-tool.']);

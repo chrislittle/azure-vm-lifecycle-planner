@@ -85,7 +85,7 @@ export const FACT_GROUPS = [
     ['Size and OS', ['Current size', 'Generation', 'OS', 'Hibernation']],
     ['Disks and network', ['Data-disk count', 'Unmanaged disks', 'Ephemeral OS disk', 'Shared disk', 'NIC count', 'Accelerated NICs', 'Primary NIC accelerated']],
     ['Security', ['Security type', 'Azure Disk Encryption', 'System-assigned identity']],
-    ['Workload', ['Resource type', 'Instances', 'Scale set', 'Managed by', 'Azure Virtual Desktop', 'AVD host pool type', 'SQL Server', 'SQL availability group', 'SAP']],
+    ['Workload', ['Resource type', 'Instances', 'Scale set', 'Managed by', 'Azure Virtual Desktop', 'AVD host pool type', 'SQL Server', 'SQL availability group', 'SAP', 'SAP sign']],
     ['Image and Marketplace', ['Image publisher', 'Image offer', 'Image SKU', 'Image ID', 'Plan publisher', 'Plan product', 'Managed application', 'Application plan publisher', 'Application plan product']],
     ['Location and IDs', ['VM name', 'Region', 'Zone', 'Availability set', 'Resource ID']],
 ];

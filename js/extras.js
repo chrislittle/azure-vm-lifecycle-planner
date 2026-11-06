@@ -32,6 +32,8 @@ export function readExtras(cell) {
         scaleSet: yes('Scale set'),
         virtualDesktop: yes('Azure Virtual Desktop'),
         sap: yes('SAP'),
+        // The sign that the query found for SAP, as text (query 0.9.4-beta and later).
+        sapSign: cell('SAP sign') || null,
         unmanagedDisks: yes('Unmanaged disks'),
         ephemeralOsDisk: yes('Ephemeral OS disk'),
         systemIdentity: yes('System-assigned identity'),
@@ -252,6 +254,15 @@ export const gibWords = (n) => String(Math.round(n * 10) / 10);
 // The temporary disk of the current size, in words, or '' when the size table does not give it.
 const currentTempDisk = (vm) => (vm.sourceTempDiskGiB > 0 ? `The current size ${vm.sourceSize} has a temporary disk of ${gibWords(vm.sourceTempDiskGiB)} GiB. ` : '');
 
+// The SAP note: the value, the sign that the query found (when the list gives it),
+// and the step to correct the list. Only the extension can be removed from the VM.
+function sapNote(x) {
+    const confirm = 'Confirm that SAP certifies the new size (SAP Note 1928533).';
+    if (!x.sapSign) return `${said('SAP')} ${confirm}`;
+    const extension = /^Azure VM extension for SAP solutions\b/i.test(x.sapSign);
+    return `${said('SAP')} ${said('SAP sign', `"${x.sapSign}"`)} ${confirm} If this VM does not run SAP, ${extension ? 'remove the extension from the VM, or ' : ''}set "SAP" to No in your list.`;
+}
+
 // The caveats for one option of one machine. Agreed wording (PLAN.md).
 export function caveats(vm, x, option) {
     const series = option.option;
@@ -314,7 +325,10 @@ export function caveats(vm, x, option) {
         : x.scaleSet === false && x.virtualDesktop === false ? fine('Not in a scale set.')
         : check('Check: the list does not say if this VM is in a scale set or in Azure Virtual Desktop.');
 
-    out['SAP'] = x.sap === false ? fine('Not SAP.') : x.sap === true ? problem(`${said('SAP')} Confirm that SAP certifies the new size (SAP Note 1928533).`) : check('Check: the list does not say if this VM runs SAP.');
+    // Only when the list says Yes, as for an appliance: No and no value show nothing
+    // (owner, 2026-11-06). The sign that the query found shows, so that a customer
+    // can see why, and how to correct a list for a VM that does not run SAP.
+    out['SAP'] = x.sap === true ? problem(sapNote(x)) : none;
     out['Unmanaged disks'] = x.unmanagedDisks === false ? fine('Managed disks.') : x.unmanagedDisks === true ? problem(`${said('Unmanaged disks')} Convert the unmanaged disks to managed disks first.`) : check('Check: the list does not say if the disks are managed disks.');
     out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem(`${said('Ephemeral OS disk')} The data on an ephemeral OS disk does not stay when the VM moves. Deploy a new VM at the new size.`) : check('Check: the list does not say if the OS disk is ephemeral.');
 

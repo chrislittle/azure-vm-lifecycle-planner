@@ -162,9 +162,12 @@ test('SAP, unmanaged disks and an ephemeral OS disk: no suggestion', () => {
 test('a blank column is "check", never a pass', () => {
     const { plan: p } = run(read('samples/contoso-by-hand.csv'));
     const row = byName(p, 'contoso-file01').rows.find((r) => r.series === 'v6');
-    for (const topic of ['NVMe', 'Disk encryption', 'Hibernation', 'SAP', 'Identity', 'Zone']) {
+    for (const topic of ['NVMe', 'Disk encryption', 'Hibernation', 'Identity', 'Zone']) {
         assert.equal(row.caveats[topic].state, 'check', topic);
     }
+    // SAP shows only for Yes, as an appliance does (0.9.4-beta). The workload type still
+    // names a missing SAP column (tests/sap.test.js).
+    assert.deepEqual(row.caveats['SAP'], { state: '', text: '' });
 });
 
 test('NVMe support follows Microsoft\'s list; a custom image cannot tell', () => {
@@ -260,8 +263,9 @@ test('every link points to a real Microsoft Learn or GitHub path', () => {
     const files = ['index.html', ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`), ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`)];
     for (const f of files) {
         for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
-            // The identity note cites the managed identities overview (0.9.3-beta).
-            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+            // The identity note cites the managed identities overview (0.9.3-beta). The query
+            // (js/query.js) names the two pages of the Azure VM extension for SAP solutions (0.9.4-beta).
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience|sap\/workloads\/vm-extension-for-sap-(new|standard)$)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
         }
     }
 });
