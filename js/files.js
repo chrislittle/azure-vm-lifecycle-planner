@@ -12,7 +12,7 @@ import capacity from '../data/capacity.js?v=0.9.3-beta';
 import nvme from '../data/nvme-images.js?v=0.9.3-beta';
 import { capacityRestricted } from './planner.js?v=0.9.3-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.3-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_RESIZE_WORDS, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.3-beta';
 import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.3-beta';
 import { generationShown, workloadFound } from './evidence.js?v=0.9.3-beta';
 
@@ -141,7 +141,7 @@ export function rankedFor(m, r, table, now = new Date()) {
 // a service; otherwise the series does.
 export function howToMove(m, r) {
     if (POOL_PATTERNS.includes(m.pattern)) { const a = poolAdvice(m); return `${a.todo} ${a.more}`.trim(); }
-    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange);
+    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange, r.option.previewResize);
 }
 
 function stageText(m) {
@@ -203,7 +203,12 @@ export function targetRows(p, table, now = new Date()) {
                 'Suggested': r.isDefault.map((d) => (d === 'Current default' ? 'Current stage' : 'Extended stage')).join(', '),
                 'How to move': o.supported ? howToMove(m, r) : '',
                 'Ranked sizes': o.supported ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
-                'Rebuild': !has ? '' : !m.vm.os ? 'Not checked. This tool does not know the OS.' : o.rebuild ? 'Yes' : 'No',
+                // v6 and v7 are never a rebuild: deploy in parallel, or change the size of the
+                // current VM (0.9.3-beta). A Windows Generation 2 rebuild on v5 or Burstable is a
+                // resize with the preview feature (lifecycle.js, previewResize).
+                'Rebuild': !has ? '' : r.series === 'v6' || r.series === 'v7' ? 'No'
+                    : !m.vm.os ? 'Not checked. This tool does not know the OS.'
+                    : o.previewResize ? 'Only without the preview feature VMTempDiskResizePreview' : o.rebuild ? 'Yes' : 'No',
                 'Premium SSD on target': !has ? '' : o.premiumDisks === null ? 'Not checked' : o.premiumDisks ? 'Yes' : 'No',
                 'Burstable ends': o.burstableEnds ? 'Yes. The new size has fixed CPU performance. It does not use CPU credits.' : '',
                 'Region availability': has ? 'Not checked' : '',
@@ -286,17 +291,26 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  Not checked:        This tool cannot read or check an item.',
         '',
         'HOW TO MOVE',
-        '  v5:        Resize the current VM, when Azure supports a resize to the new size.',
-        '             A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.',
+        '  v5:        Resize the current VM, when Azure supports a resize to the new size. Burstable is the same.',
+        '             When one size has a temporary disk and the other size does not, a Windows VM needs a rebuild.',
+        // Measured in a lab test, 2026-11-02 (lifecycle.js, previewResize; 0.9.3-beta).
+        '             A Windows Generation 2 VM can have a resize if the preview feature VMTempDiskResizePreview',
+        '             is registered on the subscription. Move the page file to C: before the resize.',
         '  v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM.',
         '             Microsoft highly recommends this. A move to v6 or v7 is not a normal resize.',
         '             You can also change the size of the current VM. The VM then keeps its identity.',
         '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
         '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
         '             and a rebuild removes Azure Disk Encryption.',
-        // The preview feature VMTempDiskResizePreview (words.js, PREVIEW_WORDS).
+        '             In vm-target-sizes.csv, Rebuild is No for v6 and v7.',
+        '             For a Windows Generation 2 VM on v5 or Burstable where the temporary disk changes type,',
+        '             Rebuild is "Only without the preview feature VMTempDiskResizePreview".',
+        // The preview feature VMTempDiskResizePreview (words.js, PREVIEW_WORDS and PREVIEW_RESIZE_WORDS).
         `  Preview:   ${PREVIEW_WORDS}`,
-        '             This tool shows it for v6 and v7, when the temporary disk changes type. The answers do not change.',
+        '             v6 and v7: this tool shows it when the temporary disk changes type.',
+        `             v5 and Burstable: ${PREVIEW_RESIZE_WORDS}`,
+        '             This tool shows it for a Windows Generation 2 VM, when the temporary disk changes type.',
+        '             The answers do not change.',
         `             ${GUIDANCE.tempDiskPreview}`,
         '',
         'RANKED SIZES',

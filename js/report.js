@@ -75,9 +75,13 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 const o = r.option; const name = r.series === 'burstable' ? 'Burstable' : r.series;
                 if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
                 const ranked = F.rankedFor(m, r, table, now);
-                const how = POOL_PATTERNS.includes(m.pattern) ? '' : moveWords(r.series, o.rebuild, Boolean(m.vm.os), o.tempDiskChange).split('. ')[0] + '.';
+                const words = POOL_PATTERNS.includes(m.pattern) ? '' : moveWords(r.series, o.rebuild, Boolean(m.vm.os), o.tempDiskChange, o.previewResize);
+                const how = words ? words.split('. ')[0] + '.' : '';
                 // The preview feature VMTempDiskResizePreview, with the link to the Microsoft page that names it.
-                const preview = tempDiskPreview(m, r) ? `<br><span class="muted">${esc(PREVIEW_WORDS)} <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a></span>` : '';
+                // On v5 and Burstable (a Windows Generation 2 VM, 0.9.3-beta) the first sentence is
+                // only half of the move: the condition and the rebuild follow on a line of their own.
+                const preview = tempDiskPreview(m, r) ? `<br><span class="muted">${esc(PREVIEW_WORDS)} <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a></span>`
+                    : words && o.previewResize ? `<br><span class="muted">${esc(words.split('. ').slice(1).join('. '))}</span>` : '';
                 return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span>${preview}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');
             sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;

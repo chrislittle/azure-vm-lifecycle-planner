@@ -1216,6 +1216,76 @@ it keeps its identity. The note read as if a customer always loses the identity.
   OS; the two notes in the page, the report and the files; the about file and the page),
   and the expected words in `tests/values.test.js`. 11 mutation checks, all caught.
 
+### Also in 0.9.3-beta: v6 and v7 are never a rebuild
+
+Review, 2026-11-06: on a Windows v6 or v7 row where the temporary disk changes type, the
+column Rebuild of vm-target-sizes.csv said "Yes". That contradicts the two methods above.
+- **The column Rebuild is "No" on v6 and v7**, for any OS (also when the list does not
+  give the OS). The internal rebuild flag of the option does not change.
+- **Azure Disk Encryption on v6 and v7 is always the plain answer**: "No - Azure Disk
+  Encryption", with the reason of `disk-encryption-present`. Microsoft's v6 and v7 plan
+  page (https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-plan,
+  "Azure Disk Encryption and encryption at host"): Azure Disk Encryption is "not available
+  on the v6 or v7 series for either operating system", and "An ADE-encrypted VM can't reach
+  v6 or v7 by conversion." The series rules already gave this answer first, so no answer
+  changes. Now the rebuild refusal (`disk-encryption-rebuild`) also never applies to v6 or
+  v7, if the rules change. v5 and Burstable keep `disk-encryption-rebuild`.
+
+### Also in 0.9.3-beta: the preview feature on v5 and Burstable (owner, from a lab test)
+
+Owner, 2026-11-06: "use the lab result as it works. docs have been wrong a lot". This
+**overrides the Microsoft FAQ** about VM sizes with no temporary disk
+(https://learn.microsoft.com/azure/virtual-machines/azure-vms-no-temp-disk), which still
+says that a Windows VM cannot change size between a size with a temporary disk and a size
+without one. The FAQ is not cited in the code, and not watched.
+- **The lab result** (measured 2026-11-01 and 2026-11-02, Windows Server 2022, Generation
+  2). With `Microsoft.Compute/VMTempDiskResizePreview` registered, Azure accepted a resize
+  in place across the temporary-disk boundary, in both directions: for example
+  Standard_B2s to Standard_B2ls_v2 (a plain SCSI resize), and D2ds_v4, D2s_v3 and D16ds_v5
+  to v6 and v7. The VM kept its vmId, its system-assigned identity and its extensions. The
+  page file was moved to C: first. Without the feature, Azure refused: "Unable to resize
+  the VM since changing from resource disk to non-resource disk VM size and vice-versa is
+  not allowed." Not measured: Generation 1, Azure Disk Encryption.
+- **Which rows** (`previewResize` in `js/lifecycle.js`, words only): v5 or Burstable, a
+  supported size, a rebuild (a Windows VM where the temporary disk changes type), and
+  Generation 2 (from the list, or found from the security type or the image SKU).
+  Generation 1 keeps the rebuild words. A VM with Azure Disk Encryption still has no size
+  there (`disk-encryption-rebuild`). Linux stays a plain resize. With no OS in the list,
+  the words of 0.9.2-beta stay. The 0.9.2-beta rule "the preview words show only for v6
+  and v7" (a review decision) is now overruled for these rows; the Note about the NVMe
+  conversion script still shows only on v6 and v7.
+- **The words** on these rows:
+  - How to move (page, CSV; the report shows the first sentence, then the rest on a line
+    of its own): "Change the size of the current VM. On Windows, Azure allows this resize
+    only when the preview feature VMTempDiskResizePreview is registered on the
+    subscription. Move the page file from the temporary disk to C: before the resize.
+    Without the feature, rebuild from a current image."
+  - What to do: "Resize to {size}. First register the preview feature
+    VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image."
+  - The column Rebuild: "Only without the preview feature VMTempDiskResizePreview".
+  - Identity: "With the preview feature, the VM keeps its identity. If you rebuild,
+    record the role assignments of the system-assigned identity. A new VM gets a new
+    identity: add them to it again."
+  - Availability set (it said "Deploy the new VM into the set"): "With the preview
+    feature, you change the size of the VM in the set. If the hardware of the set does
+    not have the new size, stop all the VMs in the set before the resize. If you rebuild,
+    deploy the new VM into the set. Azure adds a VM to an availability set only when it
+    creates the VM." Still a fact to know (blue).
+  - The about file: HOW TO MOVE (v5, the column Rebuild, Preview) says the same. The
+    0.9.2-beta line "This tool shows it for v6 and v7, ..." is replaced.
+- **No answer changes.** Against 0.9.2-beta (70c0fb5), for the sample lists, a made-up
+  list of 4,000 VMs and a list of the cases above: every result, result group, workload
+  type, size, other size, reason code, default and note state is the same. Text changes
+  only: the column Rebuild (v6 and v7 "Yes" or "Not checked" to "No"; the lab rows "Yes"
+  to the text above), "How to move", "What to do" and the Identity and Availability set
+  notes of the lab rows. In the samples, contoso-by-hand.csv has one lab row; the
+  4,000-VM list has none (its B v1 and Av2 VMs do not change the temporary disk on Windows
+  Generation 2).
+- Tests: three in `tests/planner.test.js` (each row type for Burstable; v5 with a changed
+  size table; Azure Disk Encryption on v6 and v7 with the series rule taken away), and the
+  0.9.2-beta preview tests changed for the new rule. The STE check reads the new words
+  (a new made-up list). 22 more mutation checks, all caught (two only after new tests).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

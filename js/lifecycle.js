@@ -808,13 +808,21 @@ function entryTarget(vm, table, targetGeneration, chosenSize, now) {
     let blockers = [...judged.blockers];
     let classification = judged.classification;
     let refusedRebuild = false;
+    // v6 and v7 are never a rebuild (0.9.3-beta): Microsoft's v6 and v7 plan page says
+    // that Azure Disk Encryption is "not available on the v6 or v7 series for either
+    // operating system", and "An ADE-encrypted VM can't reach v6 or v7 by conversion."
+    // So the answer there is the plain one, 'disk-encryption-present' (the series rules
+    // give it first; this keeps it so if they do not).
     if (path === 'B' && hasI(vm.blockers, 'disk-encryption-present')) {
-        blockers.push('disk-encryption-rebuild');
+        const nvme = generationController(targetGeneration) === 'NVMe';
+        const code = nvme ? 'disk-encryption-present' : 'disk-encryption-rebuild';
+        if (!hasI(blockers, code)) blockers.push(code);
         classification = 'Blocked';
-        refusedRebuild = true;
+        refusedRebuild = !nvme;
         path = pathSelection(vm, diskArch, targetGeneration, classification);
-        mapping = { target: null, alternates: [], code: 'disk-encryption-rebuild',
-            reason: `This machine uses Azure Disk Encryption, and its move to ${targetGeneration} is a rebuild. The tool does not rebuild an encrypted machine, so it does not move it.` };
+        mapping = { target: null, alternates: [], code,
+            reason: nvme ? `${targetGeneration} sizes do not support Azure Disk Encryption.`
+                : `This machine uses Azure Disk Encryption, and its move to ${targetGeneration} is a rebuild. The tool does not rebuild an encrypted machine, so it does not move it.` };
         diskArch = null;
         tempDisks = null;
     }
@@ -856,13 +864,27 @@ function tempDiskChangeTo(vm, targetEntry, targetArch) {
     return !eqI(vm.sourceDiskArch, targetArch);
 }
 
+// A rebuild on v5 or Burstable that can also be a resize with the preview feature
+// VMTempDiskResizePreview (0.9.3-beta, owner 2026-11-06). Measured in a lab test,
+// 2026-11-02, on Windows Server 2022, Generation 2: with the feature registered, Azure
+// accepted a resize across the temporary-disk boundary in both directions (for example
+// Standard_B2s to Standard_B2ls_v2), and the VM kept its vmId, its system-assigned
+// identity and its extensions. Without it, Azure refused the resize. The owner uses the
+// lab result over the Microsoft FAQ about VM sizes with no temporary disk (PLAN.md).
+// Not measured: Generation 1, Azure Disk Encryption (those rows have no size anyway).
+// Words only: the answer (the size, the rebuild flag) does not change. A rebuild is
+// always a Windows VM (pathSelection, burstableOption), so the OS needs no check here.
+function previewResize(vm, option) {
+    return Boolean(option.supported && option.rebuild && generationController(option.option) !== 'NVMe' && eqI(vm.gen, 'V2'));
+}
+
 // One series for one machine: whether it is supported, and the facts about it.
 export function adviceOption(vm, series, table, chosenSize = null, now = new Date()) {
     const option = {
         option: series, supported: false, notSupported: [],
         targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
         move: generationController(series) === 'NVMe' ? 'nvme-conversion' : 'scsi-resize',
-        rebuild: false,
+        rebuild: false, previewResize: false,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
         // The temporary disk changes type (none, SCSI, NVMe) on the target size; null
         // when there is no target size. Words only (the preview feature, words.js).
@@ -919,6 +941,7 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         if (turnsOn === true) option.stops = ['acceleratedNetworkingRequired'];
     }
     option.supported = option.notSupported.length === 0;
+    option.previewResize = previewResize(vm, option);
 
     // Each size choice carries the facts that follow from its own size; a
     // choice this machine cannot take is not offered.
@@ -983,7 +1006,7 @@ export function burstableOption(vm, table, now = new Date()) {
     const option = {
         option: 'burstable', supported: false, notSupported: [],
         targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
-        move: 'scsi-resize', rebuild: false,
+        move: 'scsi-resize', rebuild: false, previewResize: false,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
         tempDiskChange: null,
         tempDisksTo: null, targetStage: null, stageChange: 'unknown',
@@ -1039,6 +1062,7 @@ export function burstableOption(vm, table, now = new Date()) {
     option.sizeChoices = fits.filter((f) => f.vcpus === best.vcpus && f.memoryGB === best.memoryGB)
         .map((f) => ({ size: f.size, family: f.amd ? 'Basv2' : 'Bsv2', variant: 'default', vcpus: f.vcpus, activeVcpus: f.vcpus, memoryGB: f.memoryGB, best: f.size === best.size }));
     option.supported = true;
+    option.previewResize = previewResize(vm, option);
     return option;
 }
 

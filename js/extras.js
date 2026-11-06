@@ -333,6 +333,10 @@ export function caveats(vm, x, option) {
             // VM" and "Resizes the VM to the target SKU and sets the disk controller type
             // to NVMe." (GUIDANCE.tempDiskPreview, "3. Usage", read 2026-11-06).
             : isNvme ? problem(`${said('System-assigned identity')} If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.`)
+            // v5 and Burstable, a Windows Generation 2 VM: the preview feature makes the
+            // rebuild a resize of the same VM, which kept its identity (measured in a lab
+            // test, 2026-11-02; lifecycle.js, previewResize). Without it, a rebuild.
+            : option.rebuild && option.previewResize ? problem(`${said('System-assigned identity')} With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
             // v5 and Burstable: a rebuild (a Windows VM, the temporary disk changes type)
             // is the only method, and a rebuild is a new VM.
             : option.rebuild ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
@@ -340,7 +344,10 @@ export function caveats(vm, x, option) {
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${isNvme || option.rebuild
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${!isNvme && option.rebuild && option.previewResize
+            // A Windows Generation 2 VM on v5 or Burstable: a resize with the preview feature, else a rebuild (0.9.3-beta).
+            ? 'With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.'
+            : isNvme || option.rebuild
             // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
             : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.'}`) : check('Check: the list does not say if the VM is in an availability set.');

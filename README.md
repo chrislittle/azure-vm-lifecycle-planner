@@ -82,6 +82,12 @@ For each VM:
   The source is a note on the Microsoft page
   [Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux).
   The feature is a preview. The answers of the tool do not change.
+  On v5 and Burstable, a Windows VM needs a rebuild when one size has a temporary disk
+  and the other size does not. For a Generation 2 VM, the tool also gives a resize:
+  "On Windows, Azure allows this resize only when the preview feature
+  VMTempDiskResizePreview is registered on the subscription." This comes from a lab
+  test on Windows Server 2022, Generation 2. A Generation 1 VM still needs a rebuild.
+  In vm-target-sizes.csv, the column Rebuild is "No" for v6 and v7.
 - Ranked sizes: up to five sizes for each series, best first. Each one passes the same
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).

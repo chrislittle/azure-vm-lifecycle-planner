@@ -44,10 +44,13 @@ export const PROCESSOR_NOTE = '* A processor change. Test the application, and c
 // A Windows VM needs a rebuild when it changes. With no OS in the list, the words say
 // so only when it changes or this tool cannot tell (0.9.2-beta).
 // v6 and v7: when it changes, the words also name the preview feature (PREVIEW_WORDS).
-export function moveWords(series, rebuild, osKnown, tempDiskChange = null) {
+// previewResize: a Windows Generation 2 rebuild on v5 or Burstable that the preview
+// feature makes a resize (lifecycle.js, measured in a lab test, 2026-11-02; 0.9.3-beta).
+export function moveWords(series, rebuild, osKnown, tempDiskChange = null, previewResize = false) {
     if (series === 'v6' || series === 'v7') {
         return `Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.${tempDiskChange === true ? ` ${PREVIEW_WORDS}` : ''}`;
     }
+    if (rebuild && previewResize) return `Change the size of the current VM. ${PREVIEW_RESIZE_WORDS} Move the page file from the temporary disk to C: before the resize. Without the feature, rebuild from a current image.`;
     if (rebuild) return 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
     if (!osKnown && tempDiskChange !== false) return 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.';
     return 'Resize the current VM. Azure supports a resize to this size.';
@@ -63,6 +66,10 @@ export function moveWords(series, rebuild, osKnown, tempDiskChange = null) {
 // for the preview: the words say no more than the Note. No answer depends on them.
 export const PREVIEW_WORDS = "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview, registered on the subscription, when the temporary disk changes type.";
 export const PREVIEW_LINK = 'Convert SCSI to NVMe (Microsoft)';
+// v5 and Burstable (0.9.3-beta): the same feature lets Azure resize a Windows
+// Generation 2 VM across the temporary-disk boundary. Measured in a lab test,
+// 2026-11-02 (lifecycle.js, previewResize). Only these rows show it.
+export const PREVIEW_RESIZE_WORDS = 'On Windows, Azure allows this resize only when the preview feature VMTempDiskResizePreview is registered on the subscription.';
 
 // Whether one row (m: a planned VM, r: one of its rows) shows PREVIEW_WORDS: a
 // supported v6 or v7 size, the temporary disk changes type, and the VM is not in a pool
