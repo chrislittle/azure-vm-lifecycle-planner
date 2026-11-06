@@ -5,22 +5,28 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.3-beta';
-import families from '../data/families.js?v=0.9.3-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.3-beta';
-import capacity from '../data/capacity.js?v=0.9.3-beta';
-import nvme from '../data/nvme-images.js?v=0.9.3-beta';
-import { capacityRestricted } from './planner.js?v=0.9.3-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_RESIZE_WORDS, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.3-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.3-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.3-beta';
+import sizes from '../data/sizes.js?v=0.9.4-beta';
+import families from '../data/families.js?v=0.9.4-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.4-beta';
+import capacity from '../data/capacity.js?v=0.9.4-beta';
+import nvme from '../data/nvme-images.js?v=0.9.4-beta';
+import { capacityRestricted } from './planner.js?v=0.9.4-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.4-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_RESIZE_WORDS, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.4-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.4-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.4-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
     const w = workloadFound(m);
     return { 'Vendor': w.vendor, 'Evidence': w.kind && w.evidence ? `${w.kind}. ${w.evidence}` : w.evidence };
 }
+
+// The sign that the query found for SAP (query 0.9.4-beta and later), as the list gives
+// it, only when the list says SAP is Yes, else ''. The "SAP" column of vm-target-sizes.csv
+// has the SAP note, which shows only for Yes too: both are blank for No and for no value,
+// as the page shows nothing (review, 2026-11-06).
+const sapSign = (m) => (m.extra && m.extra.sap === true && m.extra.sapSign) || '';
 
 // CSV as Excel opens it: a byte order mark, every field quoted, CRLF. A cell that
 // starts with = + - @ (or a tab or CR) and is longer than one character gets a ' in
@@ -151,7 +157,9 @@ function stageText(m) {
 export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
     'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know', 'To check', 'Needs review', 'Notes', 'Resource ID',
     // Added in 0.8.0-beta at the end, so that the other columns keep their place.
-    'Vendor', 'Evidence'];
+    'Vendor', 'Evidence',
+    // Added in 0.9.4-beta at the end: the sign that the query found for SAP, as the list gives it.
+    'SAP sign'];
 
 export function summaryRows(p) {
     return p.machines.map((m) => ({
@@ -169,12 +177,15 @@ export function summaryRows(p) {
         'Needs review': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
         ...vendorAndEvidence(m),
+        'SAP sign': sapSign(m),
     }));
 }
 
 export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
     'Workload type', 'Series', 'Target size', 'Series result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
-    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID'];
+    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID',
+    // Added in 0.9.4-beta at the end, so that the other columns keep their place.
+    'SAP sign'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
@@ -215,6 +226,7 @@ export function targetRows(p, table, now = new Date()) {
                 'Notes': m.notes.join('; '),
             };
             for (const t of CAVEAT_TOPICS) row[t] = r.caveats && r.caveats[t] ? r.caveats[t].text : '';
+            row['SAP sign'] = sapSign(m);
             out.push(row);
         }
     }
@@ -330,6 +342,13 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  This tool does not show an unknown fact as a pass.',
         '  If the list has no NIC count, this tool selects the size for 1 NIC.',
         '  If the list has no data-disk count, this tool selects the size for 0 data disks.',
+        '',
+        'SAP',
+        '  The SAP note shows only when the "SAP" column of your list is Yes.',
+        '  "SAP sign" gives the fact that the query found: the Azure VM extension for SAP solutions, an SAP licence type or an SAP image.',
+        '  If a VM does not run SAP, set "SAP" to No in your list. Then load the list again.',
+        '  A blank SAP value, or a value that this tool cannot read, gives no SAP note, as for the appliances.',
+        '  If your list does not give SAP, a VM that is in no other workload type shows "Type not checked".',
         '',
         'CAPACITY GROWTH RESTRICTIONS',
         ...capacityWords(capacity, now).map((l) => `  ${l}`),

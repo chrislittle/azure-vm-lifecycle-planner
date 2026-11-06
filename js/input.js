@@ -25,6 +25,9 @@ export const COLUMNS = [
     { name: 'Scale set' },
     { name: 'Azure Virtual Desktop' },
     { name: 'SAP' },
+    // The sign that made "SAP" Yes: the extension for SAP solutions, the licence type or
+    // the image (query 0.9.4-beta and later). Optional.
+    { name: 'SAP sign' },
     { name: 'Unmanaged disks' },
     { name: 'Ephemeral OS disk' },
     { name: 'System-assigned identity' },

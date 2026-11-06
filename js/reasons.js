@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.3-beta';
-import { dateWords, stageWords } from './words.js?v=0.9.3-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.4-beta';
+import { dateWords, stageWords } from './words.js?v=0.9.4-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -32,7 +32,8 @@ export const REASONS = {
     'not-approved': ({ series, facts }) => `Microsoft lists no ${series} target size for the ${facts?.family || 'same'} family.`,
     'excluded': () => 'Another Azure service manages this VM. This tool gives no target size for it.',
     'disk-encryption-present': () => 'v6 and v7 sizes do not support Azure Disk Encryption. Microsoft retires Azure Disk Encryption on 15 September 2028. Move to encryption at host with the Microsoft migration steps. They make new disks and a new VM, because an encrypted disk keeps a flag after decryption.',
-    'sap-needs-a-certified-size': () => 'This VM runs SAP. SAP supports only the sizes that SAP certifies (SAP Note 1928533). This tool cannot check that list.',
+    // What the list says, not a fact this tool checked (0.9.4-beta): with the sign, when the list gives it.
+    'sap-needs-a-certified-size': ({ sapSign }) => `The list says this VM runs SAP.${sapSign ? ` "SAP sign" is "${sapSign}".` : ''} SAP supports only the sizes that SAP certifies (SAP Note 1928533). This tool cannot check that list.`,
     'nva-requires-parallel-deployment': () => 'This VM is a network virtual appliance. Network traffic goes through it, and a move stops the traffic. Ask the vendor which sizes they support. Then deploy a new appliance beside this one and move the traffic.',
     'managed-application-requires-vendor': () => 'This VM is part of a managed application from the Azure Marketplace. The vendor of the application owns the VM, and you cannot change it. Ask the vendor which sizes they support.',
     'storage-appliance-requires-vendor': () => 'This VM is a storage or backup appliance. The vendor certifies specific VM families, disk presentation and drivers. Ask the vendor which sizes they support before a move.',
@@ -106,7 +107,8 @@ export function optionReason(row, table, now = new Date()) {
         for (const w of row.reviewWhy) r += ' ' + reasonFor(w, { vm, series, table, now, option: row.option });
         return r;
     }
-    const why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined })).join(' ');
+    const sapSign = row.machine.extra ? row.machine.extra.sapSign : null;
+    const why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined, sapSign })).join(' ');
     // Not moving: the option is for reference only.
     if (row.moveRequired === 'No' && !why.startsWith('Not needed')) return `No move needed. Note: ${why}`;
     return why;

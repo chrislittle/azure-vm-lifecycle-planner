@@ -162,9 +162,12 @@ test('SAP, unmanaged disks and an ephemeral OS disk: no suggestion', () => {
 test('a blank column is "check", never a pass', () => {
     const { plan: p } = run(read('samples/contoso-by-hand.csv'));
     const row = byName(p, 'contoso-file01').rows.find((r) => r.series === 'v6');
-    for (const topic of ['NVMe', 'Disk encryption', 'Hibernation', 'SAP', 'Identity', 'Zone']) {
+    for (const topic of ['NVMe', 'Disk encryption', 'Hibernation', 'Identity', 'Zone']) {
         assert.equal(row.caveats[topic].state, 'check', topic);
     }
+    // SAP shows only for Yes, as an appliance does (0.9.4-beta). The workload type still
+    // names a missing SAP column (tests/sap.test.js).
+    assert.deepEqual(row.caveats['SAP'], { state: '', text: '' });
 });
 
 test('NVMe support follows Microsoft\'s list; a custom image cannot tell', () => {
@@ -260,8 +263,9 @@ test('every link points to a real Microsoft Learn or GitHub path', () => {
     const files = ['index.html', ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`), ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`)];
     for (const f of files) {
         for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
-            // The identity note cites the managed identities overview (0.9.3-beta).
-            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+            // The identity note cites the managed identities overview (0.9.3-beta). The query
+            // (js/query.js) names the two pages of the Azure VM extension for SAP solutions (0.9.4-beta).
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience|sap\/workloads\/vm-extension-for-sap-(new|standard)$)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
         }
     }
 });
@@ -449,7 +453,8 @@ test('the availability set note says when all the VMs must stop', () => {
     const both = F.allNotes(byName(run(`${head}
 contoso-as1,Standard_D4s_v3,V2,Linux,Yes
 `).plan, 'contoso-as1')).attention.filter((x) => x.topic === 'Availability set');
-    assert.ok(both.some((x) => x.series.includes('v6') && /only when it creates the VM/.test(x.text)));
+    // 0.9.4-beta: v6 and v7 give both methods (tests below).
+    assert.ok(both.some((x) => x.series.includes('v6') && /If you deploy a new VM in parallel: put the new VM in the same availability set/.test(x.text)));
 });
 
 // ---- Same names in other groups or subscriptions (0.4.6-beta) ----
@@ -900,7 +905,11 @@ const LAB_MOVE = `Change the size of the current VM. ${PREVIEW_RESIZE} Move the 
 const LAB_TODO = (size) => `Resize to ${size}. First register the preview feature VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image.`;
 const LAB_REBUILD_COLUMN = 'Only without the preview feature VMTempDiskResizePreview';
 const IDENTITY_LAB = '"System-assigned identity" is Yes. With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
-const AVSET_LAB = '"Availability set" is Yes. With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.';
+// 0.9.4-beta (owner, 2026-11-06): each method in the same words, on v6 and v7 and on the preview rows.
+const AVSET_PARALLEL = 'put the new VM in the same availability set when you create it. Azure cannot add an existing VM to a set.';
+const AVSET_IN_PLACE = 'the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
+const AVSET_BOTH = `"Availability set" is Yes. If you deploy a new VM in parallel: ${AVSET_PARALLEL} If you change the size of the current VM: ${AVSET_IN_PLACE}`;
+const AVSET_LAB = `"Availability set" is Yes. With the preview feature: ${AVSET_IN_PLACE} If you rebuild: ${AVSET_PARALLEL}`;
 const AVSET_NEW_VM = '"Availability set" is Yes. Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.';
 const AVSET_RESIZE = '"Availability set" is Yes. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.';
 const REBUILD_WORDS = 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
@@ -1514,4 +1523,27 @@ test('the temporary-disk preview changes no answer: only "How to move" changes, 
         assert.equal(i, rows.length);
     }
     assert.ok(shown > 0, 'the samples reach the preview');
+});
+
+// ---- 0.9.4-beta: the availability set note gives both methods on v6 and v7 ----
+
+test('availability set on v6 and v7: both methods; a rebuild-only row (Generation 1, a pool) keeps the new-VM words', () => {
+    const head = 'VM name,Current size,Generation,OS,Availability set,Resource type,Managed by\n';
+    const p = run(head + 'contoso-av1,Standard_D4s_v3,V2,Linux,Yes,VM,None\ncontoso-av2,Standard_D4s_v3,V2,Windows,Yes,VM,None\n'
+        + 'contoso-av3,Standard_D4s_v3,V1,Windows,Yes,VM,None\ncontoso-av4,Standard_D4s_v3,V2,Linux,Yes,Scale set,None\n'
+        + 'contoso-av5,Standard_D4s_v3,V2,Linux,No,VM,None\ncontoso-av6,Standard_D4s_v3,V2,Linux,,VM,None\n').plan;
+    const note = (name, series) => rowOf(byName(p, name), series).caveats['Availability set'];
+    for (const name of ['contoso-av1', 'contoso-av2']) {
+        for (const s of ['v6', 'v7']) assert.deepEqual([note(name, s).state, note(name, s).text], ['attention', AVSET_BOTH], `${name} ${s}`);
+        assert.equal(note(name, 'v5').text, AVSET_RESIZE, `${name} v5: a resize, as before`);
+    }
+    // The page shows it once, for v6 and v7.
+    const shown = F.allNotes(byName(p, 'contoso-av1')).attention.filter((x) => x.topic === 'Availability set');
+    assert.ok(shown.some((x) => x.text === AVSET_BOTH && x.series.join() === 'v6,v7'));
+    // Generation 1 needs a new VM for v6 and v7; a pool makes new nodes.
+    assert.equal(byName(p, 'contoso-av3').vm.gen, 'V1');
+    assert.ok(POOL(byName(p, 'contoso-av4')), 'the fixture is a pool');
+    for (const name of ['contoso-av3', 'contoso-av4']) for (const s of ['v6', 'v7']) assert.equal(note(name, s).text, AVSET_NEW_VM, `${name} ${s}`);
+    assert.deepEqual(note('contoso-av5', 'v6'), { state: '', text: '' });
+    assert.equal(note('contoso-av6', 'v6').state, 'check');
 });

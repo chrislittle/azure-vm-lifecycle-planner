@@ -51,6 +51,7 @@ them. It takes one format, with these columns:
 | Scale set | no | Yes / No. |
 | Azure Virtual Desktop | no | Yes / No - a session host. |
 | SAP | no | Yes / No - the extension for SAP solutions, an SAP licence type, or an SAP image. |
+| SAP sign | no | The sign that made SAP Yes, in words (0.9.4-beta): "Azure VM extension for SAP solutions (type)", "Licence type ...", or "Image publisher offer". Empty when there is none. |
 | Unmanaged disks | no | Yes / No - disks kept as VHDs in a storage account. |
 | Ephemeral OS disk | no | Yes / No. |
 | System-assigned identity | no | Yes / No. |
@@ -213,7 +214,7 @@ Agreed so far:
   | Data disks | {n} data disks - fits | No size holds this many data disks | Check: picked for no data disks |
   | Hibernation | Off | On - turn it off before you resize | Check: hibernation |
   | Scale set / AKS / AVD | Not in a scale set | In a scale set (or AKS/AVD) - not covered here | Check: VMs in AKS, AVD or a scale set aren't covered here |
-  | SAP | Not SAP | SAP - only sizes SAP certifies are supported; check SAP Note 1928533 | Check: SAP workloads need an SAP-certified size |
+  | SAP | Not SAP | SAP - only sizes SAP certifies are supported; check SAP Note 1928533 | Check: SAP workloads need an SAP-certified size (from 0.9.4-beta: no note, only Yes shows one) |
   | Unmanaged disks | Managed disks | Unmanaged disks - convert to managed disks first | Check: disks must be managed disks |
   | Ephemeral OS disk | Not ephemeral | Ephemeral OS disk - the new size needs room for it; its contents are lost | Check: ephemeral OS disk |
   | Identity | No system-assigned identity | System-assigned identity - kept on a resize, lost on a rebuild | Check: system-assigned identity |
@@ -1289,6 +1290,127 @@ without one. The FAQ is not cited in the code, and not watched.
   size table; Azure Disk Encryption on v6 and v7 with the series rule taken away), and the
   0.9.2-beta preview tests changed for the new rule. The STE check reads the new words
   (a new made-up list). 22 more mutation checks, all caught (two only after new tests). Review fixes: a test for a pool, a service and an assumed generation; 4 more mutation checks, all caught.
+
+## 0.9.4-beta (2026-11-06): the SAP sign, and the availability set note for each method
+
+Owner, 2026-11-06: a customer's Windows VM with a database showed SAP, but the customer
+does not run SAP. The query said SAP = Yes because the new version of the Azure VM
+extension for SAP solutions (MonitorX64Windows) was on the VM. The customer could not
+see why. Three changes:
+
+- **The standard Windows version too.** The Microsoft page "Standard version of Azure
+  VM extension for SAP solutions" gives its Windows install folder as
+  `Microsoft.AzureCAT.AzureEnhancedMonitoring.AzureCATExtensionHandler` (publisher.type):
+  so the type is `AzureCATExtensionHandler`. The query now reads each publisher with its
+  own types: `Microsoft.AzureCAT.AzureEnhancedMonitoring` with MonitorX64Windows,
+  MonitorX64Linux (the new version) or AzureCATExtensionHandler, and
+  `Microsoft.OSTCExtensions` with AzureEnhancedMonitorForLinux. Before, any of the three
+  types with either publisher counted. For a scale set the query reads the extensions in
+  its model as text, where the order of the fields is not fixed: it finds the publisher
+  and the type in the same list of extensions, not in the same entry. Both pages are
+  cited in the query and watched (`tools/sources.mjs`, now 27 pages). Only their two
+  entries were added to the snapshot (read 2026-11-06).
+- **A new query column "SAP sign"**, after "SAP": the sign that the query found, in a
+  fixed order, so that the same VM gives the same sign each time. The extension first
+  ("Azure VM extension for SAP solutions (MonitorX64Windows)", with the type that was
+  found; the highest of new Windows, new Linux, standard Windows, standard Linux when a
+  VM has more than one), then the licence type ("Licence type SLES_SAP"), then the image
+  ("Image SUSE sles-sap-15-sp5", publisher and offer). Empty when there is none. "SAP"
+  is now Yes exactly when "SAP sign" is not empty. No join was added. The name is the
+  title of the two Microsoft pages ("Azure VM extension for SAP solutions").
+  The column is optional: an older list or a hand-made list works as before.
+- **The SAP note shows only for Yes**, as the network virtual appliance and storage
+  appliance notes do. "No", no value and no column show nothing (before, no value gave
+  "Check: the list does not say if this VM runs SAP."). The note says the sign:
+  - extension: `"SAP" is Yes. "SAP sign" is "Azure VM extension for SAP solutions
+    (MonitorX64Windows)". Confirm that SAP certifies the new size (SAP Note 1928533). If
+    this VM does not run SAP, remove the extension from the VM, or set "SAP" to No in
+    your list.`
+  - licence type or image: the same, but the last sentence is `If this VM does not run
+    SAP, set "SAP" to No in your list.`
+  - Yes with no sign: as before, `"SAP" is Yes. Confirm that SAP certifies the new size
+    (SAP Note 1928533).`
+  The blocker `sap-needs-a-certified-size` still applies only for Yes.
+- **Where the sign shows.** "Facts from your list" (Workload group). The workload type
+  evidence: `"SAP" is Yes. "SAP sign" is "...".` (the page, the report, the Evidence
+  column of vm-summary.csv). A new last column "SAP sign" in vm-summary.csv and in
+  vm-target-sizes.csv, so the other columns keep their place. It has the sign only when
+  "SAP" is Yes, as the page (review, 2026-11-06). The about file has a section SAP: it
+  also says that a blank or unreadable SAP value gives no note, and that a list without
+  SAP can give "Type not checked" (the README says the same).
+- **"What to do" and "Why" for SAP** (owner, 2026-11-06: the page must show the sign and
+  how to clear it). A SAP VM has no size, so the page and the report show no notes for
+  it: the words are in "What to do" (`js/details.js`), on the page and in the report.
+  After "This tool gives no size. Only SAP can approve a size." it adds, with a sign:
+  `"SAP sign" is "<sign>". If this VM does not run SAP, remove the extension from the
+  VM, or set "SAP" to No in your list.` (extension), or `... If this VM does not run
+  SAP, set "SAP" to No in your list.` (licence type or image). With no sign, nothing is
+  added. The reason (`js/reasons.js`, "Why" and the Reason column of
+  vm-target-sizes.csv) said "This VM runs SAP.", which is more than the tool knows. It
+  is now `The list says this VM runs SAP.`, then, with a sign, `"SAP sign" is
+  "<sign>".`, then as before: `SAP supports only the sizes that SAP certifies (SAP Note
+  1928533). This tool cannot check that list.`
+- **The SAP column of vm-target-sizes.csv** has the SAP note: empty for No and for no
+  value, as the page shows nothing. Empty, not "No sign found": for a list with no SAP
+  column the tool did not look, so "No sign found" would say more than the list. The
+  network virtual appliance and storage appliance columns are empty in the same way.
+- **The workload type still names a missing SAP column** ("Type not checked: the list
+  does not give ... "SAP""). Pattern E (standalone) means that no other pattern applies;
+  without the SAP fact the tool cannot rule out SAP (pattern F). This is not a note on
+  the VM, so it does not contradict "the SAP note shows only for Yes".
+- The sample (`contoso-from-azure.csv`): contoso-sap01 has the sign "Image SUSE
+  sles-sap-15-sp5". The template has the column.
+- Not proven on a live Resource Graph yet: the query syntax (`max()` of a number from
+  `case()`, `matches regex` with `(?i)`, `strcat`) is not run against Azure. A test
+  build with the standard and the new extension on a Windows VM, and on a scale set,
+  would prove it (the owner approves the cost first).
+- Tests: `tests/sap.test.js` (the query text, the reader, each note, no note for No and
+  for no value, the evidence, the facts, the report, both CSV files, the about file,
+  "What to do" and "Why" for each kind of sign, and no text that says "This VM runs
+  SAP"). The STE check reads a list with each kind of sign. 53 mutation checks, all
+  caught (32 for the query, the note and the files; 11 for "What to do" and "Why"; 10
+  for the availability set note).
+
+**The availability set note for each method** (owner, 2026-11-06). On v6 and v7 the
+note said only "Azure adds a VM to an availability set only when it creates the VM.
+Deploy the new VM into the set." But v6 and v7 have two methods (0.9.3-beta): deploy in
+parallel, or change the size of the current VM.
+
+- **The source.** The Microsoft page "Resize a virtual machine"
+  (https://learn.microsoft.com/azure/virtual-machines/sizes/resize-vm): "If the new
+  size for a VM in an availability set isn't available on the hardware cluster
+  currently hosting the VM, then you need to deallocate all VMs in the availability
+  set". So all the VMs stop only in that case. A measured run (owner, 2026-11-06): two
+  VMs in one set moved from v4 to v6 one at a time, with the other VM running. The page
+  is watched (`tools/sources.mjs`, now 28 pages); only its entry was added to the
+  snapshot (read 2026-11-06).
+- **v6 and v7** (a fact to know, as before): `"Availability set" is Yes. If you deploy a
+  new VM in parallel: put the new VM in the same availability set when you create it.
+  Azure cannot add an existing VM to a set. If you change the size of the current VM:
+  the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer
+  the new size for this set, stop (deallocate) all the VMs in the set first.`
+- **v5 and Burstable with the preview feature** (the 0.9.3-beta lab rows), the same
+  words in the order of the Identity note: `"Availability set" is Yes. With the preview
+  feature: the VM stays in its set. You can resize the VMs one at a time. If Azure does
+  not offer the new size for this set, stop (deallocate) all the VMs in the set first. If
+  you rebuild: put the new VM in the same availability set when you create it. Azure
+  cannot add an existing VM to a set.`
+- **Rebuild only** keeps the new-VM words ("Azure adds a VM to an availability set only
+  when it creates the VM. Deploy the new VM into the set."): a rebuild on v5 or
+  Burstable, a Generation 1 VM on v6 and v7 (it needs a new VM at Generation 2), and a
+  VM in a pool or a service (patterns A to D: new nodes). A plain resize on v5 and
+  Burstable keeps its words too ("If the hardware of the set does not have the new size,
+  stop all the VMs in the set before the resize.").
+- Tests: one in `tests/planner.test.js` (v6 and v7 for Linux and Windows, v5 unchanged,
+  the page shows the note once for v6 and v7, Generation 1 and a pool keep the new-VM
+  words, No and no value), and the lab-row texts of 0.9.3-beta changed.
+
+**No answer changes.** Against 0.9.3-beta (60f1436), for the three sample lists and a
+made-up list of 4,000 VMs: every result group, workload type, stage, move needed, series
+result, reason code, size, rebuild flag and ranked size is the same. Text changes only:
+the SAP note, the SAP reason, "SAP sign", the Evidence of SAP VMs, "To check" (no SAP
+check), and the Availability set note on v6 and v7 (4 rows of contoso-from-azure.csv, 52
+of the 4,000-VM list).
 
 ## Next
 

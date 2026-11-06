@@ -3,7 +3,7 @@
 // categories"). The pattern decides how to move a VM, not only the size.
 // docs/workload-patterns.md gives the signal for each pattern and its status.
 
-import { applianceSign, inManagedApplication, storageApplianceSign } from './extras.js?v=0.9.3-beta';
+import { applianceSign, inManagedApplication, storageApplianceSign } from './extras.js?v=0.9.4-beta';
 
 // A service that owns a resource group, as the query writes it.
 const POOL_SERVICES = ['aks', 'aro'];
@@ -44,9 +44,14 @@ export function patternFound(x) {
     if (x.sqlGroup === true) f.push(fact('SQL availability group', true));
     if (x.sharedDisk === true) f.push(fact('Shared disk', true));
     if (x.sap === true) f.push(fact('SAP', true));
+    // The sign that the query found for SAP, so that a customer can see why.
+    // In quotes, as in the SAP note: the sign is text with spaces.
+    if (x.sap === true && x.sapSign) f.push(fact('SAP sign', `"${x.sapSign}"`));
     if (f.length) return found('F', f);
     // Pattern E is "every VM that is not in another pattern": so every signal
-    // must be known. An AVD host with no host pool type can be B or E.
+    // must be known. An AVD host with no host pool type can be B or E. A list with
+    // no SAP value is still named here, although the SAP note shows only for Yes:
+    // without it, this tool cannot say that the VM is not SAP (pattern F).
     const missing = [['Managed by', managedBy], ['Scale set', x.scaleSet], ['SQL Server', x.sqlServer], ['Shared disk', x.sharedDisk], ['SAP', x.sap], ['Azure Virtual Desktop', x.virtualDesktop]]
         .filter(([, v]) => v === null).map(([column]) => ({ column, value: null }));
     if (x.virtualDesktop === true && !pool) missing.push({ column: 'AVD host pool type', value: null });
