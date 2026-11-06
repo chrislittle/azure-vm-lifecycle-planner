@@ -9,15 +9,16 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.2-beta';
-import capacity from '../data/capacity.js?v=0.9.2-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.3-beta';
+import capacity from '../data/capacity.js?v=0.9.3-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.2-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.2-beta';
-import { patternOf } from './patterns.js?v=0.9.2-beta';
+} from './lifecycle.js?v=0.9.3-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.3-beta';
+import { patternOf } from './patterns.js?v=0.9.3-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.3-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -238,6 +239,9 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
 
     const vm = {
         vmId: `row-${rowNumber}`, name, location: region, sourceSize, gen, hyperVGeneration: gen,
+        // A service makes the new nodes: this tool assumed Generation 2, it does not know it
+        // (0.9.3-beta: no preview words, lifecycle.js previewResize).
+        genAssumed: genNotNeeded,
         os: os || '', osVersion: '',
         classification: blockers.length ? 'Blocked' : controller === 'NVMe' ? 'ReadyNow' : 'ReadyAfterPrep',
         blockers, prepNeeded: [], platformManaged: false,
@@ -410,6 +414,9 @@ export function plan(machines, table, now = new Date()) {
         const rows = [];
         for (const o of options) {
             const series = o.option;
+            // A pool or a service changes the size there, not on the VM: no resize with the
+            // preview feature (0.9.3-beta; the move words are the pool advice).
+            if (POOL_PATTERNS.includes(m.pattern)) o.previewResize = false;
             const codes = [...o.notSupported];
             const known = [...BY_DESIGN, ...Object.keys(FACT_LABELS)];
             let result;

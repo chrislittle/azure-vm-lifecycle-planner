@@ -42,6 +42,8 @@ const EXTRA_LISTS = [
     + 'contoso-x10,Standard_D4s_v3,3,Linux,TrustedLaunch,1,0,,,\n'
     + 'contoso-x11,Standard_D4s_v3,3,Linux,Standard,1,0,22_04-lts-gen2,,\n',
     'VM name,Machine name,Current size,Generation\ncontoso-d1,contoso-d2,Standard_D2s_v3,V2\n',
+    // 0.9.3-beta: a Windows Generation 2 rebuild on Burstable (the preview feature) and a Generation 1 one.
+    'VM name,Current size,Generation,OS,System-assigned identity,Availability set\ncontoso-w1,Standard_B2ms,V2,Windows,Yes,Yes\ncontoso-w2,Standard_B2ms,V1,Windows,Yes,Yes\n',
     '',
 ];
 
@@ -121,7 +123,7 @@ function collect() {
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
         W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),
-        ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].flatMap((os) => [true, false, null].map((ch) => W.moveWords(s, rb, os, ch))))), W.PREVIEW_WORDS, W.PREVIEW_LINK,
+        ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].flatMap((os) => [true, false, null].flatMap((ch) => [true, false].map((pr) => W.moveWords(s, rb, os, ch, pr)))))), W.PREVIEW_WORDS, W.PREVIEW_LINK, W.PREVIEW_RESIZE_WORDS,
         ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01', '2025-09-30'].flatMap((d) => [null, capacity].flatMap((c) => [null, NOW].map((now) => W.stageWords({ stage, retiresUtc: d }, c, now))))),
         W.capacityWords(capacity, NOW));
     // The page: index.html, and the texts in js/page.js.

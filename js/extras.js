@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.2-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.2-beta';
-import nvme from '../data/nvme-images.js?v=0.9.2-beta';
-import { readCount } from './planner.js?v=0.9.2-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.3-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.3-beta';
+import nvme from '../data/nvme-images.js?v=0.9.3-beta';
+import { readCount } from './planner.js?v=0.9.3-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -318,18 +318,37 @@ export function caveats(vm, x, option) {
     out['Unmanaged disks'] = x.unmanagedDisks === false ? fine('Managed disks.') : x.unmanagedDisks === true ? problem(`${said('Unmanaged disks')} Convert the unmanaged disks to managed disks first.`) : check('Check: the list does not say if the disks are managed disks.');
     out['Ephemeral OS disk'] = x.ephemeralOsDisk === false ? fine('Not ephemeral.') : x.ephemeralOsDisk === true ? problem(`${said('Ephemeral OS disk')} The data on an ephemeral OS disk does not stay when the VM moves. Deploy a new VM at the new size.`) : check('Check: the list does not say if the OS disk is ephemeral.');
 
-    // A system-assigned identity is kept on a resize and lost on a rebuild.
+    // A system-assigned identity is kept on a resize and lost on a new VM. Microsoft:
+    // "Shared life cycle with the Azure resource that the managed identity is created
+    // with. When the parent resource is deleted, the managed identity is deleted as
+    // well." (read 2026-11-06 on
+    // https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview )
+    // The method decides it (words.js moveWords), not the series.
     if (x.systemIdentity === false) out['Identity'] = fine('No system-assigned identity.');
     else if (x.systemIdentity === true) {
-        // On v6 and v7 the move is a new VM (deploy in parallel), which gets a new identity.
-        const newVm = isNvme || option.rebuild;
         out['Identity'] = !hasTarget ? none
-            : newVm ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
+            // v6 and v7 have two methods (0.9.3-beta, owner 2026-11-06). Deploy in parallel
+            // makes a new VM, with a new identity. A change of the size of the current VM
+            // keeps the VM: Microsoft's NVMe conversion script "Stops and deallocates the
+            // VM" and "Resizes the VM to the target SKU and sets the disk controller type
+            // to NVMe." (GUIDANCE.tempDiskPreview, "3. Usage", read 2026-11-06).
+            : isNvme ? problem(`${said('System-assigned identity')} If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.`)
+            // v5 and Burstable, a Windows Generation 2 VM: the preview feature makes the
+            // rebuild a resize of the same VM, which kept its identity (measured in a lab
+            // test, 2026-11-02; lifecycle.js, previewResize). Without it, a rebuild.
+            : option.rebuild && option.previewResize ? problem(`${said('System-assigned identity')} With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
+            // v5 and Burstable: a rebuild (a Windows VM, the temporary disk changes type)
+            // is the only method, and a rebuild is a new VM.
+            : option.rebuild ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
             : !vm.os ? check('Check: the list does not give the OS. A rebuild removes the system-assigned identity.')
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${isNvme || option.rebuild
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${!isNvme && option.rebuild && option.previewResize
+            // A Windows Generation 2 VM on v5 or Burstable: a resize with the preview feature, else a rebuild (0.9.3-beta).
+            // "deallocate all VMs in the availability set" (Microsoft, resize a VM).
+            ? 'With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.'
+            : isNvme || option.rebuild
             // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
             : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.'}`) : check('Check: the list does not say if the VM is in an availability set.');

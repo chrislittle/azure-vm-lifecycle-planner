@@ -144,7 +144,7 @@ test('notes: a problem or a fact to know says the value from the list that gave 
     assert.equal(n({ 'Hibernation': 'Yes' })['Hibernation'], '"Hibernation" is Yes. Turn off hibernation before the move.');
     assert.equal(n({ 'Primary NIC accelerated': 'No' })['Accelerated networking'], '"Primary NIC accelerated" is No. Turn on accelerated networking before the move. The new size needs it.');
     assert.equal(n({ 'Primary NIC accelerated': '', 'Accelerated NICs': '0' })['Accelerated networking'], '"Accelerated NICs" is 0. Turn on accelerated networking before the move. The new size needs it.');
-    assert.equal(n({ 'System-assigned identity': 'Yes' })['Identity'], '"System-assigned identity" is Yes. Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.');
+    assert.equal(n({ 'System-assigned identity': 'Yes' })['Identity'], '"System-assigned identity" is Yes. If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.');
     assert.match(n({ 'Availability set': 'Yes' })['Availability set'], /^"Availability set" is Yes\. /);
     assert.equal(n({ 'Azure Virtual Desktop': 'Yes', 'AVD host pool type': 'Personal' })['Scale set / AKS / AVD'], 'A personal desktop: "AVD host pool type" is Personal. The user cannot use it during the move. Tell the user first.');
     assert.equal(n({})['Temporary disk'], 'The current size Standard_D4s_v3 has a temporary disk of 32 GiB. The move deletes the data on the temporary disk. Keep nothing there that you need.');

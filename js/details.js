@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.2-beta';
-import { likelyRow, signals } from './files.js?v=0.9.2-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
-import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.2-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.2-beta';
-import { gibWords } from './extras.js?v=0.9.2-beta';
+import { capacityRestricted } from './planner.js?v=0.9.3-beta';
+import { likelyRow, signals } from './files.js?v=0.9.3-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
+import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.3-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.3-beta';
+import { gibWords } from './extras.js?v=0.9.3-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -99,6 +99,8 @@ export function todo(m, g) {
     const r = likelyRow(m);
     const o = r.option;
     const main = r.series === 'v6' || r.series === 'v7' ? `Deploy a new VM at ${o.targetSize} in parallel. Then move the workload.`
+        // A Windows Generation 2 rebuild that the preview feature makes a resize (0.9.3-beta).
+        : o.rebuild && o.previewResize ? `Resize to ${o.targetSize}. First register the preview feature VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image.`
         : o.rebuild ? `Rebuild at ${o.targetSize} from a current image.` : `Resize to ${o.targetSize}.`;
     const more = [];
     // "Do this first" is steps, facts to check, or both (review, 2026-10-10).
