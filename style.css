@@ -139,6 +139,10 @@ textarea { width: 100%; resize: vertical; background: var(--bg); color: var(--te
 
 .downloads, .filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
 .downloads .label { display: inline; margin: 0; }
+/* A long option ("Move needed - change in the service or pool") made the select
+   wider than a 320 px screen. The label and its select shrink to the row instead. */
+.filters label { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.filters select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 .status { color: var(--muted); font-size: 13px; }
 select, input[type=search] { font: inherit; padding: 5px 8px; border: 1px solid var(--control); border-radius: 6px; background: var(--panel); color: var(--text); }
 

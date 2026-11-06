@@ -1162,6 +1162,11 @@ vm-target-sizes.csv but "How to move" are the same as 0.9.1-beta.
   for the three sample lists, each "How to move" is the 0.9.1-beta words with only the
   two changes above). The STE check also reads the words. 33 mutation checks, all caught
   (one only after a new test: "What to do" for a VM with no OS whose main move is v5).
+- Also in 0.9.2-beta: at 320 px the "Show" select, sized by its longest option ("Move
+  needed - change in the service or pool"), made the page scroll sideways. The filter labels
+  and selects now shrink to the row (`style.css`); at desktop width nothing changes. A test
+  in `tests/accessibility.test.js` holds the rule; checked at 320 px (light and dark) and
+  1280 px.
 
 ## Next
 

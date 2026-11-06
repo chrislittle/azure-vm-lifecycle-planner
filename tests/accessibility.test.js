@@ -158,6 +158,14 @@ test('messages and counts are in live regions; the motion stops when the system 
     assert.match(read('style.css'), /@media \(prefers-reduced-motion: reduce\) \{[^}]*transition: none/);
 });
 
+// WCAG 1.4.10 Reflow: at 320 px the "Show" select, sized by its longest option,
+// made the page scroll sideways (found 2026-11-06). The filters must shrink to the row.
+test('the filter selects shrink to a narrow screen', () => {
+    const css = read('style.css');
+    assert.match(css, /\.filters label \{[^}]*max-width: 100%[^}]*min-width: 0/);
+    assert.match(css, /\.filters select \{[^}]*min-width: 0[^}]*max-width: 100%/);
+});
+
 // ---- The report ----
 
 function planned() {
