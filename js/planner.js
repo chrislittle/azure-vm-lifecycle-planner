@@ -9,16 +9,16 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.3-beta';
-import capacity from '../data/capacity.js?v=0.9.3-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.4-beta';
+import capacity from '../data/capacity.js?v=0.9.4-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.3-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.3-beta';
-import { patternOf } from './patterns.js?v=0.9.3-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.3-beta';
+} from './lifecycle.js?v=0.9.4-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.4-beta';
+import { patternOf } from './patterns.js?v=0.9.4-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.4-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -436,7 +436,8 @@ export function plan(machines, table, now = new Date()) {
                 machine: m, option: o, series, result, codes, reviewWhy, moveRequired, stage,
                 isDefault: [advice.start.current === series ? 'Current default' : null, advice.start.extended === series ? 'Extended default' : null].filter((x) => x),
                 otherSizes: o.sizeChoices.filter((c) => c.size !== String(o.targetSize ?? '')).map((c) => c.size),
-                caveats: caveats(vm, m.extra, o),
+                // A pool or a service makes new nodes: only the new-VM notes (0.9.4-beta).
+                caveats: caveats(vm, m.extra, o, POOL_PATTERNS.includes(m.pattern)),
             };
             results.push(row);
             rows.push(row);

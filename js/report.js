@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.3-beta';
-import { capacityRestricted } from './planner.js?v=0.9.3-beta';
-import * as F from './files.js?v=0.9.3-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.3-beta';
-import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords, PREVIEW_LINK, PREVIEW_WORDS, tempDiskPreview } from './words.js?v=0.9.3-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.3-beta';
-import version from './version.js?v=0.9.3-beta';
+import capacity from '../data/capacity.js?v=0.9.4-beta';
+import { capacityRestricted } from './planner.js?v=0.9.4-beta';
+import * as F from './files.js?v=0.9.4-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.4-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.4-beta';
+import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, moveWords, PREVIEW_LINK, PREVIEW_WORDS, tempDiskPreview } from './words.js?v=0.9.4-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.4-beta';
+import version from './version.js?v=0.9.4-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 

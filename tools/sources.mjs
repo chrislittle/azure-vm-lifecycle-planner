@@ -47,6 +47,9 @@ export const SOURCES = [
     // publisher and the type that the query reads as an SAP sign.
     ['sap-extension-new', 'New version of Azure VM extension for SAP solutions', `${LEARN}/azure/sap/workloads/vm-extension-for-sap-new`],
     ['sap-extension-standard', 'Standard version of Azure VM extension for SAP solutions', `${LEARN}/azure/sap/workloads/vm-extension-for-sap-standard`],
+    // The availability set note (0.9.4-beta): deallocate all the VMs in the set only when
+    // the new size is not available on the hardware cluster.
+    ['resize-vm', 'Resize a virtual machine', `${VM}/sizes/resize-vm`],
 ].map(([id, name, url]) => ({ id, name, url }));
 
 const point = (n) => { try { return String.fromCodePoint(n); } catch { return ' '; } };

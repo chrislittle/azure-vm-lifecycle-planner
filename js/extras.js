@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.3-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.3-beta';
-import nvme from '../data/nvme-images.js?v=0.9.3-beta';
-import { readCount } from './planner.js?v=0.9.3-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.4-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.4-beta';
+import nvme from '../data/nvme-images.js?v=0.9.4-beta';
+import { readCount } from './planner.js?v=0.9.4-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -272,7 +272,8 @@ export function sapClear(x) {
 export const sapSignWords = (x) => (x && x.sapSign ? said('SAP sign', `"${x.sapSign}"`) : '');
 
 // The caveats for one option of one machine. Agreed wording (PLAN.md).
-export function caveats(vm, x, option) {
+// pool: the VM is in a pool or a service (patterns A to D), which makes new nodes.
+export function caveats(vm, x, option, pool = false) {
     const series = option.option;
     if (series === 'gen1Route') return {};
     const hasTarget = Boolean(option.targetSize);
@@ -366,10 +367,21 @@ export function caveats(vm, x, option) {
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
+    // Two methods, each in the same words (0.9.4-beta, owner 2026-11-06). A new VM joins a
+    // set only when Azure creates it. A resize keeps the VM in its set: Microsoft's "Resize
+    // a VM" page says to deallocate all the VMs in the set only when the new size is not
+    // available on the hardware cluster of the set
+    // (https://learn.microsoft.com/azure/virtual-machines/sizes/resize-vm), and a measured
+    // run moved two VMs in one set from v4 to v6 one at a time, with the other VM running.
+    const avParallel = 'put the new VM in the same availability set when you create it. Azure cannot add an existing VM to a set.';
+    const avInPlace = 'the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
     out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${!isNvme && option.rebuild && option.previewResize
             // A Windows Generation 2 VM on v5 or Burstable: a resize with the preview feature, else a rebuild (0.9.3-beta).
-            // "deallocate all VMs in the availability set" (Microsoft, resize a VM).
-            ? 'With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.'
+            ? `With the preview feature: ${avInPlace} If you rebuild: ${avParallel}`
+            // v6 and v7: deploy in parallel, or change the size of the current VM. Not for
+            // Generation 1 (v6 and v7 need a new VM at Generation 2) or a pool (new nodes).
+            : isNvme && vm.gen !== 'V1' && !pool
+            ? `If you deploy a new VM in parallel: ${avParallel} If you change the size of the current VM: ${avInPlace}`
             : isNvme || option.rebuild
             // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
