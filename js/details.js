@@ -5,7 +5,7 @@ import { likelyRow, signals } from './files.js?v=0.9.3-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
 import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.3-beta';
 import { sizeFacts } from './lifecycle.js?v=0.9.3-beta';
-import { gibWords } from './extras.js?v=0.9.3-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.3-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -78,7 +78,8 @@ export function seriesList(list) {
 // The hard gate, in words: SAP, or the vendor of an appliance.
 export function gateReasons(m) {
     const codes = ['sap-needs-a-certified-size', 'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor', 'managed-application-requires-vendor'];
-    return (m.vm.blockers || []).filter((b) => codes.includes(b)).map((b) => reasonFor(b, {}));
+    // The SAP reason says the sign that the list gives (0.9.4-beta).
+    return (m.vm.blockers || []).filter((b) => codes.includes(b)).map((b) => reasonFor(b, { sapSign: m.extra && m.extra.sapSign }));
 }
 
 // The main thing to do for a VM: { main, more: [] }.
@@ -93,7 +94,11 @@ export function todo(m, g) {
     if (g === 'pool') { const a = poolAdvice(m); return { main: a.todo, more: [a.more] }; }
     if (g === 'gate') {
         const sap = (m.vm.blockers || []).includes('sap-needs-a-certified-size');
-        return { main: sap ? 'Ask SAP which sizes they certify. Do not change the VM before that.' : 'Ask the vendor which sizes they certify. Do not change the VM before that.', more: [`This tool gives no size. Only ${sap ? 'SAP' : 'the vendor'} can approve a size.`] };
+        const more = [`This tool gives no size. Only ${sap ? 'SAP' : 'the vendor'} can approve a size.`];
+        // SAP: the sign that the list gives, and how to clear it for a VM that does
+        // not run SAP (owner, 2026-11-06). Nothing more when the list gives no sign.
+        if (sap && sapClear(m.extra)) more.push(`${sapSignWords(m.extra)} ${sapClear(m.extra)}`);
+        return { main: sap ? 'Ask SAP which sizes they certify. Do not change the VM before that.' : 'Ask the vendor which sizes they certify. Do not change the VM before that.', more };
     }
     if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
     const r = likelyRow(m);

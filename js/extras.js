@@ -259,9 +259,17 @@ const currentTempDisk = (vm) => (vm.sourceTempDiskGiB > 0 ? `The current size ${
 function sapNote(x) {
     const confirm = 'Confirm that SAP certifies the new size (SAP Note 1928533).';
     if (!x.sapSign) return `${said('SAP')} ${confirm}`;
-    const extension = /^Azure VM extension for SAP solutions\b/i.test(x.sapSign);
-    return `${said('SAP')} ${said('SAP sign', `"${x.sapSign}"`)} ${confirm} If this VM does not run SAP, ${extension ? 'remove the extension from the VM, or ' : ''}set "SAP" to No in your list.`;
+    return `${said('SAP')} ${said('SAP sign', `"${x.sapSign}"`)} ${confirm} ${sapClear(x)}`;
 }
+// How to correct the list for a VM that does not run SAP, or '' with no sign. Only
+// the extension can be removed from the VM. "What to do" uses it too (details.js).
+export function sapClear(x) {
+    if (!x || !x.sapSign) return '';
+    const extension = /^Azure VM extension for SAP solutions\b/i.test(x.sapSign);
+    return `If this VM does not run SAP, ${extension ? 'remove the extension from the VM, or ' : ''}set "SAP" to No in your list.`;
+}
+// The sign in words: '"SAP sign" is "Licence type SLES_SAP".', or '' with no sign.
+export const sapSignWords = (x) => (x && x.sapSign ? said('SAP sign', `"${x.sapSign}"`) : '');
 
 // The caveats for one option of one machine. Agreed wording (PLAN.md).
 export function caveats(vm, x, option) {

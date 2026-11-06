@@ -15,6 +15,8 @@ import { plan, toMachine } from '../js/planner.js';
 import { patternFound } from '../js/patterns.js';
 import { factsRead, workloadFound } from '../js/evidence.js';
 import { reportHtml } from '../js/report.js';
+import { optionReason, reasonFor } from '../js/reasons.js';
+import { todo, whyLines } from '../js/details.js';
 import * as F from '../js/files.js';
 
 const table = new SizeTable(sizes.sizes);
@@ -205,4 +207,45 @@ test('about-these-results.txt: what the SAP note and "SAP sign" mean', () => {
     assert.ok(about.includes('  The SAP note shows only when the "SAP" column of your list is Yes.'));
     assert.ok(about.includes('  "SAP sign" gives the fact that the query found: the Azure VM extension for SAP solutions, an SAP licence type or an SAP image.'));
     assert.ok(about.includes('  If a VM does not run SAP, set "SAP" to No in your list. Then load the list again.'));
+});
+
+// ---------------------------------------------------------------------------
+// What to do and Why on the page and in the report (0.9.4-beta, owner)
+// ---------------------------------------------------------------------------
+
+const ASK = 'Ask SAP which sizes they certify. Do not change the VM before that.';
+const ONLY = 'This tool gives no size. Only SAP can approve a size.';
+const REST = 'SAP supports only the sizes that SAP certifies (SAP Note 1928533). This tool cannot check that list.';
+
+test('what to do: the sign and how to clear it, for each kind of sign', () => {
+    const t = (row) => { const m = one(row); return todo(m, F.groupOf(m)); };
+    assert.deepEqual(t({ 'SAP': 'Yes', 'SAP sign': EXT }), { main: ASK, more: [ONLY,
+        `"SAP sign" is "${EXT}". If this VM does not run SAP, remove the extension from the VM, or set "SAP" to No in your list.`] });
+    assert.deepEqual(t({ 'SAP': 'Yes', 'SAP sign': 'Licence type SLES_SAP', 'OS': 'Linux' }), { main: ASK, more: [ONLY,
+        '"SAP sign" is "Licence type SLES_SAP". If this VM does not run SAP, set "SAP" to No in your list.'] });
+    assert.equal(t({ 'SAP': 'Yes', 'SAP sign': 'Image RedHat rhel-sap-ha', 'OS': 'Linux' }).more[1],
+        '"SAP sign" is "Image RedHat rhel-sap-ha". If this VM does not run SAP, set "SAP" to No in your list.');
+    // No sign: as before.
+    assert.deepEqual(t({ 'SAP': 'Yes' }), { main: ASK, more: [ONLY] });
+    // An appliance: no SAP words.
+    assert.deepEqual(t({ 'Image publisher': 'paloaltonetworks', 'Image offer': 'vmseries-flex' }).more, ['This tool gives no size. Only the vendor can approve a size.']);
+    // An appliance with a sign but "SAP" No: no SAP words either.
+    assert.deepEqual(t({ 'Image publisher': 'paloaltonetworks', 'Image offer': 'vmseries-flex', 'SAP': 'No', 'SAP sign': EXT }).more, ['This tool gives no size. Only the vendor can approve a size.']);
+});
+
+test('why: the list says this VM runs SAP, with the sign; the report shows both', () => {
+    assert.equal(reasonFor('sap-needs-a-certified-size', {}), `The list says this VM runs SAP. ${REST}`);
+    assert.equal(reasonFor('sap-needs-a-certified-size', { sapSign: EXT }), `The list says this VM runs SAP. "SAP sign" is "${EXT}". ${REST}`);
+    const m = one({ 'SAP': 'Yes', 'SAP sign': EXT });
+    assert.ok(whyLines(m, F.groupOf(m), table, NOW).includes(`The list says this VM runs SAP. "SAP sign" is "${EXT}". ${REST}`));
+    // The Reason column of vm-target-sizes.csv.
+    assert.equal(optionReason(m.rows.find((r) => r.series === 'v5'), table, NOW), `The list says this VM runs SAP. "SAP sign" is "${EXT}". ${REST}`);
+    const html = reportHtml(run(list([{ 'VM name': 'contoso-sap1', 'SAP': 'Yes', 'SAP sign': EXT }])), table, 'test', NOW);
+    const q = (s) => s.replace(/"/g, '&quot;');
+    assert.ok(html.includes(q(`${ASK} ${ONLY} "SAP sign" is "${EXT}". If this VM does not run SAP, remove the extension from the VM, or set "SAP" to No in your list.`)), 'what to do');
+    assert.ok(html.includes(q(`The list says this VM runs SAP. "SAP sign" is "${EXT}".`)), 'why');
+    // No customer text says as a fact that the VM runs SAP (PLAN.md quotes the old words).
+    for (const f of ['js/reasons.js', 'js/details.js', 'js/words.js', 'js/extras.js', 'js/files.js', 'js/page.js', 'js/report.js', 'README.md', 'index.html']) {
+        assert.doesNotMatch(read(f), /This VM runs SAP/, f);
+    }
 });

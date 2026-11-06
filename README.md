@@ -148,7 +148,8 @@ For each VM:
   For SAP, they also give the "SAP sign" column (from the query of 0.9.4-beta and later).
   It tells you why "SAP" is Yes: the Azure VM extension for SAP solutions (the standard
   or the new version, with its type), an SAP licence type, or an SAP image. The SAP note
-  shows only when "SAP" is Yes. If a VM does not run SAP, set "SAP" to No in your list,
+  shows only when "SAP" is Yes. "What to do" and "Why" for the VM also give the sign.
+  If a VM does not run SAP, set "SAP" to No in your list,
   and load the list again. If the sign is the extension, you can also remove the
   extension from the VM.
 

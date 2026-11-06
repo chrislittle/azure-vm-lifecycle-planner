@@ -1336,6 +1336,18 @@ see why. Three changes:
   column of vm-summary.csv). A new last column "SAP sign" in vm-summary.csv and in
   vm-target-sizes.csv, so the other columns keep their place. The about file has a
   section SAP.
+- **"What to do" and "Why" for SAP** (owner, 2026-11-06: the page must show the sign and
+  how to clear it). A SAP VM has no size, so the page and the report show no notes for
+  it: the words are in "What to do" (`js/details.js`), on the page and in the report.
+  After "This tool gives no size. Only SAP can approve a size." it adds, with a sign:
+  `"SAP sign" is "<sign>". If this VM does not run SAP, remove the extension from the
+  VM, or set "SAP" to No in your list.` (extension), or `... If this VM does not run
+  SAP, set "SAP" to No in your list.` (licence type or image). With no sign, nothing is
+  added. The reason (`js/reasons.js`, "Why" and the Reason column of
+  vm-target-sizes.csv) said "This VM runs SAP.", which is more than the tool knows. It
+  is now `The list says this VM runs SAP.`, then, with a sign, `"SAP sign" is
+  "<sign>".`, then as before: `SAP supports only the sizes that SAP certifies (SAP Note
+  1928533). This tool cannot check that list.`
 - **The SAP column of vm-target-sizes.csv** has the SAP note: empty for No and for no
   value, as the page shows nothing. Empty, not "No sign found": for a list with no SAP
   column the tool did not look, so "No sign found" would say more than the list. The
@@ -1351,8 +1363,9 @@ see why. Three changes:
   build with the standard and the new extension on a Windows VM, and on a scale set,
   would prove it (the owner approves the cost first).
 - Tests: `tests/sap.test.js` (the query text, the reader, each note, no note for No and
-  for no value, the evidence, the facts, the report, both CSV files, the about file).
-  The STE check reads a list with each kind of sign.
+  for no value, the evidence, the facts, the report, both CSV files, the about file,
+  "What to do" and "Why" for each kind of sign, and no text that says "This VM runs
+  SAP"). The STE check reads a list with each kind of sign.
 
 ## Next
 
