@@ -1249,6 +1249,10 @@ without one. The FAQ is not cited in the code, and not watched.
 - **Which rows** (`previewResize` in `js/lifecycle.js`, words only): v5 or Burstable, a
   supported size, a rebuild (a Windows VM where the temporary disk changes type), and
   Generation 2 (from the list, or found from the security type or the image SKU).
+  Not when this tool only assumed Generation 2 (a service such as AKS, with no generation
+  in the list: `genAssumed`), and not for a VM in a pool or a service (the move words are
+  the pool advice), with or without a generation in the list (review, 2026-11-06). Those
+  rows keep the words of 0.9.2-beta: the column Rebuild says "Yes".
   Generation 1 keeps the rebuild words. A VM with Azure Disk Encryption still has no size
   there (`disk-encryption-rebuild`). Linux stays a plain resize. With no OS in the list,
   the words of 0.9.2-beta stay. The 0.9.2-beta rule "the preview words show only for v6
@@ -1268,7 +1272,7 @@ without one. The FAQ is not cited in the code, and not watched.
     identity: add them to it again."
   - Availability set (it said "Deploy the new VM into the set"): "With the preview
     feature, you change the size of the VM in the set. If the hardware of the set does
-    not have the new size, stop all the VMs in the set before the resize. If you rebuild,
+    not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild,
     deploy the new VM into the set. Azure adds a VM to an availability set only when it
     creates the VM." Still a fact to know (blue).
   - The about file: HOW TO MOVE (v5, the column Rebuild, Preview) says the same. The
@@ -1284,7 +1288,7 @@ without one. The FAQ is not cited in the code, and not watched.
 - Tests: three in `tests/planner.test.js` (each row type for Burstable; v5 with a changed
   size table; Azure Disk Encryption on v6 and v7 with the series rule taken away), and the
   0.9.2-beta preview tests changed for the new rule. The STE check reads the new words
-  (a new made-up list). 22 more mutation checks, all caught (two only after new tests).
+  (a new made-up list). 22 more mutation checks, all caught (two only after new tests). Review fixes: a test for a pool, a service and an assumed generation; 4 more mutation checks, all caught.
 
 ## Next
 

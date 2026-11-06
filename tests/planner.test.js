@@ -900,7 +900,7 @@ const LAB_MOVE = `Change the size of the current VM. ${PREVIEW_RESIZE} Move the 
 const LAB_TODO = (size) => `Resize to ${size}. First register the preview feature VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image.`;
 const LAB_REBUILD_COLUMN = 'Only without the preview feature VMTempDiskResizePreview';
 const IDENTITY_LAB = '"System-assigned identity" is Yes. With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
-const AVSET_LAB = '"Availability set" is Yes. With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.';
+const AVSET_LAB = '"Availability set" is Yes. With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.';
 const AVSET_NEW_VM = '"Availability set" is Yes. Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.';
 const AVSET_RESIZE = '"Availability set" is Yes. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.';
 const REBUILD_WORDS = 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
@@ -981,6 +981,37 @@ test('a Windows Generation 2 VM whose temporary disk changes type on v5 or Burst
         '             This tool shows it for a Windows Generation 2 VM, when the temporary disk changes type.',
     ]) assert.ok(about.includes(`${line}\n`), line);
     assert.ok(!about.includes('A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.'), 'the 0.9.2-beta line is gone');
+});
+
+test('a pool or a service, or a generation that this tool assumed: no preview words, the words of 0.9.2-beta', async () => {
+    // Review, 2026-11-06: a service (AKS) with no generation gets Generation 2 as "not
+    // needed". That is not a known Generation 2. A pool gets the pool advice, not a resize.
+    const head = 'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Managed by,Resource type\n';
+    const { plan: p } = run(`${head}contoso-pa1,Standard_B2ms,,Windows,Yes,Yes,AKS,VM\ncontoso-ps1,Standard_B2ms,V2,Windows,Yes,Yes,None,Scale set\n`);
+    const all = F.targetRows(p, table, NOW);
+    const B = 'Burstable (Bsv2, Basv2)';
+    for (const name of ['contoso-pa1', 'contoso-ps1']) {
+        const m = byName(p, name);
+        assert.ok(POOL(m), `${name}: the fixture is a pool or a service`);
+        const b = rowOf(m, 'burstable');
+        assert.deepEqual([b.result, b.option.rebuild, b.option.previewResize], ['Supported', true, false], name);
+        const row = all.find((r) => r['VM name'] === name && r['Series'] === B);
+        assert.equal(row['Rebuild'], 'Yes', `${name}: as in 0.9.2-beta`);
+        assert.ok(!row['How to move'].includes('VMTempDiskResizePreview'), name);
+        assert.equal(b.caveats['Identity'].text, IDENTITY_REBUILD, name);
+        assert.equal(b.caveats['Availability set'].text, AVSET_NEW_VM, name);
+    }
+    assert.equal(byName(p, 'contoso-pa1').read.generationFrom, 'not-needed');
+    assert.equal(byName(p, 'contoso-pa1').vm.genAssumed, true);
+    assert.equal(byName(p, 'contoso-ps1').vm.genAssumed, false);
+    // The assumed generation on its own (the pool rule also covers this VM): the option itself says no.
+    const { burstableOption } = await import('../js/lifecycle.js');
+    const pa1 = byName(p, 'contoso-pa1').vm;
+    assert.equal(burstableOption(pa1, table, NOW).previewResize, false);
+    assert.equal(burstableOption({ ...pa1, genAssumed: false }, table, NOW).previewResize, true, 'the fixture: known Generation 2 would get it');
+    // A generation that the security type gives is known: Trusted launch needs Generation 2.
+    const tl = byName(run('VM name,Current size,Generation,OS,Security type\ncontoso-pt1,Standard_B2ms,,Windows,TrustedLaunch\n').plan, 'contoso-pt1');
+    assert.deepEqual([tl.read.generationFrom, tl.vm.genAssumed, rowOf(tl, 'burstable').option.previewResize], ['security-type', false, true]);
 });
 
 test('v5: a Windows Generation 2 rebuild gets the preview words too, Generation 1 does not', () => {

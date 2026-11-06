@@ -346,7 +346,8 @@ export function caveats(vm, x, option) {
 
     out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${!isNvme && option.rebuild && option.previewResize
             // A Windows Generation 2 VM on v5 or Burstable: a resize with the preview feature, else a rebuild (0.9.3-beta).
-            ? 'With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.'
+            // "deallocate all VMs in the availability set" (Microsoft, resize a VM).
+            ? 'With the preview feature, you change the size of the VM in the set. If the hardware of the set does not have the new size, stop (deallocate) all the VMs in the set before the resize. If you rebuild, deploy the new VM into the set. Azure adds a VM to an availability set only when it creates the VM.'
             : isNvme || option.rebuild
             // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'

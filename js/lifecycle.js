@@ -874,8 +874,10 @@ function tempDiskChangeTo(vm, targetEntry, targetArch) {
 // Not measured: Generation 1, Azure Disk Encryption (those rows have no size anyway).
 // Words only: the answer (the size, the rebuild flag) does not change. A rebuild is
 // always a Windows VM (pathSelection, burstableOption), so the OS needs no check here.
+// Generation 2 must be known: not assumed for a service (vm.genAssumed, planner.js).
+// A VM in a pool or a service gets the pool advice: planner.js sets it false there.
 function previewResize(vm, option) {
-    return Boolean(option.supported && option.rebuild && generationController(option.option) !== 'NVMe' && eqI(vm.gen, 'V2'));
+    return Boolean(option.supported && option.rebuild && generationController(option.option) !== 'NVMe' && eqI(vm.gen, 'V2') && !vm.genAssumed);
 }
 
 // One series for one machine: whether it is supported, and the facts about it.
