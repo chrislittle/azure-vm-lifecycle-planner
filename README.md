@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.1-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.2-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -72,6 +72,12 @@ For each VM:
 - How to move, by series, as Microsoft recommends. On v5, resize the current VM when
   Azure supports it. On v6 and v7, deploy a new VM in parallel and move the workload.
   Microsoft says that a move to v6 or v7 is "not a normal VM resize".
+  On v6 and v7, when the temporary disk changes type, the tool also says:
+  "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview,
+  registered on the subscription, when the temporary disk changes type."
+  The source is a note on the Microsoft page
+  [Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux).
+  The feature is a preview. The answers of the tool do not change.
 - Ranked sizes: up to five sizes for each series, best first. Each one passes the same
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).

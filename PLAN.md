@@ -1094,6 +1094,80 @@ tool found Generation 2 itself, or when a service did not need it.
   page now shows the hint only when the report would (`generationHint` in
   `js/evidence.js`, one rule for both).
 
+## 0.9.2-beta (2026-11-06): the temporary-disk preview
+
+Owner, 2026-11-06: Microsoft documents a preview feature, `VMTempDiskResizePreview`.
+The tool said nothing about it. Words only, plus the source list. **No answer
+changes:** for the three sample lists and a made-up list of 4,000 VMs, the result
+group, the workload type, the stage, each series answer and its reason codes, the
+defaults, the Azure Disk Encryption refusals, the ranked sizes, each note (topic,
+state, series, words), vm-summary.csv, vm-not-checked.csv and every column of
+vm-target-sizes.csv but "How to move" are the same as 0.9.1-beta.
+
+- **The source.** A Note on the Microsoft page "Convert SCSI to NVMe for Linux and
+  Windows VMs" (https://learn.microsoft.com/azure/virtual-machines/nvme-linux, in
+  "3. Usage"). It is about Microsoft's NVMe conversion script: when "converting between
+  VM sizes with different resource (temporary) disk support", the subscription "must be
+  registered for the VMTempDiskResizePreview feature", or the script stops with an
+  error. The page is for Linux and Windows. It names no series. Microsoft gives no
+  terms, limits or date of general availability for the preview, so the words say no
+  more than the Note: no "supported", no list of series, no general size change. The
+  page "Convert a VM from SCSI to NVMe in place" also mentions the feature in a Tip
+  that contradicts itself: watched, not cited. Both pages are in `tools/sources.mjs`
+  (now 25 pages). Only their two entries were added to the snapshot (read 2026-11-06),
+  so the weekly check still compares the other pages with 16 October. The second page
+  moved (from `/migration/sizes/` to `/migration/`): the list has the new address,
+  because the check never follows a move.
+- **The words**, the same everywhere: "Microsoft's NVMe conversion script needs the
+  preview feature VMTempDiskResizePreview, registered on the subscription, when the
+  temporary disk changes type."
+- **When they show** (`tempDiskPreview` in `js/words.js`, one rule for the page, the
+  report and vm-target-sizes.csv): a v6 or v7 row with a supported size, where the
+  temporary disk changes type, for any OS (Windows, Linux or not given). Not on v5 or
+  Burstable (their sizes keep SCSI: the script converts to NVMe), not for a VM in a pool
+  or a service (they get other advice), and not for a series with no supported size.
+  - "Changes type": none, SCSI or NVMe, from the current size to the new size
+    (`tempDiskChange`, a new fact on each option). In the size table of 2026-10-16 the
+    size picker gives a v6 or v7 size with another kind of temporary disk only from a
+    SCSI temporary disk to an NVMe one (all 1,498 sizes checked): a VM with no temporary
+    disk gets a v6 or v7 size with none. The rule also counts the other directions (a
+    test uses a changed table for "none to a temporary disk").
+  - **Unknown is not a change** (review, 2026-11-06). The tool reads the temporary disk
+    from the size name when the size table does not give it (a size that is not in the
+    table still gets v6 and v7 sizes this way). `tempDiskChange` is then not known, and
+    no words show. The same when the table does not give the temporary disk of the new
+    size.
+- **A word fix (review, 2026-11-06).** With no OS in the list, v5 and Burstable said
+  "Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the
+  temporary disk changes type." also when the temporary disk keeps its type. Now, when
+  the size table shows that it keeps its type, they say "Resize the current VM. Azure
+  supports a resize to this size.", and "What to do" no longer says "For a Windows VM, a
+  rebuild can be necessary". When it changes type, or the table cannot tell, the words
+  stay. The answers and the Rebuild column do not change.
+- **"How to move" changes** (against 0.9.1-beta): the preview words after the v6 and v7
+  words on 12 rows of contoso-from-azure.csv (contoso-web01, contoso-f01, contoso-fc01,
+  contoso-b02, contoso-api01), 41 of contoso-every-series.csv, 4 of contoso-by-hand.csv
+  (contoso-file01, contoso-dc01), and 828 of the 4,000-VM list; the resize words in
+  place of the hedge on 10 v5 rows of the 4,000-VM list (no OS, the disk keeps its type).
+  Nothing else.
+- **Where.** The page: in each v6 and v7 size card, after the move words, with the link
+  "Convert SCSI to NVMe (Microsoft)". The report: under the move in the sizes table of
+  the VM card, with the same link (the report shows only the first sentence of the move
+  words, so the words have their own line). vm-target-sizes.csv: "How to move". The
+  about file: an entry "Preview" in HOW TO MOVE, with when it shows and the page. The
+  README: after "How to move".
+- Tests: five in `tests/planner.test.js` (the words and the link; the rule for each
+  case and each OS; unknown is not a change, with a current size that is not in the size
+  table; the page, the CSV file, the report, the about file, the README and this plan;
+  for the three sample lists, each "How to move" is the 0.9.1-beta words with only the
+  two changes above). The STE check also reads the words. 33 mutation checks, all caught
+  (one only after a new test: "What to do" for a VM with no OS whose main move is v5).
+- Also in 0.9.2-beta: at 320 px the "Show" select, sized by its longest option ("Move
+  needed - change in the service or pool"), made the page scroll sideways. The filter labels
+  and selects now shrink to the row (`style.css`); at desktop width nothing changes. A test
+  in `tests/accessibility.test.js` holds the rule; checked at 320 px (light and dark) and
+  1280 px.
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

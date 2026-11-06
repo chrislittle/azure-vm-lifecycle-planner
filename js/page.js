@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.9.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.1-beta';
-import capacity from '../data/capacity.js?v=0.9.1-beta';
-import nvme from '../data/nvme-images.js?v=0.9.1-beta';
-import query from './query.js?v=0.9.1-beta';
-import sample from './sample.js?v=0.9.1-beta';
-import { SizeTable } from './lifecycle.js?v=0.9.1-beta';
-import { COLUMNS, readList } from './input.js?v=0.9.1-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.1-beta';
-import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.1-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.9.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, stageShort, stageWords } from './words.js?v=0.9.1-beta';
-import * as F from './files.js?v=0.9.1-beta';
-import { makeZip } from './zip.js?v=0.9.1-beta';
-import version from './version.js?v=0.9.1-beta';
+import sizes from '../data/sizes.js?v=0.9.2-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.2-beta';
+import capacity from '../data/capacity.js?v=0.9.2-beta';
+import nvme from '../data/nvme-images.js?v=0.9.2-beta';
+import query from './query.js?v=0.9.2-beta';
+import sample from './sample.js?v=0.9.2-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.2-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.2-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.2-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
+import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.2-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.2-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.2-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_LINK, stageShort, stageWords, tempDiskPreview } from './words.js?v=0.9.2-beta';
+import * as F from './files.js?v=0.9.2-beta';
+import { makeZip } from './zip.js?v=0.9.2-beta';
+import version from './version.js?v=0.9.2-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -373,7 +373,12 @@ function details(m) {
             const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
             const card = el('div', {}, el('h4', { class: o.supported ? '' : 'no', text: title }));
             if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no', text: optionReason(r, table, now) }));
-            if (o.supported && m.moveRequired === 'Yes' && !pool) card.append(el('p', { class: 'hint', text: moveWords(r.series, o.rebuild, Boolean(m.vm.os)) }));
+            if (o.supported && m.moveRequired === 'Yes' && !pool) {
+                // With the preview feature VMTempDiskResizePreview, the link to the Microsoft page that names it.
+                const preview = tempDiskPreview(m, r);
+                card.append(el('p', { class: 'hint' }, moveWords(r.series, o.rebuild, Boolean(m.vm.os), o.tempDiskChange),
+                    preview ? ' ' : null, preview ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
+            }
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;

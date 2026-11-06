@@ -9,15 +9,15 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.1-beta';
-import capacity from '../data/capacity.js?v=0.9.1-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.2-beta';
+import capacity from '../data/capacity.js?v=0.9.2-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.1-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.1-beta';
-import { patternOf } from './patterns.js?v=0.9.1-beta';
+} from './lifecycle.js?v=0.9.2-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.2-beta';
+import { patternOf } from './patterns.js?v=0.9.2-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -242,6 +242,9 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
         classification: blockers.length ? 'Blocked' : controller === 'NVMe' ? 'ReadyNow' : 'ReadyAfterPrep',
         blockers, prepNeeded: [], platformManaged: false,
         diskController: controller || '', sourceDiskArch, sourceTempDisks,
+        // The size table gives the temporary disk of the current size (0.9.2-beta): only
+        // then can the words say that it changes type. A name alone does not tell.
+        sourceTempDiskKnown: maxMb !== null && Number.isFinite(maxMb),
         // The size of the temporary disk, for the words of the notes (0.9.0-beta).
         sourceTempDiskGiB: entry ? sizeFacts(entry).tempGiB : null,
     };

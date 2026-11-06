@@ -37,6 +37,10 @@ export const SOURCES = [
     ['eav4', 'Eav4 series', `${VM}/sizes/memory-optimized/eav4-series`],
     ['easv4', 'Easv4 series', `${VM}/sizes/memory-optimized/easv4-series`],
     ['capacity-resilience', 'Well-Architected Framework: capacity resilience', `${LEARN}/azure/well-architected/design-guides/capacity-resilience`],
+    // The preview feature VMTempDiskResizePreview (0.9.2-beta): the Note on this page is
+    // the source of the words. The next page only mentions it in a Tip: watched, not cited.
+    ['nvme-conversion', 'Convert SCSI to NVMe for Linux and Windows VMs', `${VM}/nvme-linux`],
+    ['scsi-to-nvme', 'Convert a VM from SCSI to NVMe in place', `${VM}/migration/scsi-to-nvme-migration`],
 ].map(([id, name, url]) => ({ id, name, url }));
 
 const point = (n) => { try { return String.fromCodePoint(n); } catch { return ' '; } };

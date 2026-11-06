@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.1-beta';
-import families from '../data/families.js?v=0.9.1-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.1-beta';
-import capacity from '../data/capacity.js?v=0.9.1-beta';
-import nvme from '../data/nvme-images.js?v=0.9.1-beta';
-import { capacityRestricted } from './planner.js?v=0.9.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, rankWords, stageWords } from './words.js?v=0.9.1-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.1-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.1-beta';
+import sizes from '../data/sizes.js?v=0.9.2-beta';
+import families from '../data/families.js?v=0.9.2-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.2-beta';
+import capacity from '../data/capacity.js?v=0.9.2-beta';
+import nvme from '../data/nvme-images.js?v=0.9.2-beta';
+import { capacityRestricted } from './planner.js?v=0.9.2-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.2-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.2-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.2-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -141,7 +141,7 @@ export function rankedFor(m, r, table, now = new Date()) {
 // a service; otherwise the series does.
 export function howToMove(m, r) {
     if (POOL_PATTERNS.includes(m.pattern)) { const a = poolAdvice(m); return `${a.todo} ${a.more}`.trim(); }
-    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os));
+    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange);
 }
 
 function stageText(m) {
@@ -293,6 +293,10 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
         '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
         '             and a rebuild removes Azure Disk Encryption.',
+        // The preview feature VMTempDiskResizePreview (words.js, PREVIEW_WORDS).
+        `  Preview:   ${PREVIEW_WORDS}`,
+        '             This tool shows it for v6 and v7, when the temporary disk changes type. The answers do not change.',
+        `             ${GUIDANCE.tempDiskPreview}`,
         '',
         'RANKED SIZES',
         '  For each supported series, up to five sizes, best first. Each one passes the same checks.',

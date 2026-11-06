@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.1-beta';
-import { likelyRow, signals } from './files.js?v=0.9.1-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.1-beta';
-import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.1-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.1-beta';
-import { gibWords } from './extras.js?v=0.9.1-beta';
+import { capacityRestricted } from './planner.js?v=0.9.2-beta';
+import { likelyRow, signals } from './files.js?v=0.9.2-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
+import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.2-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.2-beta';
+import { gibWords } from './extras.js?v=0.9.2-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -108,7 +108,8 @@ export function todo(m, g) {
             : s.actions.length ? 'Do the steps in "Before the move" first.' : 'Check the facts in "To check" first.');
     }
     // A resize on Linux can be a rebuild on Windows (the temporary disk changes type).
-    if (!m.vm.os && !o.rebuild && r.series !== 'v6' && r.series !== 'v7') more.push('The list does not give the OS. For a Windows VM, a rebuild can be necessary.');
+    // Not when the size table shows that the temporary disk keeps its type (0.9.2-beta).
+    if (!m.vm.os && !o.rebuild && o.tempDiskChange !== false && r.series !== 'v6' && r.series !== 'v7') more.push('The list does not give the OS. For a Windows VM, a rebuild can be necessary.');
     if (m.pattern === 'F') more.push(PATTERNS.F.advice);
     const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
     if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);
