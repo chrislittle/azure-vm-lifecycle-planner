@@ -260,7 +260,8 @@ test('every link points to a real Microsoft Learn or GitHub path', () => {
     const files = ['index.html', ...readdirSync(new URL('../js/', import.meta.url)).map((f) => `js/${f}`), ...readdirSync(new URL('../data/', import.meta.url)).map((f) => `data/${f}`)];
     for (const f of files) {
         for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
-            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience)|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+            // The identity note cites the managed identities overview (0.9.3-beta).
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
         }
     }
 });
@@ -842,6 +843,53 @@ test('notes: a new VM on v6 and v7 gets a new identity; unknown accelerated netw
     const m = run('VM name,Current size,Generation,OS,System-assigned identity\ncontoso-i1,Standard_D4s_v3,V2,Linux,Yes\n').plan.machines[0];
     assert.equal(rowOf(m, 'v6').caveats['Identity'].state, 'problem');
     assert.equal(rowOf(m, 'v5').caveats['Accelerated networking'].state, 'check', 'the new size needs it, and the list does not say');
+});
+
+// 0.9.3-beta (owner, 2026-11-06): a system-assigned identity has the life cycle of its
+// VM. v6 and v7 have two methods (deploy in parallel: a new VM; change the size of the
+// current VM: the same VM), so the note gives both. A rebuild is a new VM. A resize keeps it.
+const IDENTITY_PARALLEL = '"System-assigned identity" is Yes. If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.';
+const IDENTITY_REBUILD = '"System-assigned identity" is Yes. Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
+test('notes: the identity note follows the method of each series (v6 and v7 both methods, a rebuild a new VM, a resize nothing)', () => {
+    const head = 'VM name,Current size,Generation,OS,System-assigned identity\n';
+    const p = run(`${head}contoso-i2,Standard_B2ms,V2,Windows,Yes\ncontoso-i3,Standard_B2ms,V2,Linux,Yes\ncontoso-i4,Standard_D4s_v3,V2,,Yes\n`).plan;
+    // A Windows VM on B2ms: v5 is a resize, Burstable (B2s_v2, no temporary disk) a rebuild.
+    const win = byName(p, 'contoso-i2');
+    for (const s of ['v6', 'v7']) {
+        const c = rowOf(win, s).caveats['Identity'];
+        assert.deepEqual([c.state, c.text], ['problem', IDENTITY_PARALLEL], s);
+        assert.match(c.text, /If you deploy a new VM in parallel, /);
+        assert.match(c.text, /If you change the size of the current VM, the VM keeps its identity\.$/);
+    }
+    assert.equal(rowOf(win, 'burstable').option.rebuild, true, 'the fixture: Burstable is a rebuild');
+    assert.deepEqual([rowOf(win, 'burstable').caveats['Identity'].state, rowOf(win, 'burstable').caveats['Identity'].text], ['problem', IDENTITY_REBUILD]);
+    assert.doesNotMatch(rowOf(win, 'burstable').caveats['Identity'].text, /change the size|keeps its identity|in parallel/, 'a rebuild is only a new VM');
+    assert.equal(rowOf(win, 'v5').option.rebuild, false, 'the fixture: v5 is a resize');
+    assert.deepEqual(rowOf(win, 'v5').caveats['Identity'], { state: '', text: '' }, 'a resize keeps the identity: no note');
+    // The page, the report and the files show the two texts as two notes, each with its series.
+    const ids = F.allNotes(win).actions.filter((x) => x.topic === 'Identity');
+    assert.deepEqual(ids.map((x) => [x.text, x.series]), [[IDENTITY_PARALLEL, ['v6', 'v7']], [IDENTITY_REBUILD, ['burstable']]]);
+    // Linux: v5 and Burstable are a resize.
+    const linux = byName(p, 'contoso-i3');
+    for (const s of ['v5', 'burstable']) assert.deepEqual(rowOf(linux, s).caveats['Identity'], { state: '', text: '' }, s);
+    assert.equal(rowOf(linux, 'v6').caveats['Identity'].text, IDENTITY_PARALLEL);
+    // No OS in the list: v6 and v7 still give both methods; v5 stays a check.
+    const noOs = byName(p, 'contoso-i4');
+    assert.equal(rowOf(noOs, 'v7').caveats['Identity'].text, IDENTITY_PARALLEL);
+    assert.deepEqual(rowOf(noOs, 'v5').caveats['Identity'], { state: 'check', text: 'Check: the list does not give the OS. A rebuild removes the system-assigned identity.' });
+    // A rebuild on v5 (the method of the option, not the series, decides it).
+    const vm = { os: 'Windows', sourceSize: 'Standard_D4s_v3' };
+    const base = { targetSize: 'Standard_D4s_v5', acceleratedNetworking: {} };
+    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', rebuild: true })['Identity'].text, IDENTITY_REBUILD);
+    assert.deepEqual(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', rebuild: false })['Identity'], { state: '', text: '' });
+    // v6 with a rebuild flag (Windows, the temporary disk changes type): still both methods.
+    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, targetSize: 'Standard_D4ds_v6', option: 'v6', rebuild: true })['Identity'].text, IDENTITY_PARALLEL);
+});
+
+test('the about file and the page: on v6 and v7, a change of the size of the current VM keeps the identity', () => {
+    const about = F.aboutText(run(sample).plan, readList(sample), 'sample', NOW).replace(/\r\n/g, '\n');
+    assert.match(about, /\n {2}v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM\.\n {13}Microsoft highly recommends this\. A move to v6 or v7 is not a normal resize\.\n {13}You can also change the size of the current VM\. The VM then keeps its identity\.\n/);
+    assert.match(read('index.html'), /For v6 and v7, you deploy a new VM in parallel and move the workload to it\. You can also change the size of the current VM\. A new VM gets a new system-assigned identity, and a rebuild removes Azure Disk Encryption\. When Azure changes the size of the same VM, the VM keeps its identity\.<\/li>/);
 });
 
 test('workload type: ARO is a pool that the service manages; a SQL Server image is a database; unknown "Managed by" is not E', async () => {

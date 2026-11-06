@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.2-beta';
-import families from '../data/families.js?v=0.9.2-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.2-beta';
-import capacity from '../data/capacity.js?v=0.9.2-beta';
-import nvme from '../data/nvme-images.js?v=0.9.2-beta';
-import { capacityRestricted } from './planner.js?v=0.9.2-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.2-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.2-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.2-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.2-beta';
+import sizes from '../data/sizes.js?v=0.9.3-beta';
+import families from '../data/families.js?v=0.9.3-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.3-beta';
+import capacity from '../data/capacity.js?v=0.9.3-beta';
+import nvme from '../data/nvme-images.js?v=0.9.3-beta';
+import { capacityRestricted } from './planner.js?v=0.9.3-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.3-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.3-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.3-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.3-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -290,6 +290,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '             A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.',
         '  v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM.',
         '             Microsoft highly recommends this. A move to v6 or v7 is not a normal resize.',
+        '             You can also change the size of the current VM. The VM then keeps its identity.',
         '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
         '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
         '             and a rebuild removes Azure Disk Encryption.',

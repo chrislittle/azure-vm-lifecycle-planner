@@ -41,6 +41,8 @@ export const SOURCES = [
     // the source of the words. The next page only mentions it in a Tip: watched, not cited.
     ['nvme-conversion', 'Convert SCSI to NVMe for Linux and Windows VMs', `${VM}/nvme-linux`],
     ['scsi-to-nvme', 'Convert a VM from SCSI to NVMe in place', `${VM}/migration/scsi-to-nvme-migration`],
+    // The identity note (0.9.3-beta): a system-assigned identity has the life cycle of its VM.
+    ['managed-identities', 'Managed identities for Azure resources', `${LEARN}/entra/identity/managed-identities-azure-resources/overview`],
 ].map(([id, name, url]) => ({ id, name, url }));
 
 const point = (n) => { try { return String.fromCodePoint(n); } catch { return ' '; } };

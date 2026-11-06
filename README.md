@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.2-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.3-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -72,6 +72,10 @@ For each VM:
 - How to move, by series, as Microsoft recommends. On v5, resize the current VM when
   Azure supports it. On v6 and v7, deploy a new VM in parallel and move the workload.
   Microsoft says that a move to v6 or v7 is "not a normal VM resize".
+  The tool also says that you can change the size of the current VM, but that this has
+  more steps and more risk. With that method, the VM keeps its system-assigned identity.
+  A new VM gets a new identity. For a VM with a system-assigned identity, the note
+  "Identity" tells you what to do for each method.
   On v6 and v7, when the temporary disk changes type, the tool also says:
   "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview,
   registered on the subscription, when the temporary disk changes type."
