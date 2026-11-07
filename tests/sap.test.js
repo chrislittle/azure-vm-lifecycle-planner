@@ -254,7 +254,9 @@ test('why: the list says this VM runs SAP, with the sign; the report shows both'
     assert.equal(optionReason(m.rows.find((r) => r.series === 'v5'), table, NOW), `The list says this VM runs SAP. "SAP sign" is "${EXT}". ${REST}`);
     const html = reportHtml(run(list([{ 'VM name': 'contoso-sap1', 'SAP': 'Yes', 'SAP sign': EXT }])), table, 'test', NOW);
     const q = (s) => s.replace(/"/g, '&quot;');
-    assert.ok(html.includes(q(`${ASK} ${ONLY} "SAP sign" is "${EXT}". If this VM does not run SAP, remove the extension from the VM, or set "SAP" to No in your list.`)), 'what to do');
+    // 0.9.6-beta: the advice in one box of "What to do".
+    assert.ok(html.includes(q(`<h5>Ask SAP which sizes they certify</h5><p>Do not change the VM before that.</p><p>${ONLY}</p><p>"SAP sign" is "${EXT}". If this VM does not run SAP, remove the extension from the VM, or set "SAP" to No in your list.</p>`)), 'what to do');
+    assert.equal(ASK, 'Ask SAP which sizes they certify. Do not change the VM before that.', 'the table of section 2 keeps the main thing to do');
     assert.ok(html.includes(q(`The list says this VM runs SAP. "SAP sign" is "${EXT}".`)), 'why');
     // No customer text says as a fact that the VM runs SAP (PLAN.md quotes the old words).
     for (const f of ['js/reasons.js', 'js/details.js', 'js/words.js', 'js/extras.js', 'js/files.js', 'js/page.js', 'js/report.js', 'README.md', 'index.html']) {

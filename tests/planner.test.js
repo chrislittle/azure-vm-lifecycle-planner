@@ -8,10 +8,11 @@ import sizes from '../data/sizes.js';
 import query from '../js/query.js';
 import sample from '../js/sample.js';
 import { SizeTable, lifecycleChange, rankedSizes } from '../js/lifecycle.js';
-import { readList } from '../js/input.js';
+import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { caveats, imageSupportsNvme } from '../js/extras.js';
 import * as F from '../js/files.js';
+import { largeList } from './large-list.js';
 
 const table = new SizeTable(sizes.sizes);
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -933,6 +934,7 @@ const B = 'Burstable (Bsv2, Basv2)';
 const PARALLEL = 'Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.';
 const RESIZE = 'Resize the current VM. Azure supports a resize to this size.';
 const POOL = (m) => ['A', 'B', 'C', 'D'].includes(m.pattern);
+const TWO_WAYS_WORDS = 'Two ways: deploy a new VM in parallel (Microsoft recommends this), or change the size of this VM.';
 
 test('the preview feature: each word, and the rule for each fact (made-up facts)', async () => {
     const W = await import('../js/words.js');
@@ -1213,9 +1215,13 @@ test('review: the report says which resize needs the feature on v6 and v7', asyn
     const p = run('VM name,Current size,Generation,OS\ncontoso-rv1,Standard_D4s_v3,V2,Windows\ncontoso-rv2,Standard_D4s_v3,V2,\n').plan;
     const html = reportHtml(p, table, 'x', NOW);
     const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); return html.slice(i, html.indexOf('</section>', i)); };
-    // The report shows only the first sentence of the move: the feature words come after the second method.
-    assert.ok(card('contoso-rv1').includes(`Deploy a new VM at this size in parallel, move the workload, then delete the old VM.</span><br><span class="muted">You can also change the size of the current VM. ${FEATURE} <a href=`));
-    assert.ok(card('contoso-rv2').includes(`<br><span class="muted">You can also change the size of the current VM. ${FEATURE_NO_OS} <a href=`));
+    // 0.9.6-beta: the feature is a step in the box of the second way, "Change the size of this VM",
+    // with the link; the box of the first way does not name it.
+    const box = (name, title) => { const c = card(name); const i = c.indexOf(`<h5>${title}</h5>`); assert.ok(i > 0, `${name}: ${title}`); return c.slice(i, c.indexOf('</div>', i)); };
+    assert.ok(box('contoso-rv1', 'Change the size of this VM').includes(`<b>Preview feature:</b> register VMTempDiskResizePreview on the subscription. <a href="${PREVIEW_PAGE}">`));
+    assert.ok(box('contoso-rv1', 'Change the size of this VM').includes('<b>Page file:</b> move it from the temporary disk to C:.'));
+    assert.ok(box('contoso-rv2', 'Change the size of this VM').includes(`<b>Preview feature:</b> on a Windows VM, register VMTempDiskResizePreview on the subscription. <a href="${PREVIEW_PAGE}">`));
+    for (const name of ['contoso-rv1', 'contoso-rv2']) assert.doesNotMatch(box(name, 'Deploy a new VM in parallel'), /VMTempDiskResizePreview|Page file/, name);
     // The page and the CSV have the whole move, where the same sentence comes first.
     const row = F.targetRows(p, table, NOW).find((r) => r['VM name'] === 'contoso-rv1' && r['Series'] === 'v6');
     assert.ok(row['How to move'].includes(`You can also change the size of the current VM, but that has more steps and more risk. ${FEATURE}`));
@@ -1635,20 +1641,24 @@ test('the preview feature on the page, in the CSV file, the report and the about
     // The report: the first sentence of the move, then the feature (and the link on v6 and v7) on a line of their own.
     const html = reportHtml(p, table, 'cases', NOW);
     const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); assert.ok(i > 0, name); return html.slice(i, html.indexOf('</section>', i)); };
+    // 0.9.6-beta: v6 and v7 rows that What to do uses have the feature as a step of the second
+    // way, with the link; Burstable has it as a step of its one way, then the size without it.
     for (const name of ['contoso-pw1', 'contoso-pu1', 'contoso-pb1', 'contoso-pb2']) {
         assert.ok(card(name).includes(`href="${PREVIEW_PAGE}"`), `${name}: the link`);
-        assert.ok(card(name).includes(name === 'contoso-pw1' || name === 'contoso-pb1' ? FEATURE : FEATURE_NO_OS), name);
+        assert.ok(card(name).includes(`<b>Preview feature:</b> ${name === 'contoso-pw1' || name === 'contoso-pb1' ? '' : 'on a Windows VM, '}register VMTempDiskResizePreview on the subscription.`), name);
     }
     const pb1 = rowOf(byName(p, 'contoso-pb1'), 'v5').option.targetSize;
-    assert.ok(card('contoso-pb1').includes(`Resize the current VM.</span><br><span class="muted">${FEATURE} ${FALLBACK_V5(pb1)}</span>`), 'Burstable: the move, then the feature');
-    // contoso-pb1: Burstable (its main move: "What to do"), v6 and v7 name the feature.
+    assert.ok(card('contoso-pb1').includes(`<p class="muted">${FALLBACK_V5(pb1)}</p>`), 'Burstable: the size without the feature, after the steps');
+    // contoso-pb1: What to do uses Burstable, so the v6 and v7 rows of the sizes give both ways
+    // and the feature words, with the link.
+    assert.equal(card('contoso-pb1').split(`${TWO_WAYS_WORDS} ${FEATURE} <a href="${PREVIEW_PAGE}">`).length - 1, 2);
     // ... and its v5 list names it for the size with no temporary disk (review, 2026-11-06).
-    assert.equal(card('contoso-pb1').split('VMTempDiskResizePreview').length - 1, 5);
+    assert.equal(card('contoso-pb1').split('VMTempDiskResizePreview').length - 1, 4);
     for (const name of ['contoso-pl1', 'contoso-pe1']) assert.ok(!card(name).includes('VMTempDiskResizePreview') && !card(name).includes(PREVIEW_PAGE), name);
     // The page: the same rule, and the words and the link in each size card (js/page.js).
     const page = read('js/page.js').replace(/\r\n/g, '\n');
-    assert.match(page, /const preview = tempDiskPreview\(m, r\);\n\s*card\.append\(el\('p', \{ class: 'hint' \}, moveWords\(r\.series, o\.previewFeature, o\.featureFallback\),/);
-    assert.match(page, /preview \? el\('a', \{ href: GUIDANCE\.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK \}\) : null/);
+    assert.match(page, /if \(c\.how\) card\.append\(el\('p', \{ class: 'hint' \}, c\.how, c\.link \? ' ' : null, c\.link \? el\('a', \{ href: GUIDANCE\.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK \}\) : null\)\);/);
+    assert.match(page, /x\.link \? el\('a', \{ href: GUIDANCE\.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK \}\) : null/);
     // The about file, the README and the plan.
     const about = F.aboutText(p, readList('VM name,Current size,Generation\n'), 'cases', NOW).replace(/\r\n/g, '\n');
     for (const line of [
@@ -1682,4 +1692,343 @@ test('availability set on v6 and v7: both methods; a rebuild-only row (Generatio
     for (const name of ['contoso-av3', 'contoso-av4']) for (const s of ['v6', 'v7']) assert.equal(note(name, s).text, AVSET_NEW_VM, `${name} ${s}`);
     assert.deepEqual(note('contoso-av5', 'v6'), { state: '', text: '' });
     assert.equal(note('contoso-av6', 'v6').state, 'check');
+});
+
+// ---- 0.9.6-beta: readiness words, and the ways to move, each with its own steps ----
+// Owner, 2026-11-07: the Result says the readiness in Azure Migrate's terms; "What to do"
+// shows each way to move in its own box, with all the steps of that way.
+
+const LAYOUT_HEAD = COLUMNS.map((c) => c.name);
+// A standalone Windows VM on D4s_v3 with every query column: the likely move is v6.
+const LAYOUT_BASE = { 'Region': 'eastus2', 'Current size': 'Standard_D4s_v3', 'Generation': 'V2', 'OS': 'Windows', 'NIC count': '1', 'Data-disk count': '1', 'Security type': 'TrustedLaunch',
+    'Image publisher': 'MicrosoftWindowsServer', 'Image offer': 'WindowsServer', 'Image SKU': '2022-datacenter-g2', 'Disk controller': 'SCSI', 'Accelerated NICs': '1', 'Primary NIC accelerated': 'Yes',
+    'Azure Disk Encryption': 'No', 'Hibernation': 'No', 'Scale set': 'No', 'Azure Virtual Desktop': 'No', 'SAP': 'No', 'Unmanaged disks': 'No', 'Ephemeral OS disk': 'No', 'System-assigned identity': 'No',
+    'Availability set': 'No', 'Zone': '1', 'Resource type': 'VM', 'Managed by': 'None', 'SQL Server': 'No', 'SQL availability group': 'No', 'Shared disk': 'No' };
+const layoutCell = (v) => (/[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+const layoutList = (rows) => [LAYOUT_HEAD.join(','), ...rows.map((r) => LAYOUT_HEAD.map((h) => layoutCell(String(h in r ? r[h] : LAYOUT_BASE[h] ?? ''))).join(','))].join('\n') + '\n';
+const layoutOne = (row) => run(layoutList([{ 'VM name': 'contoso-l1', ...row }])).plan.machines[0];
+const AN_OFF = { 'Accelerated NICs': '0', 'Primary NIC accelerated': 'No' };
+const LINUX = { 'OS': 'Linux', 'Image publisher': 'Canonical', 'Image offer': '0001-com-ubuntu-server-jammy', 'Image SKU': '22_04-lts-gen2' };
+const topics = (way) => way.steps.map((s) => s.topic);
+
+test('the result words: Move needed and the readiness, in Azure Migrate terms', async () => {
+    const { GROUPS } = await import('../js/words.js');
+    const want = {
+        modern: ['Modern size', 'No move needed'],
+        ready: ['Move needed', 'Ready'],
+        first: ['Move needed', 'Ready with conditions'],
+        pool: ['Move needed', 'Change it in the service or pool'],
+        gate: ['Move needed', 'Vendor approval first'],
+        nopath: ['Move needed', 'Not ready: no supported size'],
+        unchecked: ['Readiness unknown', 'This tool cannot read this VM or its size'],
+    };
+    assert.deepEqual(Object.keys(GROUPS), Object.keys(want), 'the same groups, in the same order');
+    for (const [g, [move, readiness]] of Object.entries(want)) {
+        assert.deepEqual([GROUPS[g].move, GROUPS[g].readiness, GROUPS[g].short], [move, readiness, `${move} - ${readiness}`], g);
+        assert.doesNotMatch(GROUPS[g].long, /Before the move|do this first|\bsteps? \(/i, g);
+    }
+    // The CSV value and the about file use the single line.
+    const r = run(sample);
+    const row = F.summaryRows(r.plan).find((x) => x['VM name'] === 'contoso-web02');
+    assert.equal(row['Result group'], 'Move needed - Ready with conditions');
+    const about = F.aboutText(r.plan, r.list, 'sample', NOW);
+    for (const g of Object.values(GROUPS)) assert.ok(about.includes(`\r\n  ${g.short}\r\n    ${g.long}\r\n`), g.short);
+    assert.doesNotMatch(about, /do this first/i);
+    // The page shows the two lines in the Result pill, and the single line in the counts and the filter.
+    const page = read('js/page.js');
+    assert.match(page, /el\('span', \{ class: 'pill-move', text: GROUPS\[g\]\.move \}\), el\('span', \{ class: 'pill-readiness', text: GROUPS\[g\]\.readiness \}\)/);
+});
+
+test('what to do on v6 and v7: two ways, each with all its steps', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const W = await import('../js/words.js');
+    // Windows, a SCSI temporary disk, a system-assigned identity, accelerated networking off.
+    const m = layoutOne({ ...AN_OFF, 'System-assigned identity': 'Yes' });
+    assert.equal(F.likelyRow(m).series, 'v6');
+    assert.equal(F.likelyRow(m).option.previewFeature, 'needed');
+    const w = whatToDo(m, F.groupOf(m));
+    assert.equal(w.lead, `Move to ${F.likelyRow(m).option.targetSize}. Choose one of these two ways.`);
+    assert.deepEqual(w.ways.map((x) => x.key), ['parallel', 'resize']);
+    const [one, two] = w.ways;
+    assert.deepEqual([one.label, one.tag, one.title, one.lines], ['Option 1', 'Microsoft recommends', 'Deploy a new VM in parallel', ['Deploy the new VM, move the workload, then delete the old VM.']]);
+    assert.deepEqual([two.label, two.tag, two.title, two.lines], ['Option 2', '', 'Change the size of this VM', ['The VM keeps its identity, disks and extensions.']]);
+    assert.deepEqual([one.conditions, two.conditions], [true, true]);
+    assert.deepEqual(topics(one), ['Accelerated networking', 'Identity']);
+    assert.deepEqual(topics(two), ['Accelerated networking', 'Preview feature', 'Page file']);
+    // The full note, with the value from the list. Identity: only the steps of a new VM.
+    assert.equal(one.steps[0].text, '"Primary NIC accelerated" is No. Turn on accelerated networking before the move. The new size needs it.');
+    assert.equal(two.steps[0].text, one.steps[0].text, 'a step of both ways shows in both boxes');
+    assert.equal(one.steps[1].text, IDENTITY_NEW_VM);
+    assert.deepEqual(two.steps.slice(1).map((s) => [s.topic, s.text, s.link]), [
+        ['Preview feature', 'register VMTempDiskResizePreview on the subscription.', true],
+        ['Page file', 'move it from the temporary disk to C:.', false]]);
+    assert.deepEqual([W.conditionsWords(one.steps.length), W.conditionsWords(two.steps.length), W.conditionsWords(1), W.NO_CONDITIONS], ['Conditions (2 steps)', 'Conditions (3 steps)', 'Conditions (1 step)', 'No conditions.']);
+    // No "Before the move" words, and the steps are in no other section.
+    assert.doesNotMatch(JSON.stringify(w), /Before the move/);
+    assert.deepEqual(w.otherSteps, []);
+    // No OS: the feature on a Windows VM.
+    const noOsVm = layoutOne({ 'OS': '' });
+    const noOs = whatToDo(noOsVm, F.groupOf(noOsVm));
+    assert.deepEqual(noOs.ways[1].steps.map((s) => `${s.topic}: ${s.text}`), [
+        'Preview feature: on a Windows VM, register VMTempDiskResizePreview on the subscription.',
+        'Page file: on a Windows VM, move it from the temporary disk to C:.']);
+    assert.deepEqual(noOs.ways[0].steps, []);
+});
+
+test('what to do: Linux on v6 has no preview feature; the availability set splits to each way', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const m = layoutOne({ ...LINUX, ...AN_OFF, 'Availability set': 'Yes' });
+    assert.equal(F.likelyRow(m).series, 'v6');
+    const w = whatToDo(m, F.groupOf(m));
+    assert.deepEqual(topics(w.ways[0]), ['Accelerated networking']);
+    assert.deepEqual(topics(w.ways[1]), ['Accelerated networking']);
+    // Good to know in each box, the words of that way, with the value from the list.
+    assert.deepEqual(w.ways.map((x) => x.info.map((i) => [i.topic, i.text])), [
+        [['Availability set', `"Availability set" is Yes. P${AVSET_PARALLEL.slice(1)}`]],
+        [['Availability set', `"Availability set" is Yes. T${AVSET_IN_PLACE.slice(1)}`]]]);
+    // Not again in "Good to know"; the v5 words (a resize) stay there, with the series.
+    assert.ok(!w.attention.some((x) => x.text === AVSET_BOTH));
+    assert.ok(w.attention.some((x) => x.text === AVSET_STAYS && x.series.join() === 'v5'));
+    // A Linux VM with nothing to do: no steps in either box.
+    const cleanVm = layoutOne(LINUX);
+    const clean = whatToDo(cleanVm, F.groupOf(cleanVm));
+    assert.deepEqual(clean.ways.map((x) => x.steps.length), [0, 0]);
+});
+
+test('what to do: one box for v5, Burstable, a pool, SAP and no supported size', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const p = run(sample).plan;
+    const box = (m) => { const w = whatToDo(m, F.groupOf(m)); assert.equal(w.ways.length, 1, m.read.name); return { w, b: w.ways[0] }; };
+    // v5: a resize.
+    const web02 = byName(p, 'contoso-web02');
+    assert.equal(F.likelyRow(web02).series, 'v5');
+    let { w, b } = box(web02);
+    assert.equal(w.lead, `Move to ${F.likelyRow(web02).option.targetSize}.`);
+    assert.deepEqual([b.key, b.label, b.tag, b.title, b.lines, b.conditions], ['resize', '', '', 'Change the size of this VM', ['The VM keeps its identity, disks and extensions.'], true]);
+    assert.deepEqual(topics(b), ['Accelerated networking']);
+    // Burstable with the preview feature: the steps, then the size without the feature.
+    const bw = run('VM name,Current size,Generation,OS\ncontoso-bw,Standard_B2s,V2,Windows\n').plan.machines[0];
+    ({ w, b } = box(bw));
+    assert.equal(F.likelyRow(bw).series, 'burstable');
+    assert.deepEqual(topics(b).slice(-2), ['Preview feature', 'Page file']);
+    assert.equal(b.steps.find((s) => s.topic === 'Preview feature').link, false, 'the NVMe page is for v6 and v7');
+    assert.deepEqual(b.after, [FALLBACK_V5(rowOf(bw, 'v5').option.targetSize)]);
+    // A pool: its advice, in one box. A service: nothing to do on the VM.
+    ({ w, b } = box(byName(p, 'contoso-aks-np1')));
+    assert.deepEqual([w.lead, b.key, b.title, b.lines], ['', 'pool', 'Change the size in the service or the pool', ['Add a new AKS node pool at the new size.', 'This scale set is an AKS node pool. Move the workload to the new node pool, then remove the old node pool. Do not change the VMs.']]);
+    assert.deepEqual([b.steps, b.after], [[], ['Nothing to do on the VM. The service manages the image and the disks.']]);
+    ({ b } = box(byName(p, 'contoso-vmss01')));
+    assert.deepEqual([b.key, b.lines[0], b.after], ['pool', 'Make a new scale set at the new size.', []]);
+    // SAP: the vendor advice and the sign.
+    ({ w, b } = box(byName(p, 'contoso-sap01')));
+    assert.deepEqual([b.key, b.title, b.lines], ['vendor', 'Ask SAP which sizes they certify', ['Do not change the VM before that.', 'This tool gives no size. Only SAP can approve a size.',
+        '"SAP sign" is "Image SUSE sles-sap-15-sp5". If this VM does not run SAP, set "SAP" to No in your list.']]);
+    assert.equal(b.conditions, false);
+    ({ b } = box(byName(p, 'contoso-fw01')));
+    assert.equal(b.title, 'Ask the vendor which sizes they certify');
+    // No supported size: the reason is in "Why".
+    ({ b } = box(byName(p, 'contoso-gpu01')));
+    assert.deepEqual([b.key, b.lines, b.conditions], ['nopath', ['This tool has no supported size for this VM.', 'See "Why" for the reason.'], false]);
+    // No box: a modern size, and a VM that this tool cannot check.
+    for (const n of ['contoso-app01', 'contoso-odd01']) assert.deepEqual(whatToDo(byName(p, n), F.groupOf(byName(p, n))).ways, [], n);
+});
+
+test('what to do: a VM ready with conditions only to check says to check first; the cluster advice stays', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const m = byName(run('VM name,Current size,Generation\ncontoso-z,Standard_D4s_v3,V2\n').plan, 'contoso-z');
+    const w = whatToDo(m, F.groupOf(m));
+    assert.ok(w.more.includes('Check the facts in "To check" first.'));
+    assert.ok(!w.more.some((x) => /Before the move|Do the steps/.test(x)));
+    const fc = byName(run(sample).plan, 'contoso-fc01');
+    const wf = whatToDo(fc, F.groupOf(fc));
+    assert.ok(wf.more.some((x) => x.startsWith('This VM holds state or is part of a cluster')));
+    assert.ok(wf.more.includes('You can also use v5 and v7. See "Sizes".'));
+});
+
+test('what to do: a step for other series only stays outside the boxes, with the series', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    // contoso-b02 moves to Burstable; v5 and v6 need accelerated networking.
+    const b02 = byName(run(sample).plan, 'contoso-b02');
+    const w = whatToDo(b02, F.groupOf(b02));
+    assert.equal(F.likelyRow(b02).series, 'burstable');
+    assert.deepEqual(w.ways[0].steps, []);
+    assert.deepEqual(w.otherSteps.map((x) => [x.topic, x.series.join()]), [['Accelerated networking', 'v5,v6']]);
+});
+
+// Each note of each VM shows: in a box (a step, or good to know), or in "Steps for the
+// other sizes", "Good to know" or "To check". The value from the list stays with it.
+function notesLost(p, whatToDo) {
+    const lost = [];
+    for (const m of p.machines) {
+        const w = whatToDo(m, F.groupOf(m));
+        const inBox = w.ways.flatMap((b) => [...b.steps, ...b.info]);
+        const shown = [...inBox, ...w.otherSteps, ...w.attention, ...w.checks];
+        const n = F.allNotes(m);
+        for (const note of [...n.actions, ...n.attention, ...n.checks]) {
+            if (shown.some((x) => x.topic === note.topic && x.text === note.text)) continue;
+            // A note in two parts, one for each way: each sentence is in a box.
+            const parts = inBox.filter((x) => x.topic === note.topic).map((x) => x.text).join(' ');
+            const said = /^"[^"]+" is [^.]+\./.exec(note.text)?.[0] || '';
+            const rest = note.text.slice(said.length).trim()
+                .replace(/If you deploy a new VM in parallel[,:] (\w)/g, (_, c) => c.toUpperCase())
+                // The box of the change of the size says it: "The VM keeps its identity, disks and extensions."
+                .replace(/If you change the size of the current VM, the VM keeps its identity\./, '')
+                .replace(/If you change the size of the current VM: (\w)/g, (_, c) => c.toUpperCase());
+            const missing = rest.split(/(?<=\.)\s+/).filter((s) => s && !parts.includes(s));
+            if (!said || !parts.includes(said) || missing.length) lost.push(`${m.read.name}: ${note.topic}: ${note.text}`);
+        }
+    }
+    return lost;
+}
+
+test('no note is lost: every note of every VM shows, on the samples and the 4,000-VM list', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const lists = [...readdirSync(new URL('../samples/', import.meta.url)).map((f) => read(`samples/${f}`)), largeList(4000, 7)];
+    let notes = 0;
+    let split = 0;
+    for (const text of lists) {
+        const r = run(text);
+        if (r.list.stops.length) continue;
+        assert.deepEqual(notesLost(r.plan, whatToDo), []);
+        for (const m of r.plan.machines) {
+            const n = F.allNotes(m);
+            const all = [...n.actions, ...n.attention, ...n.checks];
+            notes += all.length;
+            // A part of a note in a box: its text is not the text of a note.
+            split += whatToDo(m, F.groupOf(m)).ways.flatMap((b) => [...b.steps, ...b.info]).filter((x) => !all.some((y) => y.text === x.text) && !['Preview feature', 'Page file'].includes(x.topic)).length;
+        }
+    }
+    assert.ok(notes > 500 && split > 10, `${notes} notes, ${split} parts of a note in a box`);
+    // The check catches a lost note: a model that drops a note fails.
+    const m = layoutOne({ 'System-assigned identity': 'Yes', 'Hibernation': 'Yes' });
+    const drop = (topic) => (x, g) => { const w = whatToDo(x, g); return { ...w, ways: w.ways.map((b) => ({ ...b, steps: b.steps.filter((s) => s.topic !== topic) })) }; };
+    assert.deepEqual(notesLost({ machines: [m] }, whatToDo), []);
+    assert.equal(notesLost({ machines: [m] }, drop('Hibernation')).length, 1);
+    assert.equal(notesLost({ machines: [m] }, drop('Identity')).length, 1);
+});
+
+test('the size cards: the stage of the series, the size that What to do uses, and the ways', async () => {
+    const { sizeCard } = await import('../js/details.js');
+    const W = await import('../js/words.js');
+    const m = layoutOne({ 'System-assigned identity': 'Yes' });
+    const g = F.groupOf(m);
+    const card = (s) => sizeCard(m, g, rowOf(m, s));
+    assert.deepEqual([card('v6').used, card('v5').used, card('v7').used], [true, false, false]);
+    assert.equal(W.SIZE_USED, 'What to do uses this size');
+    assert.equal(card('v6').how, 'Two ways: see "What to do".');
+    assert.equal(card('v7').how, 'Two ways, as for v6.');
+    assert.equal(card('v5').how, 'One way: change the size of this VM.');
+    assert.equal(card('v6').link, false, 'the link is in the step');
+    // The stage of the target series, from the stage data, never other words.
+    for (const s of ['v5', 'v6', 'v7']) assert.equal(card(s).stage, rowOf(m, s).option.targetStage.stage, s);
+    assert.ok(['Current', 'Extended'].includes(card('v6').stage));
+    assert.equal(W.OTHER_SIZES_FIT, 'The other sizes also fit this VM.');
+    // When What to do uses Burstable, a v6 card gives both ways and the preview feature itself;
+    // the v5 card is a plain resize.
+    const bw = run('VM name,Current size,Generation,OS\ncontoso-bw,Standard_B2s,V2,Windows\n').plan.machines[0];
+    assert.equal(sizeCard(bw, F.groupOf(bw), rowOf(bw, 'burstable')).used, true);
+    const c6 = sizeCard(bw, F.groupOf(bw), rowOf(bw, 'v6'));
+    assert.equal(c6.used, false);
+    assert.equal(c6.how, `Two ways: deploy a new VM in parallel (Microsoft recommends this), or change the size of this VM. ${FEATURE}`);
+    assert.equal(c6.link, true);
+    assert.equal(sizeCard(bw, F.groupOf(bw), rowOf(bw, 'v7')).how, c6.how, 'not "as for v6": What to do does not use v6');
+    assert.equal(sizeCard(bw, F.groupOf(bw), rowOf(bw, 'v5')).how, 'One way: change the size of this VM.');
+    // A v5 card with the feature, that What to do does not use: the words and the size without it.
+    const v5 = { series: 'v5', option: { supported: true, targetSize: 'Standard_D2s_v5', previewFeature: 'needed', featureFallback: { size: 'Standard_D2ds_v5' }, targetStage: { stage: 'Extended' } } };
+    assert.deepEqual(sizeCard(bw, F.groupOf(bw), v5), { used: false, stage: 'Extended', how: `One way: change the size of this VM. ${FEATURE} ${FALLBACK_SIZE('Standard_D2ds_v5')}`, link: false });
+    assert.equal(sizeCard(bw, F.groupOf(bw), { ...v5, option: { ...v5.option, previewFeature: 'unknown' } }).how, `One way: change the size of this VM. ${FEATURE_UNKNOWN}`);
+    // A modern size and a pool: no ways on a card, and no card is "used".
+    const p = run(sample).plan;
+    for (const n of ['contoso-app03', 'contoso-aks-np1']) {
+        const x = byName(p, n);
+        for (const r of x.rows.filter((y) => y.option.supported)) assert.deepEqual([sizeCard(x, F.groupOf(x), r).used, sizeCard(x, F.groupOf(x), r).how], [false, ''], `${n} ${r.series}`);
+    }
+});
+
+test('the page and the report show the ways in boxes with headings, and no "Before the move" section for their steps', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const r = run(layoutList([{ 'VM name': 'contoso-l1', ...AN_OFF, 'System-assigned identity': 'Yes' }]));
+    const m = r.plan.machines[0];
+    const html = reportHtml(r.plan, table, 'test', NOW);
+    const i = html.indexOf('<h3>contoso-l1</h3>');
+    const card = html.slice(i, html.indexOf('</section>\n', i));
+    for (const t of ['<h4>What to do</h4>', 'Option 1', 'Microsoft recommends', '<h5>Deploy a new VM in parallel</h5>', '<h5>Change the size of this VM</h5>', 'Conditions (2 steps)', 'Conditions (3 steps)',
+        `Move to ${F.likelyRow(m).option.targetSize}. Choose one of these two ways.`, '<b>Preview feature:</b> register VMTempDiskResizePreview on the subscription.', 'What to do uses this size']) assert.ok(card.includes(t), t);
+    assert.doesNotMatch(card, /Before the move|Do the steps in/);
+    const at = (h) => card.indexOf(`<h4>${h}</h4>`);
+    assert.ok(at('What to do') < at('Why') && at('Why') < at('Workload type') && at('Workload type') < at('Good to know') && at('Good to know') < at('Sizes'), 'the order');
+    // The boxes stack on a narrow screen.
+    assert.match(html, /@media \(max-width: 600px\) \{[^}]*\.ways \{ grid-template-columns: 1fr; \}/);
+    // The page: a labelled region for each way, a real heading, and the boxes stack.
+    const page = read('js/page.js');
+    assert.match(page, /el\('section', \{ class: `way/);
+    assert.match(page, /'aria-labelledby': /);
+    assert.match(page, /el\('h4', \{ id[,:] /);
+    assert.doesNotMatch(page, /section\('Before the move'/);
+    assert.doesNotMatch(page, /moveWords\(/, 'the cards use the words of sizeCard');
+    assert.match(read('style.css'), /@media \(max-width: 600px\) \{[^}]*\.ways \{ grid-template-columns: 1fr; \}/);
+});
+
+test('what to do: the preview feature not checked, a pool with an identity, and a service with no supported size', async () => {
+    const { whatToDo, SERVICE_NOTHING } = await import('../js/details.js');
+    // The size table does not give the temporary disk: the words are in the box of the resize, not under it.
+    const gone = tableWith({ Standard_D4s_v3: null });
+    const q = runWith('VM name,Current size,Generation,OS\ncontoso-gw,Standard_D4s_v3,V2,Windows\ncontoso-gv,Standard_D4s_v3,V1,Windows\n', gone);
+    for (const m of q.machines) {
+        const w = whatToDo(m, F.groupOf(m));
+        assert.equal(F.likelyRow(m).option.previewFeature, 'unknown', m.read.name);
+        const resize = w.ways.find((b) => b.key === 'resize');
+        assert.ok(resize.after.includes(FEATURE_UNKNOWN), m.read.name);
+        assert.ok(!w.more.includes(FEATURE_UNKNOWN), m.read.name);
+        assert.ok(!w.ways.some((b) => b.key !== 'resize' && b.after.includes(FEATURE_UNKNOWN)), m.read.name);
+    }
+    assert.deepEqual(q.machines.map((m) => F.likelyRow(m).series), ['v6', 'v5'], 'the fixture: both kinds of box');
+    // A scale set (a pool) on v6 with a system-assigned identity: one box, with the whole note.
+    const set = run('VM name,Current size,Generation,OS,System-assigned identity,Resource type,Managed by\ncontoso-ss,Standard_D4s_v3,V2,Linux,Yes,Scale set,None\n').plan.machines[0];
+    assert.equal(F.likelyRow(set).series, 'v6');
+    const ws = whatToDo(set, F.groupOf(set));
+    assert.deepEqual(ws.ways.map((b) => b.key), ['pool']);
+    assert.deepEqual(ws.ways[0].steps.map((s) => [s.topic, s.text]), [['Identity', IDENTITY_PARALLEL]]);
+    // A VM that a service manages, with no supported size: nothing to do on the VM, as before.
+    const k = run('VM name,Current size,Generation,OS,Managed by,Resource type\ncontoso-k1,Standard_NC6s_v3,V2,Linux,AKS,Scale set\n').plan.machines[0];
+    assert.equal(F.groupOf(k), 'nopath');
+    assert.deepEqual(whatToDo(k, 'nopath').ways[0].after, [SERVICE_NOTHING]);
+    // The same VM, as if this tool could not check it: the line is under "What to do".
+    assert.ok(whatToDo(k, 'unchecked').more.includes(SERVICE_NOTHING));
+    assert.deepEqual(whatToDo(byName(run(sample).plan, 'contoso-sap01'), 'gate').ways[0].after, []);
+    // An AKS node pool that the list says runs SAP: vendor approval first, and nothing to do on the VM.
+    const ks = run('VM name,Current size,Generation,OS,Managed by,Resource type,SAP\ncontoso-k2,Standard_D4s_v3,V2,Linux,AKS,Scale set,Yes\n').plan.machines[0];
+    assert.equal(F.groupOf(ks), 'gate');
+    assert.deepEqual(whatToDo(ks, 'gate').ways[0].after, [SERVICE_NOTHING]);
+});
+
+test('the size cards: no card is used when What to do gives no size; other preview words give both ways', async () => {
+    const { sizeCard } = await import('../js/details.js');
+    const m = layoutOne({ 'System-assigned identity': 'Yes' });
+    const six = F.likelyRow(m);
+    assert.equal(sizeCard(m, 'unchecked', six).used, false);
+    assert.equal(sizeCard(m, 'unchecked', six).how, TWO_WAYS_WORDS + ' ' + FEATURE);
+    // A v7 size that needs the feature when the v6 size does not: not "as for v6".
+    const v7 = rowOf(m, 'v7');
+    const other = { ...v7, option: { ...v7.option, previewFeature: 'not-needed' } };
+    assert.equal(sizeCard(m, F.groupOf(m), other).how, TWO_WAYS_WORDS);
+});
+
+test('the page and the report show the steps for the other sizes, the stage of each series and the used size', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const html = reportHtml(run(sample).plan, table, 'sample', NOW);
+    const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); return html.slice(i, html.indexOf('</section>\n', i)); };
+    // contoso-b02 moves to Burstable; v5 and v6 need accelerated networking.
+    assert.match(card('contoso-b02'), /<h4>Steps for the other sizes<\/h4><ul class="act"><li><b>Accelerated networking:<\/b> [^<]+ <span class="muted">\(v5 and v6 only\)<\/span><\/li><\/ul>/);
+    const web01 = card('contoso-web01');
+    assert.ok(web01.includes('<b>Standard_D4ds_v6</b> <span class="tag muted">Current</span><br><b class="used-note">What to do uses this size</b>'));
+    assert.ok(web01.includes('<b>Standard_D4ds_v5</b> <span class="tag muted">Extended</span>'));
+    assert.ok(web01.includes('<p class="muted">The other sizes also fit this VM.</p>'));
+    assert.ok(!card('contoso-api01').includes('Steps for the other sizes'));
+    // The page builds the same parts (js/page.js).
+    const page = read('js/page.js');
+    assert.match(page, /if \(t\.otherSteps\.length\) section\(t\.ways\.length \? OTHER_STEPS : STEPS, noteList\('act', t\.otherSteps\)\);/);
+    assert.match(page, /c\.used \? el\('p', \{ class: 'used-note', text: SIZE_USED \}\) : null/);
+    assert.match(page, /c\.stage \? el\('span', \{ class: 'tag-stage' \}, el\('span', \{ class: 'vh', text: 'Lifecycle stage of the series: ' \}\), c\.stage\) : null/);
+    assert.match(page, /if \(used && others\) hints\.push\(OTHER_SIZES_FIT\);/);
 });

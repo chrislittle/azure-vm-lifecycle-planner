@@ -1572,6 +1572,104 @@ new VM in parallel (v6 and v7, Microsoft's order kept). The preview feature
 - 13 more mutation checks, all caught. No answer of the samples or the 4,000-VM list
   changes against the first round; only the ranked-size words above.
 
+## 0.9.6-beta (2026-11-07): readiness words, and the ways to move with their own steps
+
+Owner, 2026-11-07: customers were confused. The Result said "Move needed - do this
+first" but never said what "this" was; the details called it "Before the move"; and the
+two methods of v6 and v7 were in one sentence, with every step in one list, although some
+steps belong to one method only. The owner approved mockups of the new layout. A layout
+and words change only: no result, group, size, reason code or note changes.
+
+- **The Result** (`GROUPS` in `js/words.js`: `move`, `readiness`, `short`, `long`) has two
+  lines: "Move needed" (or "Modern size", "Readiness unknown") and the readiness, after the
+  readiness categories of an Azure Migrate assessment ("Ready for Azure", "Conditionally
+  ready for Azure", "Not ready for Azure", "Readiness unknown":
+  https://learn.microsoft.com/azure/migrate/concepts-assessment-calculation, "Calculate
+  readiness", read 2026-11-07). The same groups and colours:
+
+  | Group | Line 1 | Line 2 |
+  |---|---|---|
+  | modern | Modern size | No move needed |
+  | ready | Move needed | Ready |
+  | first | Move needed | Ready with conditions |
+  | pool | Move needed | Change it in the service or pool |
+  | gate | Move needed | Vendor approval first |
+  | nopath | Move needed | Not ready: no supported size |
+  | unchecked | Readiness unknown | This tool cannot read this VM or its size |
+
+  A place with one line (the column "Result group" of vm-summary.csv, the counts, the
+  filter, the report tags, the about file) joins them: "Move needed - Ready with
+  conditions". The long texts no longer say "Before the move".
+- **What to do** (`whatToDo` in `js/details.js`, the page and the report): "Move to {size}."
+  and, for v6 and v7, "Choose one of these two ways." Then a box for each way:
+  - "Option 1" with the tag "Microsoft recommends": "Deploy a new VM in parallel" /
+    "Deploy the new VM, move the workload, then delete the old VM."
+  - "Option 2": "Change the size of this VM" / "The VM keeps its identity, disks and
+    extensions."
+  - One box only: v5 and Burstable ("Change the size of this VM"); a pool or a service
+    ("Change the size in the service or the pool", with its advice); SAP and the vendor
+    appliances ("Ask SAP which sizes they certify" / "Ask the vendor which sizes they
+    certify", with "Do not change the VM before that.", the advice and the SAP sign line of
+    0.9.4-beta); no supported size ("No supported size", with the reason in "Why").
+  - Each box of a way gives "Conditions (N steps)" ("1 step") and all the steps of that
+    way, or "No conditions.". A step of both ways is in both boxes. The "without the
+    feature" line of 0.9.5-beta and the words "not checked" for the preview feature come
+    after the steps, in the box of the resize. A VM that a service manages says "Nothing
+    to do on the VM. The service manages the image and the disks." in its box.
+  - Each step is a short bold name (the topic of the note) and the **full** note text,
+    with the value from the list (`said()`): a short form would drop that fact. The
+    preview feature has two short steps of its own (`featureSteps`): "Preview feature:
+    register VMTempDiskResizePreview on the subscription." (with the link to the Microsoft
+    page on v6 and v7) and "Page file: move it from the temporary disk to C:." (no OS: "on
+    a Windows VM, ...").
+  - The sentence "Do the steps in "Before the move" first." is gone. "Check the facts in
+    "To check" first." stays for a VM with facts to check.
+- **How the notes map to the ways** (`ways` on a note in `js/extras.js`; the note text
+  and the CSV files do not change):
+  - Identity on v6 and v7: Option 1 only, as `"System-assigned identity" is Yes. Record the
+    role assignments of the system-assigned identity. A new VM gets a new identity: add
+    them to it again.` Option 2 has no step: its box says that the VM keeps its identity.
+  - Availability set on v6 and v7 (a fact to know): its two parts go to the two boxes,
+    under "Good to know", each with the value from the list.
+  - The preview feature and the page file: Option 2 (or the one resize box) only, where
+    0.9.5-beta says that the resize needs the feature.
+  - Every other step (accelerated networking, hibernation, unmanaged disks, the NVMe OS
+    image, Azure Disk Encryption, the ephemeral OS disk, SAP, the appliances): both boxes.
+  - A pool or a service keeps the whole note in its one box (it makes new VMs).
+  - A step for other series only (for example accelerated networking on v5 and v6 when
+    What to do uses Burstable) stays outside the boxes under "Steps for the other
+    sizes", with its series. A VM with no box (it cannot be checked) has them under
+    "Steps before the move". "Good to know" and "To check" stay as before.
+  - The details: Resource ID, What to do, Why, Workload type, (Steps for the other
+    sizes), Good to know, To check, Sizes. The column "Before the move" of vm-summary.csv
+    stays, with the same values.
+- **Sizes** (`sizeCard`): each card shows the lifecycle stage of its series as a small tag
+  (from `targetStage`: "Current", "Extended"). The card that What to do uses
+  (`likelyRow`) has an outline and "What to do uses this size". The ways on each card:
+  "One way: change the size of this VM." (v5, Burstable), "Two ways: see "What to do"."
+  (the used v6 or v7 card), "Two ways, as for v6." (the other one, when it needs the
+  feature in the same way), else "Two ways: deploy a new VM in parallel (Microsoft
+  recommends this), or change the size of this VM." with the preview feature words and the
+  link. A card that What to do does not use keeps the feature words and the size without
+  the feature. Under the cards: "The other sizes also fit this VM." The report shows the
+  same in its table of sizes. No size picker.
+- The boxes stack below 600 px. The page has no sideways scroll at 320, 375 and 1280 px,
+  light and dark. Each box is a `section` named by its option and its `h4` title
+  (`aria-labelledby`); the report uses `h5` under "What to do" (`h4`).
+- Checked against 0.9.5-beta (0bf759d) for the four samples, `js/sample.js` and the
+  made-up list of 4,000 VMs (4,278 VMs): only the values of "Result group" change. Every
+  group, outcome, size, reason code, ranked size, note and every other CSV cell is the same.
+- Tests: the words of each group; the two ways of a Windows v6 VM with a SCSI temporary
+  disk, an identity and accelerated networking off (Option 1: accelerated networking and
+  identity; Option 2: accelerated networking, preview feature and page file); Linux (no
+  feature); the availability set in two parts; one box for v5, Burstable, a pool, SAP, an
+  appliance and no supported size; no note lost (every note of every VM of the samples
+  and the 4,000-VM list shows, in a box or a section, with its value from the list); the
+  size cards; a pool with an identity, the preview feature not checked, a service with no
+  supported size or with vendor approval; the page and the report (headings, order,
+  stacking). The STE check reads every new word. 49 mutation checks, all caught (14 only
+  after new tests; one condition that could never change an answer was removed).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

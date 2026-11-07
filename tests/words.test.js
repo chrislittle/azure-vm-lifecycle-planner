@@ -16,7 +16,7 @@ import { SizeTable } from '../js/lifecycle.js';
 import { readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { REASONS, reasonFor } from '../js/reasons.js';
-import { COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE, sizeComparison, todo, whyLines } from '../js/details.js';
+import { COMPARE_CAPTION, COMPARE_HINT, NOT_IN_TABLE, SERVICE_NOTHING, sizeCard, sizeComparison, todo, whatToDo, whyLines } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import * as W from '../js/words.js';
 import * as F from '../js/files.js';
@@ -85,7 +85,12 @@ function collect() {
             const g = F.groupOf(m);
             const t = todo(m, g);
             add(`${name}: what to do`, t.main, t.more, whyLines(m, g, table, NOW), m.notes);
-            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.previewFeature, r.option.featureFallback), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
+            // The ways to move, each in a box, with its steps (0.9.6-beta).
+            const w = whatToDo(m, g);
+            const items = (list) => list.map((x) => `${x.topic}: ${x.text}`);
+            add(`${name}: what to do`, w.lead, w.more, w.ways.map((b) => [b.label, b.tag, b.title, b.lines, items(b.steps), items(b.info), b.after, W.conditionsWords(b.steps.length)]),
+                items(w.otherSteps), items(w.attention), items(w.checks));
+            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.previewFeature, r.option.featureFallback), F.rankedFor(m, r, table, NOW).map((x) => x.why), sizeCard(m, g, r).how, sizeCard(m, g, r).stage]));
             // The current size beside each new size: the labels and each note.
             const c = sizeComparison(m, table);
             if (c) add(`${name}: size table`, c.rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
@@ -127,7 +132,10 @@ function collect() {
         for (const size of ['Standard_D2s_v5', 'Standard_A4_v2', 'Standard_D4s_v6']) add('details.js: size table', sizeComparison({ ...m, rows: [{ series: 'v5', option: { supported: true, targetSize: size } }] }, table).rows.map((r) => r.cells.map((x) => x.less)));
     }
     // The words in words.js.
-    add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
+    add('words.js', Object.values(W.GROUPS).map((g) => [g.move, g.readiness, g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
+        // The ways to move and the size cards (0.9.6-beta).
+        Object.values(W.WAYS).map((w) => [w.label, w.tag, w.title, w.line]), W.CHOOSE_WAY, W.NO_CONDITIONS, [0, 1, 2].map(W.conditionsWords), W.OTHER_STEPS, W.STEPS, W.GOOD_TO_KNOW,
+        ['needed', 'windows', 'unknown', null].map((f) => W.featureSteps(f).map((s) => `${s.topic}: ${s.text}`)), W.SIZE_USED, W.OTHER_SIZES_FIT, W.ONE_WAY, W.TWO_WAYS_USED, W.TWO_WAYS, W.twoWaysAsFor('v6'), SERVICE_NOTHING,
         W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].flatMap((w) => [null, 'needed', 'windows'].map((f) => W.rankWords(w, 'AMD', f))),
         ['v5', 'v6', 'burstable'].flatMap((s) => ['needed', 'windows', 'unknown', 'not-needed', null].flatMap((f) => [null, { size: null }, { size: 'Standard_D4ds_v5' }].map((fb) => W.moveWords(s, f, fb)))), W.PREVIEW_LINK,
         ['needed', 'windows', 'unknown', 'not-needed', null].map((f) => W.featureColumn(f)),

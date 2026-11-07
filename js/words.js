@@ -8,18 +8,57 @@
 // overview: "modern sizes"; v6/v7 Assess page: "hard gates", "readiness
 // signals"). Peer feedback (2026-10-09): ready and "do this first" apart, and a
 // readiness signal must not read as an unsolvable blocker.
+// 0.9.6-beta (owner, 2026-11-07): the Result has two lines, "Move needed" (or "Modern
+// size", "Readiness unknown") and the readiness, after the readiness categories of an Azure
+// Migrate assessment ("Ready for Azure", "Conditionally ready for Azure", "Not ready for
+// Azure", "Readiness unknown": learn.microsoft.com/azure/migrate/concepts-assessment-calculation,
+// "Calculate readiness", read 2026-11-07). A place with one line (the
+// CSV files, the counts, the filter) joins them: short. The groups and their colours stay.
+const group = (move, readiness, long) => ({ move, readiness, short: `${move} - ${readiness}`, long });
 export const GROUPS = {
-    modern: { short: 'Modern size - no move needed', long: 'No move needed. This is a modern size: Microsoft fully supports it.' },
-    ready: { short: 'Move needed - ready', long: 'Move needed. A supported size is available, and there is nothing to do first.' },
-    first: { short: 'Move needed - do this first', long: 'Move needed. A supported size is available. First, do the steps in "Before the move", or check the facts in "To check".' },
+    modern: group('Modern size', 'No move needed', 'This is a modern size: Microsoft fully supports it.'),
+    ready: group('Move needed', 'Ready', 'A supported size is available. There are no steps to do and no facts to check first.'),
+    first: group('Move needed', 'Ready with conditions', 'A supported size is available. First, do the steps in "What to do", or check the facts in "To check".'),
     // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).
-    pool: { short: 'Move needed - change in the service or pool', long: 'Move needed. Change the size in the service or the pool, not on this VM.' },
+    pool: group('Move needed', 'Change it in the service or pool', 'Change the size in the service or the pool, not on this VM.'),
     // Microsoft's term is "hard gate"; "gate" is not an STE word (owner, 2026-10-10).
-    gate: { short: 'Move needed - vendor approval first', long: 'Move needed. SAP, or the vendor of the appliance or the application, must approve the new size first.' },
-    nopath: { short: 'Move needed - no supported size', long: 'Move needed. This tool has no supported size for this VM. See the reason.' },
-    unchecked: { short: 'Not checked', long: 'Not checked. This tool cannot read this VM or its size.' },
+    gate: group('Move needed', 'Vendor approval first', 'SAP, or the vendor of the appliance or the application, must approve the new size first.'),
+    nopath: group('Move needed', 'Not ready: no supported size', 'This tool has no supported size for this VM. See the reason.'),
+    unchecked: group('Readiness unknown', 'This tool cannot read this VM or its size', 'This tool cannot check this VM or its size. See the reason.'),
 };
+
+// "What to do" (0.9.6-beta, owner 2026-11-07): each way to move in its own box, with all
+// the steps of that way. v6 and v7 have two ways, in Microsoft's order (deploy in parallel,
+// highly recommended: v6/v7 FAQ and Plan page); v5 and Burstable have one, a resize.
+export const WAYS = {
+    parallel: { label: 'Option 1', tag: 'Microsoft recommends', title: 'Deploy a new VM in parallel', line: 'Deploy the new VM, move the workload, then delete the old VM.' },
+    // A resize keeps the VM: its identity, disks and extensions (measured in lab tests,
+    // 2026-11-01 to 2026-11-07; PLAN.md 0.9.5-beta).
+    resize: { label: 'Option 2', tag: '', title: 'Change the size of this VM', line: 'The VM keeps its identity, disks and extensions.' },
+};
+export const CHOOSE_WAY = 'Choose one of these two ways.';
+export const NO_CONDITIONS = 'No conditions.';
+// 'Conditions (1 step)', 'Conditions (3 steps)'.
+export const conditionsWords = (n) => `Conditions (${n} ${n === 1 ? 'step' : 'steps'})`;
+// The heading of the steps that are for other series only (allNotes in files.js), and of
+// the steps of a VM that has no box.
+export const OTHER_STEPS = 'Steps for the other sizes';
+export const STEPS = 'Steps before the move';
+export const GOOD_TO_KNOW = 'Good to know';
+// The preview feature and the page file, as two steps of the resize (FEATURE_WORDS, in short).
+export function featureSteps(feature) {
+    if (feature === 'needed') return [{ topic: 'Preview feature', text: 'register VMTempDiskResizePreview on the subscription.' }, { topic: 'Page file', text: 'move it from the temporary disk to C:.' }];
+    if (feature === 'windows') return [{ topic: 'Preview feature', text: 'on a Windows VM, register VMTempDiskResizePreview on the subscription.' }, { topic: 'Page file', text: 'on a Windows VM, move it from the temporary disk to C:.' }];
+    return [];
+}
+// The size cards (0.9.6-beta).
+export const SIZE_USED = 'What to do uses this size';
+export const OTHER_SIZES_FIT = 'The other sizes also fit this VM.';
+export const ONE_WAY = 'One way: change the size of this VM.';
+export const TWO_WAYS_USED = 'Two ways: see "What to do".';
+export const TWO_WAYS = 'Two ways: deploy a new VM in parallel (Microsoft recommends this), or change the size of this VM.';
+export const twoWaysAsFor = (series) => `Two ways, as for ${series}.`;
 
 // Why a size is on the ranked list. processor: the name of the other processor.
 // feature: 'needed' or 'windows' when this size needs the preview feature and the suggested

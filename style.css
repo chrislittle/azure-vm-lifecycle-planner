@@ -211,6 +211,25 @@ tr.details > td { background: var(--bg); padding: 12px 14px; }
 .d ul.list .topic { font-weight: 600; }
 .d ul.list .only { color: var(--muted); }
 .series p { margin: 0 0 8px; }
+/* The size that "What to do" uses: an outline, and words that say so (0.9.6-beta). */
+.series > div.used { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.series .used-note { margin: 4px 0 6px; font-size: 12px; font-weight: 600; color: var(--accent); }
+.tag-stage { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--none-bg); color: var(--muted); }
+/* Text for a screen reader only. */
+.vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* "What to do": each way to move in its own box, side by side; one above the other on a narrow screen. */
+.ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 8px 0; }
+.ways:not(.two) { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+.way { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; overflow-wrap: anywhere; }
+.way-parallel { border-color: var(--fine); }
+.way h4 { margin: 0 0 4px; font-size: 15px; }
+.way-label { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.way-tag { display: inline-block; margin-left: 2px; padding: 0 6px; border-radius: 8px; font-size: 11px; background: var(--fine-bg); color: var(--fine); }
+.way-line { margin: 0 0 6px; }
+.way-cond { margin: 8px 0 2px; font-size: 13px; font-weight: 600; }
+.way-cond.none { font-weight: 400; color: var(--muted); }
+#table .pill-move, #table .pill-readiness { display: block; }
+#table .pill-readiness { font-weight: 400; }
 /* The current size beside each new size. It scrolls sideways on a narrow screen. */
 .compare-box { margin: 12px 0 0; }
 .compare-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
@@ -275,6 +294,10 @@ table.compare strong.less { display: block; color: var(--check); font-size: 12px
     #table tr.details { display: block; }
     #table tr.details > td { display: block; }
     .results-wrap { overflow-x: visible; }
+}
+
+@media (max-width: 600px) {
+    .ways { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {

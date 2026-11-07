@@ -9,16 +9,16 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.5-beta';
-import capacity from '../data/capacity.js?v=0.9.5-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
+import capacity from '../data/capacity.js?v=0.9.6-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.5-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.5-beta';
-import { patternOf } from './patterns.js?v=0.9.5-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.5-beta';
+} from './lifecycle.js?v=0.9.6-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.6-beta';
+import { patternOf } from './patterns.js?v=0.9.6-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.6-beta';
 
 // ---------------------------------------------------------------------------
 // Values

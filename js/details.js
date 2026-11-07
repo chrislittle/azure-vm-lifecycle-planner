@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.5-beta';
-import { likelyRow, signals } from './files.js?v=0.9.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
-import { FEATURE_WORDS_UNKNOWN, PATTERNS, POOL_PATTERNS, fallbackWords, poolAdvice, stageWords } from './words.js?v=0.9.5-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.5-beta';
-import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.5-beta';
+import { capacityRestricted } from './planner.js?v=0.9.6-beta';
+import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
+import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.6-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.6-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.6-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -98,9 +98,9 @@ export function todo(m, g) {
         // SAP: the sign that the list gives, and how to clear it for a VM that does
         // not run SAP (owner, 2026-11-06). Nothing more when the list gives no sign.
         if (sap && sapClear(m.extra)) more.push(`${sapSignWords(m.extra)} ${sapClear(m.extra)}`);
-        return { main: sap ? 'Ask SAP which sizes they certify. Do not change the VM before that.' : 'Ask the vendor which sizes they certify. Do not change the VM before that.', more };
+        return { main: `${askVendor(sap)}. ${NO_CHANGE}`, more };
     }
-    if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
+    if (g === 'nopath') return { main: NO_SIZE, more: ['See "Why" for the reason.'] };
     const r = likelyRow(m);
     const o = r.option;
     // v5 and Burstable are always a resize (0.9.5-beta). The preview feature first, where
@@ -111,12 +111,10 @@ export function todo(m, g) {
         : o.previewFeature === 'windows' ? `Resize to ${o.targetSize}. On a Windows VM, first register the preview feature VMTempDiskResizePreview on the subscription.${fallback ? ` ${fallback}` : ''}`
         : `Resize to ${o.targetSize}.`;
     const more = [];
-    // "Do this first" is steps, facts to check, or both (review, 2026-10-10).
-    if (g === 'first') {
-        const s = signals(m);
-        more.push(s.actions.length && s.checks.length ? 'First, do the steps in "Before the move" and check the facts in "To check".'
-            : s.actions.length ? 'Do the steps in "Before the move" first.' : 'Check the facts in "To check" first.');
-    }
+    // "Ready with conditions" is steps, facts to check, or both (review, 2026-10-10). The
+    // steps show in the boxes of each way (0.9.6-beta, whatToDo): only the facts to check
+    // need a line here.
+    if (g === 'first' && signals(m).checks.length) more.push(CHECK_FIRST);
     // The size table does not give the temporary disk: this tool cannot tell if a Windows
     // VM needs the preview feature (unknown is never a pass, 0.9.5-beta).
     if (o.previewFeature === 'unknown' && r.series !== 'v6' && r.series !== 'v7') more.push(FEATURE_WORDS_UNKNOWN);
@@ -124,6 +122,117 @@ export function todo(m, g) {
     const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
     if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);
     return { main, more };
+}
+
+// ---------------------------------------------------------------------------
+// "What to do": the ways to move, each with its own steps (0.9.6-beta)
+// ---------------------------------------------------------------------------
+
+const NO_CHANGE = 'Do not change the VM before that.';
+const askVendor = (sap) => (sap ? 'Ask SAP which sizes they certify' : 'Ask the vendor which sizes they certify');
+const NO_SIZE = 'This tool has no supported size for this VM.';
+const CHECK_FIRST = 'Check the facts in "To check" first.';
+export const SERVICE_NOTHING = 'Nothing to do on the VM. The service manages the image and the disks.';
+const POOL_TITLE = 'Change the size in the service or the pool';
+const NO_SIZE_TITLE = 'No supported size';
+const nvmeSeries = (s) => s === 'v6' || s === 'v7';
+
+// What to do for one VM, for the page and the report (owner, 2026-11-07): a line to lead,
+// the ways in boxes, more lines, and the notes that are not in a box.
+//   lead: 'Move to Standard_D4ds_v6. Choose one of these two ways.', or the main thing to
+//     do for a VM with no box (a modern size, a VM that this tool cannot check), or ''.
+//   ways: [{ key, label, tag, title, lines, conditions, steps, info, after }]. key:
+//     'parallel' and 'resize' (v6 and v7), 'resize' (v5 and Burstable), 'pool', 'vendor' or
+//     'nopath'. conditions: the box shows its steps ("Conditions (2 steps)", or "No
+//     conditions."). steps: [{ topic, text, series, link }], all the steps of that way;
+//     a step of both ways is in both boxes. info: [{ topic, text, series }], a fact to know
+//     for that way (the availability set). after: lines after the steps (the size to use
+//     without the preview feature).
+//   otherSteps, attention, checks: the notes (allNotes in files.js) that no box shows,
+//     each [{ topic, text, series }]. "Good to know" and "To check" show as before.
+// Each step is the full note, with the value from the list: a short form would drop facts.
+// A note that has a part for each way (extras.js, ways) shows its part in each box.
+export function whatToDo(m, g) {
+    const n = allNotes(m);
+    const t = todo(m, g);
+    const out = { lead: '', ways: [], more: [], otherSteps: n.actions, attention: n.attention, checks: n.checks };
+    const box = (key, title, lines, more = {}) => ({ key, label: '', tag: '', title, lines: lines.filter((x) => x), conditions: true, steps: [], info: [], after: [], ...more });
+    const pool = POOL_PATTERNS.includes(m.pattern);
+    // A VM that a service manages and that must move: nothing to do on the VM (as "Before the
+    // move" said for every such VM before 0.9.6-beta).
+    const service = m.vm && m.moveRequired === 'Yes' && serviceManaged(m) ? [SERVICE_NOTHING] : [];
+    if (!m.vm || g === 'modern' || g === 'unchecked') return { ...out, lead: t.main, more: [...t.more, ...service] };
+    if (g === 'gate') {
+        const sap = (m.vm.blockers || []).includes('sap-needs-a-certified-size');
+        return { ...out, ways: [box('vendor', askVendor(sap), [NO_CHANGE, ...t.more], { conditions: false, after: service })] };
+    }
+    if (g === 'nopath') return { ...out, ways: [box('nopath', NO_SIZE_TITLE, [t.main, ...t.more], { conditions: false, after: service })] };
+
+    const r = likelyRow(m);
+    const o = r.option;
+    const two = nvmeSeries(r.series) && !pool;
+    const keys = pool ? ['pool'] : two ? ['parallel', 'resize'] : ['resize'];
+    // The note of allNotes that is this note of the likely row (allNotes keeps one note for
+    // each topic and text, so the topic and the text find it).
+    const noteOf = (list, topic, text) => list.find((x) => x.topic === topic && x.text === text);
+    const placed = new Set();
+    const ways = keys.map((key) => {
+        const a = pool ? poolAdvice(m) : null;
+        const w = key === 'pool' ? box('pool', POOL_TITLE, [a.todo, a.more])
+            : key === 'parallel' ? box('parallel', WAYS.parallel.title, [WAYS.parallel.line], { label: WAYS.parallel.label, tag: WAYS.parallel.tag })
+            : box('resize', WAYS.resize.title, [WAYS.resize.line], two ? { label: WAYS.resize.label, tag: WAYS.resize.tag } : {});
+        for (const topic of CAVEAT_TOPICS) {
+            const c = r.caveats && r.caveats[topic];
+            if (!c || (c.state !== 'problem' && c.state !== 'attention')) continue;
+            // A fact to know goes in a box only when it has a part for each way.
+            if (c.state === 'attention' && !(two && c.ways)) continue;
+            const note = noteOf(c.state === 'problem' ? n.actions : n.attention, topic, c.text);
+            if (!note) continue;
+            placed.add(note);
+            const text = two && c.ways ? c.ways[key] : c.text;
+            if (!text) continue;
+            if (c.state === 'problem') w.steps.push({ topic, text, series: note.series, link: false });
+            else w.info.push({ topic, text, series: note.series });
+        }
+        if (key === 'resize') {
+            // The preview feature, where the resize needs it (0.9.5-beta); on v6 and v7 with
+            // the link to the Microsoft page that names it.
+            w.steps.push(...featureSteps(o.previewFeature).map((s) => ({ ...s, series: [], link: s.topic === 'Preview feature' && tempDiskPreview(m, r) })));
+            w.after.push(fallbackWords(r.series, o.previewFeature, o.featureFallback));
+            // Unknown is never a pass (0.9.5-beta).
+            if (o.previewFeature === 'unknown') w.after.push(FEATURE_WORDS_UNKNOWN);
+        }
+        if (key === 'pool') w.after.push(...service);
+        w.after = w.after.filter((x) => x);
+        return w;
+    });
+    return {
+        ...out,
+        lead: pool ? '' : `Move to ${o.targetSize}.${two ? ` ${CHOOSE_WAY}` : ''}`,
+        ways,
+        // The preview feature words are in the box of the resize.
+        more: pool ? [] : t.more.filter((x) => x !== FEATURE_WORDS_UNKNOWN),
+        otherSteps: n.actions.filter((x) => !placed.has(x)),
+        attention: n.attention.filter((x) => !placed.has(x)),
+    };
+}
+
+// The words of one size card (0.9.6-beta): { used, stage, how, link }. used: "What to do"
+// uses this size. stage: Microsoft's lifecycle stage of the target series, from the stage
+// data. how: the ways to move to it. link: show the link to the Microsoft page that names
+// the preview feature. A pool, a service and a VM that stays get no ways (as before).
+export function sizeCard(m, g, r) {
+    const o = r.option;
+    const card = { used: false, stage: o.supported && o.targetStage && o.targetStage.stage ? o.targetStage.stage : '', how: '', link: false };
+    if (!o.supported || !m.vm || m.moveRequired !== 'Yes' || POOL_PATTERNS.includes(m.pattern)) return card;
+    const likely = g === 'ready' || g === 'first' ? likelyRow(m) : null;
+    if (r === likely) return { ...card, used: true, how: nvmeSeries(r.series) ? TWO_WAYS_USED : ONE_WAY };
+    const join = (...parts) => parts.filter((x) => x).join(' ');
+    if (nvmeSeries(r.series)) {
+        if (likely && nvmeSeries(likely.series) && likely.option.previewFeature === o.previewFeature) return { ...card, how: twoWaysAsFor(likely.series) };
+        return { ...card, how: join(TWO_WAYS, featureWords(o.previewFeature)), link: tempDiskPreview(m, r) };
+    }
+    return { ...card, how: join(ONE_WAY, featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)) };
 }
 
 // "Why", as lines: the lifecycle stage; for a VM that cannot be read, the problems;
