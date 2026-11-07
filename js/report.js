@@ -81,7 +81,10 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 // The preview feature VMTempDiskResizePreview and the size to use without it, on a
                 // line of their own (0.9.5-beta); on v6 and v7 with the link to the Microsoft page
                 // that names the feature.
-                const extra = pool ? '' : [featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)].filter((w) => w).join(' ');
+                // v6 and v7: the report shows only the first method, so the line names the second
+                // one first, and "the resize" has its meaning (review, 2026-11-06).
+                const nvme = r.series === 'v6' || r.series === 'v7';
+                const extra = pool ? '' : [nvme && featureWords(o.previewFeature) ? 'You can also change the size of the current VM.' : '', featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)].filter((w) => w).join(' ');
                 const preview = extra ? `<br><span class="muted">${esc(extra)}${tempDiskPreview(m, r) ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</span>` : '';
                 return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span>${preview}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');

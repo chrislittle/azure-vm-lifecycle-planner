@@ -140,7 +140,7 @@ export function groupOf(m) {
 // The ranked sizes of one supported option, in words.
 export function rankedFor(m, r, table, now = new Date()) {
     const list = rankedSizes(m.vm, table, r.option, now);
-    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel') }));
+    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel', x.feature) }));
 }
 
 // How to move to one supported option: the pattern decides it for a pool or
@@ -329,6 +329,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         'RANKED SIZES',
         '  For each supported series, up to five sizes, best first. Each one passes the same checks.',
         '  Microsoft recommends that a workload support more than one compatible size (capacity resilience).',
+        '  When a size needs the preview feature VMTempDiskResizePreview and the suggested size does not, the list says so.',
         `  ${PROCESSOR_NOTE}`,
         '  https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience',
         '',

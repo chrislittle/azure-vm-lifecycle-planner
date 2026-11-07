@@ -342,7 +342,7 @@ export const BY_DESIGN = [
 // not-in-region: no size with the same name. Another size of the series can fit
 // (for example E16-4s_v3 on v7: no E16-4s_v7, but E16s_v7 and E16-4as_v7), so this
 // is not a "no" (review, 2026-10-10).
-const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone', 'not-in-region', 'os-unknown-encryption'];
+const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone', 'not-in-region', 'os-unknown-encryption', 'encryption-temp-disk-unknown'];
 // Codes that are a plain fact (no fitting size), with the label for the review list.
 export const FACT_LABELS = {
     'not-in-region': 'New size not in the size table', 'family-not-in-region': 'No size of this family in the size table',
@@ -350,6 +350,7 @@ export const FACT_LABELS = {
     'smaller-than-source': 'New size smaller than the current size', 'shape-unknown': 'vCPUs and memory not known',
     'processor-unreadable': 'Processor type not known', 'gen1-no-size': 'No size takes Generation 1', 'mapped-unverified': 'New size not in the size table',
     'os-unknown-encryption': 'OS not known, with Azure Disk Encryption',
+    'encryption-temp-disk-unknown': 'Temporary disk not known, with Azure Disk Encryption',
     'no-burstable-fit': 'No burstable size of this shape',
 };
 

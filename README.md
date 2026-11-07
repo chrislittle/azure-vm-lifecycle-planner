@@ -108,6 +108,8 @@ For each VM:
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
   A size with a different processor has an asterisk: test the application first.
+  When a size needs the preview feature VMTempDiskResizePreview and the suggested size
+  does not, the list says so.
 - The details of each VM, in the same order for every VM: **What to do**, **Why**, the
   notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
   - **Before the move** (amber): a step to do first. It does not block the move.

@@ -1170,8 +1170,8 @@ test('Burstable with Azure Disk Encryption: no resize with the preview feature; 
     }
     const gw = byName(q, 'contoso-gw');
     if (F.likelyRow(gw).series === 'v5') assert.ok(todo(gw, F.groupOf(gw)).more.includes(FEATURE_UNKNOWN));
-    const v5only = runWith('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-gv,Standard_D4s_v3,V2,Windows,Yes\n', gone).machines[0];
-    assert.equal(F.likelyRow(v5only).series, 'v5', 'the fixture: v6 and v7 have no size with Azure Disk Encryption');
+    const v5only = runWith('VM name,Current size,Generation,OS\ncontoso-gv,Standard_D4s_v3,V1,Windows\n', gone).machines[0];
+    assert.equal(F.likelyRow(v5only).series, 'v5', 'the fixture: Generation 1 has no v6 or v7 size');
     assert.ok(todo(v5only, F.groupOf(v5only)).more.includes(FEATURE_UNKNOWN), 'What to do says it too');
 });
 
@@ -1205,6 +1205,76 @@ test('no rebuild anywhere: no customer text recommends one, and the Rebuild colu
     // The page.
     assert.doesNotMatch(read('index.html').replace(/<head>[\s\S]*?<\/head>/, ''), /rebuild/i);
     assert.doesNotMatch(read('js/page.js'), /rebuild/i);
+});
+
+// Review of 0.9.5-beta (2026-11-06).
+test('review: the report says which resize needs the feature on v6 and v7', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const p = run('VM name,Current size,Generation,OS\ncontoso-rv1,Standard_D4s_v3,V2,Windows\ncontoso-rv2,Standard_D4s_v3,V2,\n').plan;
+    const html = reportHtml(p, table, 'x', NOW);
+    const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); return html.slice(i, html.indexOf('</section>', i)); };
+    // The report shows only the first sentence of the move: the feature words come after the second method.
+    assert.ok(card('contoso-rv1').includes(`Deploy a new VM at this size in parallel, move the workload, then delete the old VM.</span><br><span class="muted">You can also change the size of the current VM. ${FEATURE} <a href=`));
+    assert.ok(card('contoso-rv2').includes(`<br><span class="muted">You can also change the size of the current VM. ${FEATURE_NO_OS} <a href=`));
+    // The page and the CSV have the whole move, where the same sentence comes first.
+    const row = F.targetRows(p, table, NOW).find((r) => r['VM name'] === 'contoso-rv1' && r['Series'] === 'v6');
+    assert.ok(row['How to move'].includes(`You can also change the size of the current VM, but that has more steps and more risk. ${FEATURE}`));
+});
+
+test('review: ranked sizes - Azure Disk Encryption with no OS, and the sizes that need the feature', async () => {
+    // No OS, Azure Disk Encryption: no other size that changes the temporary disk type.
+    const e = run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-rk1,Standard_D4ds_v4,V2,,Yes\n').plan.machines[0];
+    const v5 = rowOf(e, 'v5');
+    assert.equal(v5.option.targetSize, 'Standard_D4ds_v5');
+    assert.ok(!rankedSizes(e.vm, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'no OS with Azure Disk Encryption: as Windows');
+    assert.ok(rankedSizes({ ...e.vm, os: 'Linux' }, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'the fixture: Linux gets it');
+    // An other size that needs the feature when the suggested size does not says so.
+    const p = run('VM name,Current size,Generation,OS\ncontoso-rk2,Standard_D4s_v3,V2,Windows\ncontoso-rk3,Standard_D4s_v3,V2,\ncontoso-rk4,Standard_D4s_v3,V2,Linux\n').plan;
+    const ranked = (name, s) => F.targetRows(p, table, NOW).find((r) => r['VM name'] === name && r['Series'] === s)['Ranked sizes'];
+    assert.match(ranked('contoso-rk2', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\. A resize to it needs the preview feature VMTempDiskResizePreview\)/);
+    assert.match(ranked('contoso-rk3', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\. On Windows, a resize to it needs the preview feature VMTempDiskResizePreview\)/);
+    assert.match(ranked('contoso-rk4', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\)/);
+    assert.doesNotMatch(ranked('contoso-rk2', 'v5'), /Standard_D4ds_v5 \([^)]*preview/, 'the suggested size keeps the temporary disk type');
+    // v6 and v7: the move already says that the resize needs it, for every size.
+    assert.doesNotMatch(ranked('contoso-rk2', 'v6'), /preview/);
+    const rf = F.rankedFor(byName(p, 'contoso-rk2'), rowOf(byName(p, 'contoso-rk2'), 'v5'), table, NOW);
+    assert.ok(rf.some((x) => x.why.endsWith('VMTempDiskResizePreview')), 'the page and the report use the same words');
+    // A processor change keeps its asterisk at the end.
+    const { rankWords } = await import('../js/words.js');
+    assert.equal(rankWords('processor', 'AMD', 'needed'), 'Same shape, AMD processor. A resize to it needs the preview feature VMTempDiskResizePreview*');
+});
+
+test('review: Azure Disk Encryption when the size table does not give the temporary disk: not checked', () => {
+    const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption\n';
+    // The current size has no temporary disk reading: its kind comes from the name only.
+    const t = tableWith({ Standard_D4s_v3: { MaxResourceVolumeMB: undefined }, Standard_D4ds_v5: null, Standard_B2ms: { MaxResourceVolumeMB: undefined } });
+    const p = runWith(`${head}contoso-ru1,Standard_D4s_v3,V2,Windows,Yes\ncontoso-ru2,Standard_D4s_v3,V2,,Yes\ncontoso-ru3,Standard_D4s_v3,V2,Linux,Yes\ncontoso-ru4,Standard_B2ms,V2,Windows,Yes\ncontoso-ru5,Standard_D4s_v3,V2,Windows,No\n`, t);
+    for (const name of ['contoso-ru1', 'contoso-ru2']) {
+        const r = rowOf(byName(p, name), 'v5');
+        assert.deepEqual([r.codes, r.result], [['encryption-temp-disk-unknown'], 'Needs team review'], name);
+    }
+    assert.equal(rowOf(byName(p, 'contoso-ru4'), 'burstable').result, 'Needs team review', 'Burstable the same');
+    assert.deepEqual(rowOf(byName(p, 'contoso-ru4'), 'burstable').codes, ['encryption-temp-disk-unknown']);
+    assert.equal(rowOf(byName(p, 'contoso-ru3'), 'v5').result, 'Supported', 'Linux needs no feature');
+    assert.equal(rowOf(byName(p, 'contoso-ru5'), 'v5').option.previewFeature, 'unknown', 'no encryption: the resize words say not checked');
+    const why = F.targetRows(p, t, NOW).find((r) => r['VM name'] === 'contoso-ru1' && r['Series'] === 'v5')['Reason'];
+    assert.match(why, /The size table does not give the temporary disk/);
+    // The new size has no reading: the same.
+    const nt = tableWith({ Standard_D4ds_v5: { MaxResourceVolumeMB: undefined } });
+    const n = runWith(`${head}contoso-rt,Standard_D4s_v3,V2,Windows,Yes\n`, nt).machines[0];
+    assert.deepEqual([rowOf(n, 'v5').option.targetSize, rowOf(n, 'v5').codes], ['Standard_D4ds_v5', ['encryption-temp-disk-unknown']]);
+    // With the readings (only the d size taken away): the answer of 0.9.5-beta.
+    const k = tableWith({ Standard_D4ds_v5: null });
+    assert.deepEqual(rowOf(runWith(`${head}contoso-rk,Standard_D4s_v3,V2,Windows,Yes\n`, k).machines[0], 'v5').codes, ['disk-encryption-preview']);
+});
+
+test('review: the Burstable reason says that no Bsv2 or Basv2 size has a temporary disk', async () => {
+    const { reasonFor } = await import('../js/reasons.js');
+    assert.equal(reasonFor('disk-encryption-preview', { series: 'burstable' }), 'This VM has Azure Disk Encryption. The resize to burstable needs the preview feature VMTempDiskResizePreview, because the temporary disk changes type. Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it. No Bsv2 or Basv2 size has a temporary disk.');
+    assert.match(reasonFor('disk-encryption-preview', { series: 'v5' }), /No v5 size of this shape keeps the temporary disk type\.$/);
+    // True in the size table: every Bsv2 and Basv2 size reports no SCSI temporary disk.
+    const b = Object.entries(sizes.sizes).filter(([n]) => /^Standard_B\d+a?[lt]?s_v2$/.test(n));
+    assert.ok(b.length > 10 && b.every(([, s]) => s.capabilities.MaxResourceVolumeMB === '0'));
 });
 
 test('v6 accelerated networking: Required on every D and E v6 size since 2026-10-27; F v6 and v7 stay Supported', async () => {
@@ -1572,7 +1642,8 @@ test('the preview feature on the page, in the CSV file, the report and the about
     const pb1 = rowOf(byName(p, 'contoso-pb1'), 'v5').option.targetSize;
     assert.ok(card('contoso-pb1').includes(`Resize the current VM.</span><br><span class="muted">${FEATURE} ${FALLBACK_V5(pb1)}</span>`), 'Burstable: the move, then the feature');
     // contoso-pb1: Burstable (its main move: "What to do"), v6 and v7 name the feature.
-    assert.equal(card('contoso-pb1').split('VMTempDiskResizePreview').length - 1, 4);
+    // ... and its v5 list names it for the size with no temporary disk (review, 2026-11-06).
+    assert.equal(card('contoso-pb1').split('VMTempDiskResizePreview').length - 1, 5);
     for (const name of ['contoso-pl1', 'contoso-pe1']) assert.ok(!card(name).includes('VMTempDiskResizePreview') && !card(name).includes(PREVIEW_PAGE), name);
     // The page: the same rule, and the words and the link in each size card (js/page.js).
     const page = read('js/page.js').replace(/\r\n/g, '\n');

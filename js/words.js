@@ -22,8 +22,10 @@ export const GROUPS = {
 };
 
 // Why a size is on the ranked list. processor: the name of the other processor.
-export function rankWords(why, processor) {
-    return {
+// feature: 'needed' or 'windows' when this size needs the preview feature and the suggested
+// size does not (lifecycle.js, rankedSizes; review 2026-11-06). The asterisk stays at the end.
+export function rankWords(why, processor, feature = null) {
+    const words = {
         'closest': 'Closest match',
         'processor': `Same shape, ${processor} processor*`,
         'temp-disk-removed': 'Same shape, no temporary disk',
@@ -32,6 +34,8 @@ export function rankWords(why, processor) {
         'same-shape': 'Same shape, other family',
         'other-shape': 'Other shape that fits',
     }[why] || why;
+    const add = { needed: '. A resize to it needs the preview feature VMTempDiskResizePreview', windows: '. On Windows, a resize to it needs the preview feature VMTempDiskResizePreview' }[feature] || '';
+    return words.endsWith('*') ? `${words.slice(0, -1)}${add}*` : `${words}${add}`;
 }
 export const PROCESSOR_NOTE = '* A processor change. Test the application, and check its licence terms.';
 

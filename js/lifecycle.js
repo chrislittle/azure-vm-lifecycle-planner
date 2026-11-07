@@ -863,7 +863,15 @@ function entryTarget(vm, table, targetGeneration, chosenSize, now) {
     // type is the target: a plain resize (0.9.5-beta, owner 2026-11-06). With none, the
     // tool does not plan it on Windows, and a person must check it when the OS is not
     // known (unknown is never a pass).
-    if (path === 'A' && encrypted && generationController(targetGeneration) !== 'NVMe' && (!vm.os || eqI(vm.os, 'Windows'))
+    // When the size table does not give the temporary disk of one of the two sizes (the
+    // kind comes from a name only), it cannot tell: not checked, never a resize or a no
+    // (review, 2026-11-06).
+    const kindsKnown = () => vm.sourceTempDiskKnown === true && table.has(mapping.target) && maxResourceMB(table.get(mapping.target)) !== null;
+    if (path === 'A' && encrypted && generationController(targetGeneration) !== 'NVMe' && (!vm.os || eqI(vm.os, 'Windows')) && !kindsKnown()) {
+        blockers.push('encryption-temp-disk-unknown');
+        classification = 'Blocked';
+        path = 'MANUAL';
+    } else if (path === 'A' && encrypted && generationController(targetGeneration) !== 'NVMe' && (!vm.os || eqI(vm.os, 'Windows'))
         && crossesScsiTempDisk(vm.sourceDiskArch, diskArch) === true) {
         const same = sameKindSize(vm, table, mapping.target, targetGeneration, nicCount, dataDiskCount);
         if (same) {
@@ -1119,6 +1127,10 @@ export function burstableOption(vm, table, now = new Date()) {
     // No Bsv2 or Basv2 size has a temporary disk: from a SCSI one, Windows needs the
     // preview feature, which this tool does not plan with Azure Disk Encryption (as on
     // v5). The OS is not known: a person must check.
+    // The size table does not give the temporary disk: not checked (review, 2026-11-06).
+    if (hasI(vm.blockers, 'disk-encryption-present') && (!vm.os || eqI(vm.os, 'Windows')) && (vm.sourceTempDiskKnown !== true || maxResourceMB(entry) === null)) {
+        option.notSupported = ['encryption-temp-disk-unknown']; return option;
+    }
     if (crossesScsiTempDisk(vm.sourceDiskArch, targetArch) === true && hasI(vm.blockers, 'disk-encryption-present')) {
         if (eqI(vm.os, 'Windows')) { option.notSupported = ['disk-encryption-preview']; return option; }
         if (!vm.os) { option.notSupported = ['os-unknown-encryption']; return option; }
@@ -1203,9 +1215,17 @@ export function rankedSizes(vm, table, option, now = new Date()) {
         if (!eqI(mp.target, size) || mp.code !== 'mapped') continue;
         // Windows with Azure Disk Encryption: a size that changes the temporary disk type
         // needs the preview feature, which this tool does not plan with the encryption.
+        // On Windows or with no OS in the list (as the target itself, review 2026-11-06).
         const arch = diskArchitecture(size, maxResourceMB(table.get(size)));
-        if (eqI(vm.os, 'Windows') && crossesScsiTempDisk(vm.sourceDiskArch, arch) === true && hasI(vm.blockers, 'disk-encryption-present')) continue;
-        out.push({ size, why: c.why });
+        const windows = !vm.os || eqI(vm.os, 'Windows');
+        const crosses = windows && crossesScsiTempDisk(vm.sourceDiskArch, arch) === true;
+        if (crosses && hasI(vm.blockers, 'disk-encryption-present')) continue;
+        // A size that needs the preview feature when the suggested size does not says so
+        // (review, 2026-11-06). When the suggested size needs it, the move already says so;
+        // a pool or a service (null) gets the pool advice.
+        const item = { size, why: c.why };
+        if (crosses && option.previewFeature === 'not-needed') item.feature = vm.os ? 'needed' : 'windows';
+        out.push(item);
     }
     return out;
 }

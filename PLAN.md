@@ -1543,6 +1543,35 @@ new VM in parallel (v6 and v7, Microsoft's order kept). The preview feature
   after new tests: an unknown kind of temporary disk, and a Burstable VM whose v5 size
   needs the feature too). Checked in a browser at 375 px and 1280 px, light and dark.
 
+### Review fixes in 0.9.5-beta (2026-11-06)
+
+- **The report on v6 and v7** shows only the first sentence of the move, so "the resize"
+  had no meaning there. Its line now starts with the second method: "You can also change
+  the size of the current VM. The resize needs the preview feature ..." (no OS: the "On a
+  Windows VM" words). The page and vm-target-sizes.csv already have the whole move.
+- **Ranked sizes, Azure Disk Encryption with no OS** are now treated as Windows, as for
+  the size itself: no other size that changes the temporary disk type. For every size of
+  the size table this removes such a size from the list of 586 made-up rows (no OS,
+  Azure Disk Encryption); no sample row changes.
+- **Ranked sizes that need the feature.** When an other size needs the preview feature and
+  the suggested size does not, its reason says so: "Same shape, no temporary disk. A
+  resize to it needs the preview feature VMTempDiskResizePreview" (no OS: "On Windows, a
+  resize to it needs ..."). A processor change keeps its asterisk at the end. When the
+  suggested size needs the feature (v6 and v7 from a SCSI temporary disk), the move
+  already says so, so the list does not repeat it on every size. Linux and the sizes that
+  keep the temporary disk type: nothing. Text change only: "Ranked sizes" on 6 v5 rows of
+  contoso-from-azure.csv, 3 of contoso-by-hand.csv and 116 of the 4,000-VM list.
+- **Azure Disk Encryption when the size table does not give the temporary disk** of the
+  current size or the new size (the kind comes from a name only): the new code
+  `encryption-temp-disk-unknown`, not checked, on v5 and Burstable, for Windows and no
+  OS. Never a fallback size or a "no". Every size in the size table has the reading, so
+  only a size that is not in the table reaches it.
+- **The Burstable reason** of `disk-encryption-preview` ends "No Bsv2 or Basv2 size has a
+  temporary disk." (all 22 Bsv2 and Basv2 sizes in the size table report no SCSI
+  temporary disk).
+- 13 more mutation checks, all caught. No answer of the samples or the 4,000-VM list
+  changes against the first round; only the ranked-size words above.
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

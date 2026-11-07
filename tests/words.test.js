@@ -128,7 +128,7 @@ function collect() {
     }
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
-        W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),
+        W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].flatMap((w) => [null, 'needed', 'windows'].map((f) => W.rankWords(w, 'AMD', f))),
         ['v5', 'v6', 'burstable'].flatMap((s) => ['needed', 'windows', 'unknown', 'not-needed', null].flatMap((f) => [null, { size: null }, { size: 'Standard_D4ds_v5' }].map((fb) => W.moveWords(s, f, fb)))), W.PREVIEW_LINK,
         ['needed', 'windows', 'unknown', 'not-needed', null].map((f) => W.featureColumn(f)),
         ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01', '2025-09-30'].flatMap((d) => [null, capacity].flatMap((c) => [null, NOW].map((now) => W.stageWords({ stage, retiresUtc: d }, c, now))))),

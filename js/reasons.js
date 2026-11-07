@@ -58,7 +58,9 @@ export const REASONS = {
     // feature on Windows (lifecycle.js, previewFeature). Lab tests did not use the feature
     // with Azure Disk Encryption, and no size of this shape keeps the temporary disk type.
     'os-unknown-encryption': () => 'The list does not give the OS. On a Windows VM, this resize needs the preview feature VMTempDiskResizePreview. Lab tests did not use the feature with Azure Disk Encryption. Give the OS in the list.',
-    'disk-encryption-preview': ({ series }) => `This VM has Azure Disk Encryption. The resize to ${series} needs the preview feature VMTempDiskResizePreview, because the temporary disk changes type. Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it. No ${series} size of this shape keeps the temporary disk type.`,
+    'disk-encryption-preview': ({ series }) => `This VM has Azure Disk Encryption. The resize to ${series} needs the preview feature VMTempDiskResizePreview, because the temporary disk changes type. Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it. ${series === 'burstable' ? 'No Bsv2 or Basv2 size has a temporary disk.' : `No ${series} size of this shape keeps the temporary disk type.`}`,
+    // The size table does not give the temporary disk of one of the two sizes (review, 2026-11-06).
+    'encryption-temp-disk-unknown': () => 'This VM has Azure Disk Encryption. The size table does not give the temporary disk of the current size or the new size. On Windows, a resize to another type of temporary disk needs the preview feature VMTempDiskResizePreview. This tool does not plan the feature with Azure Disk Encryption.',
 
     // ---- Not checked ----
     'processor-unreadable': () => 'This tool cannot read the processor type from the size name.',
