@@ -50,6 +50,12 @@ export const SOURCES = [
     // The availability set note (0.9.4-beta): deallocate all the VMs in the set only when
     // the new size is not available on the hardware cluster.
     ['resize-vm', 'Resize a virtual machine', `${VM}/sizes/resize-vm`],
+    // Accelerated networking is Required on every D and E v6 size, Intel and AMD (0.9.5-beta:
+    // the pages changed from Supported on 2026-10-27). One page for each series and processor.
+    ['dsv6', 'Dsv6 series', `${VM}/sizes/general-purpose/dsv6-series`],
+    ['dasv6', 'Dasv6 series', `${VM}/sizes/general-purpose/dasv6-series`],
+    ['esv6', 'Esv6 series', `${VM}/sizes/memory-optimized/esv6-series`],
+    ['easv6', 'Easv6 series', `${VM}/sizes/memory-optimized/easv6-series`],
 ].map(([id, name, url]) => ({ id, name, url }));
 
 const point = (n) => { try { return String.fromCodePoint(n); } catch { return ' '; } };

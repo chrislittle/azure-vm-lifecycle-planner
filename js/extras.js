@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.4-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.4-beta';
-import nvme from '../data/nvme-images.js?v=0.9.4-beta';
-import { readCount } from './planner.js?v=0.9.4-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.5-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.5-beta';
+import nvme from '../data/nvme-images.js?v=0.9.5-beta';
+import { readCount } from './planner.js?v=0.9.5-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -285,7 +285,7 @@ export function caveats(vm, x, option, pool = false) {
     else {
         const ok = imageSupportsNvme(x.imagePublisher, x.imageOffer, x.imageSku);
         out['NVMe'] = ok === true ? fine('The OS supports NVMe.')
-            : ok === false ? problem(`The image ${imageWords(x)} is not on the Microsoft list of OS images that support NVMe. Update the OS to a version on the Microsoft NVMe list, or rebuild from a newer image.`)
+            : ok === false ? problem(`The image ${imageWords(x)} is not on the Microsoft list of OS images that support NVMe. Update the OS to a version on the Microsoft NVMe list, or deploy a new VM from a newer image.`)
             // An image that the list names, but that this tool cannot find on the Microsoft list.
             : x.imagePublisher ? check(`Check: this tool cannot tell if the image ${imageWords(x)} supports NVMe. The OS must support NVMe.`)
             : check(`Check: the list does not give the OS image. The OS must support NVMe.${x.imageId ? ` The image ID is ${x.imageId}.` : ''}`);
@@ -347,6 +347,9 @@ export function caveats(vm, x, option, pool = false) {
     // well." (read 2026-11-06 on
     // https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview )
     // The method decides it (words.js moveWords), not the series.
+    // A pool or a service makes new VMs. On v5 and Burstable its rows keep the new-VM notes
+    // where 0.9.4-beta had them: Windows, and the temporary disk changes type (0.9.5-beta).
+    const poolNewVm = pool && !isNvme && vm.os === 'Windows' && Boolean(option.targetDiskArch) && vm.sourceDiskArch !== option.targetDiskArch;
     if (x.systemIdentity === false) out['Identity'] = fine('No system-assigned identity.');
     else if (x.systemIdentity === true) {
         out['Identity'] = !hasTarget ? none
@@ -356,14 +359,10 @@ export function caveats(vm, x, option, pool = false) {
             // VM" and "Resizes the VM to the target SKU and sets the disk controller type
             // to NVMe." (GUIDANCE.tempDiskPreview, "3. Usage", read 2026-11-06).
             : isNvme ? problem(`${said('System-assigned identity')} If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.`)
-            // v5 and Burstable, a Windows Generation 2 VM: the preview feature makes the
-            // rebuild a resize of the same VM, which kept its identity (measured in a lab
-            // test, 2026-11-02; lifecycle.js, previewResize). Without it, a rebuild.
-            : option.rebuild && option.previewResize ? problem(`${said('System-assigned identity')} With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
-            // v5 and Burstable: a rebuild (a Windows VM, the temporary disk changes type)
-            // is the only method, and a rebuild is a new VM.
-            : option.rebuild ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
-            : !vm.os ? check('Check: the list does not give the OS. A rebuild removes the system-assigned identity.')
+            : poolNewVm ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
+            // v5 and Burstable are always a resize of the same VM, also with the preview
+            // feature: the VM kept its identity (measured in lab tests, 2026-11-01 to
+            // 2026-11-07; lifecycle.js, previewFeature). No note.
             : fine();
     } else out['Identity'] = check('Check: the list does not say if the VM has a system-assigned identity.');
 
@@ -375,17 +374,17 @@ export function caveats(vm, x, option, pool = false) {
     // run moved two VMs in one set from v4 to v6 one at a time, with the other VM running.
     const avParallel = 'put the new VM in the same availability set when you create it. Azure cannot add an existing VM to a set.';
     const avInPlace = 'the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${!isNvme && option.rebuild && option.previewResize
-            // A Windows Generation 2 VM on v5 or Burstable: a resize with the preview feature, else a rebuild (0.9.3-beta).
-            ? `With the preview feature: ${avInPlace} If you rebuild: ${avParallel}`
+    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${
             // v6 and v7: deploy in parallel, or change the size of the current VM. Not for
             // Generation 1 (v6 and v7 need a new VM at Generation 2) or a pool (new nodes).
-            : isNvme && vm.gen !== 'V1' && !pool
+            isNvme && vm.gen !== 'V1' && !pool
             ? `If you deploy a new VM in parallel: ${avParallel} If you change the size of the current VM: ${avInPlace}`
-            : isNvme || option.rebuild
-            // v6 and v7 (and a rebuild) make a new VM: Azure adds a VM to an availability set only when it creates the VM.
+            // A new VM: Azure adds a VM to an availability set only when it creates the VM.
+            : isNvme || poolNewVm
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
-            : 'If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.'}`) : check('Check: the list does not say if the VM is in an availability set.');
+            // v5 and Burstable: only a resize, also with the preview feature (0.9.5-beta), in
+            // the words of the resize method.
+            : `${avInPlace[0].toUpperCase()}${avInPlace.slice(1)}`}`) : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
     const nva = applianceSign(x);
     out['Network virtual appliance'] = nva

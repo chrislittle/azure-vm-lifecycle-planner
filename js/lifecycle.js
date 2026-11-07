@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.9.4-beta';
-import seriesRules from '../data/series-rules.js?v=0.9.4-beta';
+import families from '../data/families.js?v=0.9.5-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.5-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -708,17 +708,51 @@ function entryClassification(vm, targetGeneration) {
     return { classification, blockers, prep };
 }
 
-// A: in place. B: a rebuild (Windows changing disk category). MANUAL, EXCLUDED.
-function pathSelection(vm, targetDiskArch, targetGeneration, classification) {
+// A: in place. MANUAL, EXCLUDED. There is no rebuild (0.9.5-beta, owner 2026-11-06): a
+// Windows VM whose temporary disk changes type is a resize with the preview feature
+// (previewFeature below).
+function pathSelection(vm, targetGeneration, classification) {
     const cls = classification || String(vm.classification ?? '');
     if (vm.platformManaged || eqI(cls, 'Excluded')) return 'EXCLUDED';
     if (eqI(cls, 'Blocked')) return 'MANUAL';
     if (generationController(targetGeneration) === 'NVMe') {
         if (eqI(vm.diskController, 'NVMe')) return 'EXCLUDED';
     } else if (eqI(sizeGeneration(vm.sourceSize), targetGeneration)) return 'EXCLUDED';
-    if (!eqI(vm.os, 'Windows')) return 'A';
-    if (eqI(vm.sourceDiskArch, targetDiskArch)) return 'A';
-    return 'B';
+    return 'A';
+}
+
+// Does a resize cross the SCSI temporary disk boundary: a SCSI temporary disk on one
+// size only? Azure counts only a SCSI temporary disk as a resource disk, so a v6 or v7
+// size with an NVMe temporary disk counts as a size with none (measured in a lab test,
+// 2026-11-07: no temporary disk to an NVMe one needs no preview feature). null when a
+// kind is not known.
+export function crossesScsiTempDisk(fromArch, toArch) {
+    if (!fromArch || !toArch) return null;
+    return (fromArch === 'scsi-temp') !== (toArch === 'scsi-temp');
+}
+
+// The v5 size of the same shape on the other side of the SCSI temporary disk boundary
+// from `size`: the d size for a size with no temporary disk, the size without the d for
+// a d size (Standard_D4s_v5 <-> Standard_D4ds_v5). The letters keep the processor maker.
+// It must keep the VM's own kind of temporary disk and pass every check that a target
+// passes; null when there is none.
+function sameKindSize(vm, table, size, series, nics, disks) {
+    const m = /^(Standard_[A-Za-z]+\d+(?:-\d+)?)([a-z]*)_(v\d+)$/.exec(String(size ?? ''));
+    if (!m || !table.has(size)) return null;
+    const [, stem, letters, version] = m;
+    // A d size without its d; else the d before the last s. (A name with no d and a SCSI
+    // temporary disk gives itself, which the boundary check below refuses.)
+    const scsi = diskArchitecture(size, maxResourceMB(table.get(size))) === 'scsi-temp';
+    const other = scsi ? letters.replace('d', '') : letters.endsWith('s') ? `${letters.slice(0, -1)}ds` : `${letters}d`;
+    const candidate = `${stem}${other}_${version}`;
+    if (!table.has(candidate)) return null;
+    const name = table.get(candidate).name;
+    if (crossesScsiTempDisk(vm.sourceDiskArch, diskArchitecture(name, maxResourceMB(table.get(name)))) !== false) return null;
+    const source = skuShape(table.has(vm.sourceSize) ? table.get(vm.sourceSize) : null);
+    if (sizeSmaller(source, skuShape(table.get(name))) !== 'fits') return null;
+    const hyperV = vm.gen ? String(vm.gen) : (vm.hyperVGeneration ?? null);
+    const mp = targetSize({ sourceSize: vm.sourceSize, sizeMap: [{ source: vm.sourceSize, target: name }], table, requiredNics: nics, requiredDataDisks: disks, targetGeneration: series, hyperVGeneration: hyperV });
+    return eqI(mp.target, name) && mp.code === 'mapped' ? name : null;
 }
 
 // Everything about a machine's target on one series.
@@ -802,36 +836,49 @@ function entryTarget(vm, table, targetGeneration, chosenSize, now) {
     }
 
     let path = (!mapping.target && (!['Excluded', 'Blocked'].includes(judged.classification) || mapping.code === 'chosen-size-gone'))
-        ? 'MANUAL' : pathSelection(vm, diskArch, targetGeneration, judged.classification);
+        ? 'MANUAL' : pathSelection(vm, targetGeneration, judged.classification);
 
-    // A move that keeps Azure Disk Encryption must be in place; a rebuild is refused.
     let blockers = [...judged.blockers];
     let classification = judged.classification;
-    let refusedRebuild = false;
-    // v6 and v7 are never a rebuild (0.9.3-beta): Microsoft's v6 and v7 plan page says
-    // that Azure Disk Encryption is "not available on the v6 or v7 series for either
-    // operating system", and "An ADE-encrypted VM can't reach v6 or v7 by conversion."
-    // So the answer there is the plain one, 'disk-encryption-present' (the series rules
-    // give it first; this keeps it so if they do not).
-    if (path === 'B' && hasI(vm.blockers, 'disk-encryption-present')) {
-        const nvme = generationController(targetGeneration) === 'NVMe';
-        const code = nvme ? 'disk-encryption-present' : 'disk-encryption-rebuild';
+    const encrypted = hasI(vm.blockers, 'disk-encryption-present');
+    const block = (code, reason) => {
         if (!hasI(blockers, code)) blockers.push(code);
         classification = 'Blocked';
-        refusedRebuild = !nvme;
-        path = pathSelection(vm, diskArch, targetGeneration, classification);
-        mapping = { target: null, alternates: [], code,
-            reason: nvme ? `${targetGeneration} sizes do not support Azure Disk Encryption.`
-                : `This machine uses Azure Disk Encryption, and its move to ${targetGeneration} is a rebuild. The tool does not rebuild an encrypted machine, so it does not move it.` };
+        path = 'MANUAL';
+        mapping = { target: null, alternates: [], code, reason };
         diskArch = null;
         tempDisks = null;
+    };
+    // v6 and v7 never take Azure Disk Encryption: Microsoft's v6 and v7 plan page says that
+    // it is "not available on the v6 or v7 series for either operating system", and "An
+    // ADE-encrypted VM can't reach v6 or v7 by conversion." The series rules give
+    // 'disk-encryption-present' first; this keeps it so if they do not (0.9.3-beta).
+    if (path === 'A' && encrypted && generationController(targetGeneration) === 'NVMe') {
+        block('disk-encryption-present', `${targetGeneration} sizes do not support Azure Disk Encryption.`);
     }
-    // The OS is not known: on Windows this move is a rebuild, which removes Azure
-    // Disk Encryption. Unknown is never a pass: a person must check (review, 2026-10-10).
-    if (path === 'A' && !vm.os && diskArch && vm.sourceDiskArch && !eqI(vm.sourceDiskArch, diskArch) && hasI(vm.blockers, 'disk-encryption-present')) {
-        blockers.push('os-unknown-encryption');
-        classification = 'Blocked';
-        path = 'MANUAL';
+    // v5, Azure Disk Encryption, and a resize that crosses the SCSI temporary disk
+    // boundary on Windows (or on a VM whose OS is not known): that resize needs the preview
+    // feature, and lab tests did not use the feature with Azure Disk Encryption. A resize
+    // keeps the encryption, so the size of the same shape that keeps the temporary disk
+    // type is the target: a plain resize (0.9.5-beta, owner 2026-11-06). With none, the
+    // tool does not plan it on Windows, and a person must check it when the OS is not
+    // known (unknown is never a pass).
+    if (path === 'A' && encrypted && generationController(targetGeneration) !== 'NVMe' && (!vm.os || eqI(vm.os, 'Windows'))
+        && crossesScsiTempDisk(vm.sourceDiskArch, diskArch) === true) {
+        const same = sameKindSize(vm, table, mapping.target, targetGeneration, nicCount, dataDiskCount);
+        if (same) {
+            mapping = ask([{ source: vm.sourceSize, target: same }]);
+            mapping.reason = `encryption-keeps-temp-disk (Azure Disk Encryption: ${same} keeps the temporary disk type, so the resize needs no preview feature)`;
+            const entry = table.get(same);
+            diskArch = diskArchitecture(same, maxResourceMB(entry));
+            tempDisks = tempDiskCount(entry, same);
+        } else if (vm.os) {
+            block('disk-encryption-preview', `This machine uses Azure Disk Encryption, and its resize to ${targetGeneration} needs the preview feature VMTempDiskResizePreview. The tool does not plan the feature with Azure Disk Encryption.`);
+        } else {
+            blockers.push('os-unknown-encryption');
+            classification = 'Blocked';
+            path = 'MANUAL';
+        }
     }
 
     const retiredScope = retiredScopeDetail(String(vm.sourceSize ?? ''), now);
@@ -847,7 +894,7 @@ function entryTarget(vm, table, targetGeneration, chosenSize, now) {
     }
 
     return { mapping, diskArch, tempDisks, path, nicCount, classification, blockers, prep: judged.prep,
-        controller: generationController(targetGeneration), refusedRebuild, sizeChoices };
+        controller: generationController(targetGeneration), sizeChoices };
 }
 
 // The mapping's reason, for a code that comes from choosing a size.
@@ -857,27 +904,35 @@ export function mappingFor(vm, table, series, now = new Date()) {
 
 // Does the temporary disk change type (none, SCSI, NVMe) from the current size to a
 // target size? null when the size table does not give the temporary disk of either
-// size: unknown is not a change (0.9.2-beta). Words only, no answer uses it.
+// size (0.9.2-beta). previewFeature reads it: null there is "not checked" (0.9.5-beta).
 function tempDiskChangeTo(vm, targetEntry, targetArch) {
     const targetMb = targetEntry ? maxResourceMB(targetEntry) : null;
     if (vm.sourceTempDiskKnown !== true || !vm.sourceDiskArch || !targetArch || targetMb === null || !Number.isFinite(targetMb)) return null;
     return !eqI(vm.sourceDiskArch, targetArch);
 }
 
-// A rebuild on v5 or Burstable that can also be a resize with the preview feature
-// VMTempDiskResizePreview (0.9.3-beta, owner 2026-11-06). Measured in a lab test,
-// 2026-11-02, on Windows Server 2022, Generation 2: with the feature registered, Azure
-// accepted a resize across the temporary-disk boundary in both directions (for example
-// Standard_B2s to Standard_B2ls_v2), and the VM kept its vmId, its system-assigned
-// identity and its extensions. Without it, Azure refused the resize. The owner uses the
-// lab result over the Microsoft FAQ about VM sizes with no temporary disk (PLAN.md).
-// Not measured: Generation 1, Azure Disk Encryption (those rows have no size anyway).
-// Words only: the answer (the size, the rebuild flag) does not change. A rebuild is
-// always a Windows VM (pathSelection, burstableOption), so the OS needs no check here.
-// Generation 2 must be known: not assumed for a service (vm.genAssumed, planner.js).
-// A VM in a pool or a service gets the pool advice: planner.js sets it false there.
-function previewResize(vm, option) {
-    return Boolean(option.supported && option.rebuild && generationController(option.option) !== 'NVMe' && eqI(vm.gen, 'V2') && !vm.genAssumed);
+// Does the resize need the preview feature VMTempDiskResizePreview (0.9.5-beta, owner
+// 2026-11-06 and 2026-11-07)? Measured in lab tests, 2026-11-01 to 2026-11-07, Windows
+// Server 2016, 2019, 2022 and 2025: a Windows VM resizes in place across the SCSI
+// temporary disk boundary (crossesScsiTempDisk) only with the feature registered on the
+// subscription, on Generation 1 and Generation 2, forward and back. The VM kept its
+// vmId, its system-assigned identity and its extensions. Without it, Azure refused the
+// resize. A size with no temporary disk resized to a v6 or v7 size with an NVMe one with
+// no feature. Linux never needs it. The owner uses the lab result over the Microsoft FAQ
+// about VM sizes with no temporary disk (PLAN.md).
+//   null         no supported size
+//   'not-needed' Linux, or the resize does not cross the boundary
+//   'needed'     Windows, and the resize crosses it
+//   'windows'    the list does not give the OS, and the resize crosses it
+//   'unknown'    Windows or no OS, and the size table does not give the temporary disk
+//                of one of the two sizes: unknown is never a pass (not checked)
+// A VM in a pool or a service gets the pool advice: planner.js sets it to null there.
+export function previewFeature(vm, option) {
+    if (!option.supported || !option.targetSize) return null;
+    if (vm.os && !eqI(vm.os, 'Windows')) return 'not-needed';
+    if (option.tempDiskChange === null || option.tempDiskChange === undefined) return 'unknown';
+    if (crossesScsiTempDisk(vm.sourceDiskArch, option.targetDiskArch) !== true) return 'not-needed';
+    return vm.os ? 'needed' : 'windows';
 }
 
 // One series for one machine: whether it is supported, and the facts about it.
@@ -886,11 +941,13 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         option: series, supported: false, notSupported: [],
         targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
         move: generationController(series) === 'NVMe' ? 'nvme-conversion' : 'scsi-resize',
-        rebuild: false, previewResize: false,
+        // The preview feature (previewFeature above), and for v5 the size of the same
+        // shape to use without it: { size } (size null when there is none).
+        previewFeature: null, featureFallback: null,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
         // The temporary disk changes type (none, SCSI, NVMe) on the target size; null
-        // when there is no target size. Words only (the preview feature, words.js).
-        tempDiskChange: null,
+        // when there is no target size or the size table does not give it.
+        tempDiskChange: null, targetDiskArch: null,
         tempDisksTo: null, targetStage: null, stageChange: 'unknown',
         acceleratedNetworking: { required: null, mayUseMana: null, turnsOn: null },
         stops: [], sizeChoices: [], premiumDisks: null, burstableEnds: null,
@@ -902,7 +959,6 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
     option.blockers = [...t.blockers];
     option.prep = [...t.prep];
     option.path = t.path;
-    option.rebuild = t.path === 'B' || t.refusedRebuild;
     option.sizeChoices = t.sizeChoices;
     const sourceGeneration = sizeGeneration(vm.sourceSize);
 
@@ -912,7 +968,7 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
     else if (series === 'v5' && ['v6', 'v7'].includes(lower(sourceGeneration))) why = ['source-is-newer'];
     else if (!size) why = [String(t.mapping.code ?? '')];
     else if (t.path === 'EXCLUDED') why = [generationController(series) === 'NVMe' ? 'already-on-nvme' : 'already-on-series'];
-    else if (!['A', 'B'].includes(t.path)) why = ['no-path'];
+    else if (t.path !== 'A') why = ['no-path'];
     else why = [];
     option.notSupported = why.filter((c) => c);
 
@@ -921,6 +977,7 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         option.premiumDisks = diskPremiumCapable(table.has(size) ? table.get(size) : null);
         option.sizeUnverified = t.mapping.code === 'mapped-unverified';
         option.tempDisksTo = t.tempDisks;
+        option.targetDiskArch = t.diskArch;
         option.tempDiskChange = tempDiskChangeTo(vm, table.has(size) ? table.get(size) : null, t.diskArch);
         option.move = t.controller === 'NVMe' ? 'nvme-conversion' : sizeGeneration(size) === 'v5' ? 'scsi-resize' : 'scsi-reversion';
         option.targetStage = adviceStage(size);
@@ -943,7 +1000,12 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
         if (turnsOn === true) option.stops = ['acceleratedNetworkingRequired'];
     }
     option.supported = option.notSupported.length === 0;
-    option.previewResize = previewResize(vm, option);
+    option.previewFeature = previewFeature(vm, option);
+    // v5: without the feature, the size of the same shape that keeps the temporary disk type.
+    if (generationController(series) !== 'NVMe' && ['needed', 'windows'].includes(option.previewFeature)) {
+        const nics = vm.nicCount !== undefined && vm.nicCount > 0 ? vm.nicCount : 1;
+        option.featureFallback = { size: sameKindSize(vm, table, size, series, nics, vm.dataDiskCount !== undefined ? vm.dataDiskCount : 0) };
+    }
 
     // Each size choice carries the facts that follow from its own size; a
     // choice this machine cannot take is not offered.
@@ -953,7 +1015,7 @@ export function adviceOption(vm, series, table, chosenSize = null, now = new Dat
             const sub = adviceOption(vm, series, table, c.size, now);
             if (!sub.supported || String(sub.targetSize ?? '') !== c.size) continue;
             const item = { ...c };
-            for (const k of ['path', 'rebuild', 'tempDisksTo', 'sizeUnverified', 'acceleratedNetworking', 'stops', 'premiumDisks']) item[k] = sub[k];
+            for (const k of ['path', 'previewFeature', 'tempDisksTo', 'sizeUnverified', 'acceleratedNetworking', 'stops', 'premiumDisks']) item[k] = sub[k];
             kept.push(item);
         }
         option.sizeChoices = kept;
@@ -968,12 +1030,21 @@ export function machineAdvice(vm, table, now = new Date()) {
     const options = ['v5', 'v6', 'v7'].map((s) => adviceOption(vm, s, table, null, now));
     let outOfScope = (vm.blockers || []).some((b) => ['hpc-or-fpga-size', 'local-nvme-storage-size', 'l-series-replacement', 'size-retired'].includes(b));
     if (sizeRetiredForTool(String(vm.sourceSize ?? ''), now)) outOfScope = true;
-    if (burstableSource(vm.sourceSize)) options.push(burstableOption(vm, table, now));
+    if (burstableSource(vm.sourceSize)) {
+        const b = burstableOption(vm, table, now);
+        // No Bsv2 or Basv2 size has a temporary disk. Without the feature, the v5 size,
+        // when it is a resize with no feature (owner, 2026-11-07); else none.
+        if (['needed', 'windows'].includes(b.previewFeature)) {
+            const v5 = options[0];
+            b.featureFallback = { size: v5.supported && v5.previewFeature === 'not-needed' ? v5.targetSize : null };
+        }
+        options.push(b);
+    }
     if (eqI(vm.gen, 'V1') && !outOfScope) {
         options.push({
             option: 'gen1Route', supported: false, notSupported: ['not-built-yet'],
             targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
-            move: 'gen1-route', rebuild: false, tempDisksFrom: null, tempDisksTo: null,
+            move: 'gen1-route', previewFeature: null, featureFallback: null, tempDisksFrom: null, tempDisksTo: null,
             targetStage: null, stageChange: 'unknown',
             acceleratedNetworking: { required: null, mayUseMana: null, turnsOn: null },
             stops: [], sizeChoices: [], premiumDisks: null, burstableEnds: null,
@@ -1008,9 +1079,9 @@ export function burstableOption(vm, table, now = new Date()) {
     const option = {
         option: 'burstable', supported: false, notSupported: [],
         targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
-        move: 'scsi-resize', rebuild: false, previewResize: false,
+        move: 'scsi-resize', previewFeature: null, featureFallback: null,
         tempDisksFrom: vm.sourceTempDisks !== undefined && vm.sourceTempDisks !== null ? vm.sourceTempDisks : null,
-        tempDiskChange: null,
+        tempDiskChange: null, targetDiskArch: null,
         tempDisksTo: null, targetStage: null, stageChange: 'unknown',
         acceleratedNetworking: { required: null, mayUseMana: null, turnsOn: null },
         stops: [], sizeChoices: [], premiumDisks: null, burstableEnds: null, facts: null,
@@ -1045,15 +1116,17 @@ export function burstableOption(vm, table, now = new Date()) {
     const best = fits[0];
     const entry = table.get(best.size);
     const targetArch = diskArchitecture(best.size, maxResourceMB(entry));
-    const rebuild = eqI(vm.os, 'Windows') && !eqI(vm.sourceDiskArch, targetArch);
-    // A rebuild loses Azure Disk Encryption: refused, as on v5.
-    if (rebuild && hasI(vm.blockers, 'disk-encryption-present')) { option.notSupported = ['disk-encryption-rebuild']; option.rebuild = true; return option; }
-    // The OS is not known, and on Windows this is a rebuild: a person must check.
-    if (!vm.os && !eqI(vm.sourceDiskArch, targetArch) && hasI(vm.blockers, 'disk-encryption-present')) { option.notSupported = ['os-unknown-encryption']; return option; }
+    // No Bsv2 or Basv2 size has a temporary disk: from a SCSI one, Windows needs the
+    // preview feature, which this tool does not plan with Azure Disk Encryption (as on
+    // v5). The OS is not known: a person must check.
+    if (crossesScsiTempDisk(vm.sourceDiskArch, targetArch) === true && hasI(vm.blockers, 'disk-encryption-present')) {
+        if (eqI(vm.os, 'Windows')) { option.notSupported = ['disk-encryption-preview']; return option; }
+        if (!vm.os) { option.notSupported = ['os-unknown-encryption']; return option; }
+    }
     option.targetSize = best.size;
-    option.path = rebuild ? 'B' : 'A';
-    option.rebuild = rebuild;
+    option.path = 'A';
     option.tempDisksTo = tempDiskCount(entry, best.size);
+    option.targetDiskArch = targetArch;
     option.tempDiskChange = tempDiskChangeTo(vm, entry, targetArch);
     option.premiumDisks = diskPremiumCapable(entry);
     option.targetStage = { ...burstableStage };
@@ -1064,7 +1137,7 @@ export function burstableOption(vm, table, now = new Date()) {
     option.sizeChoices = fits.filter((f) => f.vcpus === best.vcpus && f.memoryGB === best.memoryGB)
         .map((f) => ({ size: f.size, family: f.amd ? 'Basv2' : 'Bsv2', variant: 'default', vcpus: f.vcpus, activeVcpus: f.vcpus, memoryGB: f.memoryGB, best: f.size === best.size }));
     option.supported = true;
-    option.previewResize = previewResize(vm, option);
+    option.previewFeature = previewFeature(vm, option);
     return option;
 }
 
@@ -1085,6 +1158,9 @@ export function rankedSizes(vm, table, option, now = new Date()) {
     const out = [{ size: best, why: 'closest' }];
     const m = /^Standard_([A-Z]+)(\d+)(-\d+)?([a-z]*)_(v\d+)$/.exec(best);
     const candidates = [];
+    // v5 with the preview feature: the size to use without it comes second (0.9.5-beta).
+    const fallback = option.option !== 'burstable' && option.featureFallback && option.featureFallback.size;
+    if (fallback) candidates.push({ size: fallback, why: option.targetDiskArch === 'scsi-temp' ? 'temp-disk-removed' : 'temp-disk-added' });
     if (m && option.option !== 'burstable') {
         const [, fam, num, con = '', letters, ver] = m;
         const name = (f, l) => `Standard_${f}${num}${con}${l}_${ver}`;
@@ -1125,9 +1201,10 @@ export function rankedSizes(vm, table, option, now = new Date()) {
         const mp = targetSize({ sourceSize: vm.sourceSize, sizeMap: [{ source: vm.sourceSize, target: size }], table,
             requiredNics: nics, requiredDataDisks: disks, targetGeneration: series, hyperVGeneration: vm.gen });
         if (!eqI(mp.target, size) || mp.code !== 'mapped') continue;
-        // A Windows rebuild (the temporary disk changes type) removes Azure Disk Encryption.
+        // Windows with Azure Disk Encryption: a size that changes the temporary disk type
+        // needs the preview feature, which this tool does not plan with the encryption.
         const arch = diskArchitecture(size, maxResourceMB(table.get(size)));
-        if (eqI(vm.os, 'Windows') && !eqI(vm.sourceDiskArch, arch) && hasI(vm.blockers, 'disk-encryption-present')) continue;
+        if (eqI(vm.os, 'Windows') && crossesScsiTempDisk(vm.sourceDiskArch, arch) === true && hasI(vm.blockers, 'disk-encryption-present')) continue;
         out.push({ size, why: c.why });
     }
     return out;

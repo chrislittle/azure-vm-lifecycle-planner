@@ -182,7 +182,8 @@ test('pattern: a list with no SAP column still cannot say that the VM is standal
 
 test('vm-summary.csv and vm-target-sizes.csv: "SAP sign" is the last column; "SAP" is blank when the list does not say Yes', () => {
     assert.equal(F.SUMMARY_COLUMNS.at(-1), 'SAP sign');
-    assert.equal(F.TARGET_COLUMNS.at(-1), 'SAP sign');
+    // 0.9.5-beta adds "Preview feature" after it, at the end.
+    assert.deepEqual(F.TARGET_COLUMNS.slice(-2), ['SAP sign', 'Preview feature']);
     assert.deepEqual(F.SUMMARY_COLUMNS.slice(-3, -1), ['Vendor', 'Evidence'], 'the other columns keep their place');
     const p = run(list([
         { 'VM name': 'contoso-s1', 'SAP': 'Yes', 'SAP sign': EXT },
@@ -199,7 +200,7 @@ test('vm-summary.csv and vm-target-sizes.csv: "SAP sign" is the last column; "SA
     for (const n of ['contoso-s2', 'contoso-s3', 'contoso-s4', 'contoso-s5']) assert.deepEqual([v5(n)['SAP'], v5(n)['SAP sign']], ['', '']);
     const summary = F.summaryRows(p);
     assert.deepEqual(summary.map((r) => r['SAP sign']), [EXT, '', '', '', '']);
-    assert.ok(F.toCsv(F.TARGET_COLUMNS, target).split('\r\n')[0].endsWith('"Resource ID","SAP sign"'));
+    assert.ok(F.toCsv(F.TARGET_COLUMNS, target).split('\r\n')[0].endsWith('"Resource ID","SAP sign","Preview feature"'));
 });
 
 test('about-these-results.txt: what the SAP note and "SAP sign" mean', () => {
