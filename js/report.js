@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.5-beta';
-import { capacityRestricted } from './planner.js?v=0.9.5-beta';
-import * as F from './files.js?v=0.9.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.5-beta';
-import { APPLIANCE_KINDS, GROUPS, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, NOT_FOUND, serviceManaged, stageWords, stageShort, dateWords, capacityWords, GUIDANCE, fallbackWords, featureWords, moveWords, PREVIEW_LINK, tempDiskPreview } from './words.js?v=0.9.5-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.5-beta';
-import version from './version.js?v=0.9.5-beta';
+import capacity from '../data/capacity.js?v=0.9.6-beta';
+import { capacityRestricted } from './planner.js?v=0.9.6-beta';
+import * as F from './files.js?v=0.9.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
+import { COMPARE_HINT, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.6-beta';
+import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.6-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.6-beta';
+import version from './version.js?v=0.9.6-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -65,9 +65,22 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
         return `<div class="scroll"><table class="compare"><caption>${esc(c.caption)}</caption><thead><tr><th scope="col">Fact</th>${c.columns.map((col) => `<th scope="col">${esc(col.label)}<br><span class="mono">${esc(short(col.size))}</span></th>`).join('')}</tr></thead><tbody>${c.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((cell) => `<td>${esc(cell.text)}${cell.less ? `<br><b class="less">${esc(cell.less)}</b>` : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="muted">${esc(COMPARE_HINT)}</p>`;
     }
 
+    // A list of notes or steps: the topic in bold, the text, and the series when the note is
+    // for some series only. A step can have the link to the Microsoft page that names the
+    // preview feature.
+    const noteItems = (items, cls, strip) => `<ul class="${cls}">${items.map((x) => `<li><b>${esc(x.topic)}:</b> ${esc(strip ? x.text.replace(/^Check: /, '') : x.text)}${x.series.length ? ` <span class="muted">(${seriesList(x.series)} only)</span>` : ''}${x.link ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</li>`).join('')}</ul>`;
+    const notes = (title, items, cls, strip) => (items.length ? `<h4>${esc(title)}</h4>${noteItems(items, cls, strip)}` : '');
+
+    // "What to do" (details.js, whatToDo; 0.9.6-beta): the ways to move, each in a box with
+    // all its steps, as on the page.
+    function wayHtml(w) {
+        const cond = !w.conditions ? '' : w.steps.length ? `<p class="cond">${esc(conditionsWords(w.steps.length))}</p>${noteItems(w.steps, 'act')}`
+            : w.key === 'pool' && w.after.length ? '' : `<p class="cond muted">${esc(NO_CONDITIONS)}</p>`;
+        return `<div class="way${w.tag ? ' rec' : ''}">${w.label ? `<p class="way-label">${esc(w.label)}${w.tag ? ` <span class="tag ok">${esc(w.tag)}</span>` : ''}</p>` : ''}<h5>${esc(w.title)}</h5>${w.lines.map((x) => `<p>${esc(x)}</p>`).join('')}${cond}${w.info.length ? `<p class="cond">${esc(GOOD_TO_KNOW)}</p>${noteItems(w.info, 'att')}` : ''}${w.after.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}</div>`;
+    }
+
     function vmCard(m) {
-        const g = F.groupOf(m); const t = todo(m, g); const n = F.allNotes(m);
-        const notes = (title, items, cls, strip) => items.length ? `<h4>${title}</h4><ul class="${cls}">${items.map((x) => `<li><b>${esc(x.topic)}:</b> ${esc(strip ? x.text.replace(/^Check: /, '') : x.text)}${x.series.length ? ` <span class="muted">(${seriesList(x.series)} only)</span>` : ''}</li>`).join('')}</ul>` : '';
+        const g = F.groupOf(m); const t = whatToDo(m, g);
         const why = whyLines(m, g, table, now);
         let sizesHtml = '';
         if (m.vm && !['gate', 'nopath'].includes(g)) {
@@ -75,32 +88,27 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 const o = r.option; const name = r.series === 'burstable' ? 'Burstable' : r.series;
                 if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
                 const ranked = F.rankedFor(m, r, table, now);
-                const pool = POOL_PATTERNS.includes(m.pattern);
-                const words = pool ? '' : moveWords(r.series, o.previewFeature, o.featureFallback);
-                const how = words ? words.split('. ')[0] + '.' : '';
-                // The preview feature VMTempDiskResizePreview and the size to use without it, on a
-                // line of their own (0.9.5-beta); on v6 and v7 with the link to the Microsoft page
-                // that names the feature.
-                // v6 and v7: the report shows only the first method, so the line names the second
-                // one first, and "the resize" has its meaning (review, 2026-11-06).
-                const nvme = r.series === 'v6' || r.series === 'v7';
-                const extra = pool ? '' : [nvme && featureWords(o.previewFeature) ? 'You can also change the size of the current VM.' : '', featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)].filter((w) => w).join(' ');
-                const preview = extra ? `<br><span class="muted">${esc(extra)}${tempDiskPreview(m, r) ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</span>` : '';
-                return `<tr><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b><br><span class="muted">${esc(how)}</span>${preview}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
+                // The lifecycle stage of the series, the size that "What to do" uses, and the
+                // ways to move to it (details.js, sizeCard), as on the page.
+                const c = sizeCard(m, g, r);
+                const how = c.how ? `<br><span class="muted">${esc(c.how)}${c.link ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</span>` : '';
+                return `<tr${c.used ? ' class="used"' : ''}><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b>${c.stage ? ` <span class="tag muted">${esc(c.stage)}</span>` : ''}${c.used ? `<br><b class="used-note">${esc(SIZE_USED)}</b>` : ''}${how}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
             }).join('');
-            sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>`;
+            const fits = m.rows.some((r) => sizeCard(m, g, r).used) && m.rows.filter((r) => r.series !== 'gen1Route' && r.option.supported).length > 1 ? `<p class="muted">${esc(OTHER_SIZES_FIT)}</p>` : '';
+            sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>${fits}`;
             sizesHtml += compareHtml(sizeComparison(m, table));
         }
+        const todoHtml = `${t.lead ? `<p class="lead">${esc(t.lead)}</p>` : ''}${t.ways.length ? `<div class="ways${t.ways.length > 1 ? ' two' : ''}">${t.ways.map(wayHtml).join('')}</div>` : ''}${t.more.map((x) => `<p>${esc(x)}</p>`).join('')}`;
         return `<section class="vm">
       <header><h3>${esc(m.read.name)}</h3><span class="tag ${TONE[g]}">${esc(GROUPS[g].short)}</span></header>
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
       ${genLine(m)}
-      <div class="todo"><b>What to do:</b> ${esc(t.main)} ${t.more.map(esc).join(' ')}</div>
+      <h4>What to do</h4><div class="todo">${todoHtml}</div>
       ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
       ${workloadHtml(m)}
-      ${serviceManaged(m) && m.moveRequired === 'Yes' ? '<h4>Before the move</h4><p class="muted">Nothing to do on the VM. The service manages the image and the disks.</p>' : notes('Before the move', n.actions, 'act')}
-      ${notes('Good to know', n.attention, 'att')}
-      ${notes('To check', n.checks, 'chk', true)}
+      ${notes(t.ways.length ? OTHER_STEPS : STEPS, t.otherSteps, 'act')}
+      ${notes(GOOD_TO_KNOW, t.attention, 'att')}
+      ${notes('To check', t.checks, 'chk', true)}
       ${sizesHtml}
       ${m.read.resourceId ? `<p class="rid">${esc(m.read.resourceId)}</p>` : ''}
     </section>`;
@@ -144,7 +152,12 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     .vm { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; break-inside: avoid; }
     .vm header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; } .vm h3 { margin: 0; }
     .meta { color: var(--muted); font-size: 13px; }
-    .todo { background: var(--bg); border-left: 3px solid var(--accent); padding: 6px 10px; margin: 8px 0; }
+    .todo { background: var(--bg); border-left: 3px solid var(--accent); padding: 6px 10px; margin: 4px 0 8px; }
+    .todo .lead { font-weight: 600; }
+    .ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 6px 0; } .ways:not(.two) { grid-template-columns: minmax(0, 1fr); }
+    .way { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; break-inside: avoid; } .way.rec { border-color: var(--ok); }
+    .way h5 { font-size: 14px; margin: 0 0 4px; } .way-label { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 2px; } .way .cond { font-weight: 600; margin: 6px 0 2px; }
+    tr.used td, tr.used th { background: var(--bg); } b.used-note { font-size: 12px; color: var(--accent); }
     ul { margin: 0; padding-left: 18px; } li { margin: 2px 0; }
     ul.act li::marker { color: var(--act); } ul.att li::marker { color: var(--accent); } ul.chk li::marker { color: var(--muted); }
     table.sizes th:first-child { width: 80px; }
@@ -152,6 +165,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     .rid { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
     @media (max-width: 900px) { .sums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .sums { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) { .ways { grid-template-columns: 1fr; } }
     @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
     </style></head><body><main>
     <div class="cover">

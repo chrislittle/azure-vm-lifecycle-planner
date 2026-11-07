@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.5-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.5-beta';
-import nvme from '../data/nvme-images.js?v=0.9.5-beta';
-import { readCount } from './planner.js?v=0.9.5-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.6-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.6-beta';
+import nvme from '../data/nvme-images.js?v=0.9.6-beta';
+import { readCount } from './planner.js?v=0.9.6-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -242,6 +242,11 @@ const check = (text) => ({ state: 'check', text });
 // really problems"). It does not stop a VM from being ready.
 const attention = (text) => ({ state: 'attention', text });
 const none = { state: '', text: '' };
+// A note that says what to do for each of the two ways of v6 and v7 (deploy in parallel,
+// change the size): ways gives the part for each way, with the value from the list, for
+// the boxes of "What to do" (details.js, 0.9.6-beta). '' means nothing for that way.
+// The text (the CSV files) does not change.
+const withWays = (note, parallel, resize) => ({ ...note, ways: { parallel, resize } });
 
 // The value of a column as the list gives it, in words: '"Hibernation" is Yes.'
 // Each note says the value that made it (0.9.0-beta), so that a customer can see
@@ -358,7 +363,11 @@ export function caveats(vm, x, option, pool = false) {
             // keeps the VM: Microsoft's NVMe conversion script "Stops and deallocates the
             // VM" and "Resizes the VM to the target SKU and sets the disk controller type
             // to NVMe." (GUIDANCE.tempDiskPreview, "3. Usage", read 2026-11-06).
-            : isNvme ? problem(`${said('System-assigned identity')} If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.`)
+            // "What to do" shows each way in its own box (0.9.6-beta): ways gives the part
+            // of the note for each way. The change of the size has no step: its box says
+            // that the VM keeps its identity.
+            : isNvme ? withWays(problem(`${said('System-assigned identity')} If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.`),
+                `${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`, '')
             : poolNewVm ? problem(`${said('System-assigned identity')} Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.`)
             // v5 and Burstable are always a resize of the same VM, also with the preview
             // feature: the VM kept its identity (measured in lab tests, 2026-11-01 to
@@ -374,17 +383,21 @@ export function caveats(vm, x, option, pool = false) {
     // run moved two VMs in one set from v4 to v6 one at a time, with the other VM running.
     const avParallel = 'put the new VM in the same availability set when you create it. Azure cannot add an existing VM to a set.';
     const avInPlace = 'the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
-    out['Availability set'] = x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${
-            // v6 and v7: deploy in parallel, or change the size of the current VM. Not for
-            // Generation 1 (v6 and v7 need a new VM at Generation 2) or a pool (new nodes).
-            isNvme && vm.gen !== 'V1' && !pool
-            ? `If you deploy a new VM in parallel: ${avParallel} If you change the size of the current VM: ${avInPlace}`
+    const upper = (s) => `${s[0].toUpperCase()}${s.slice(1)}`;
+    // v6 and v7: deploy in parallel, or change the size of the current VM. Not for
+    // Generation 1 (v6 and v7 need a new VM at Generation 2) or a pool (new nodes).
+    // ways: the part of the note for each way, for the boxes of "What to do" (0.9.6-beta).
+    const avBoth = isNvme && vm.gen !== 'V1' && !pool;
+    out['Availability set'] = x.availabilitySet === true && avBoth
+        ? withWays(attention(`${said('Availability set')} If you deploy a new VM in parallel: ${avParallel} If you change the size of the current VM: ${avInPlace}`),
+            `${said('Availability set')} ${upper(avParallel)}`, `${said('Availability set')} ${upper(avInPlace)}`)
+        : x.availabilitySet === false ? fine('Not in an availability set.') : x.availabilitySet === true ? attention(`${said('Availability set')} ${
             // A new VM: Azure adds a VM to an availability set only when it creates the VM.
-            : isNvme || poolNewVm
+            isNvme || poolNewVm
             ? 'Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.'
             // v5 and Burstable: only a resize, also with the preview feature (0.9.5-beta), in
             // the words of the resize method.
-            : `${avInPlace[0].toUpperCase()}${avInPlace.slice(1)}`}`) : check('Check: the list does not say if the VM is in an availability set.');
+            : upper(avInPlace)}`) : check('Check: the list does not say if the VM is in an availability set.');
     // Only on an appliance: on any other VM this note says nothing (owner, 2026-10-09).
     const nva = applianceSign(x);
     out['Network virtual appliance'] = nva

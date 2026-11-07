@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.9.5-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.5-beta';
-import capacity from '../data/capacity.js?v=0.9.5-beta';
-import nvme from '../data/nvme-images.js?v=0.9.5-beta';
-import query from './query.js?v=0.9.5-beta';
-import sample from './sample.js?v=0.9.5-beta';
-import { SizeTable } from './lifecycle.js?v=0.9.5-beta';
-import { COLUMNS, readList } from './input.js?v=0.9.5-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
-import { COMPARE_HINT, seriesList, sizeComparison, todo, whyLines } from './details.js?v=0.9.5-beta';
-import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.5-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.9.5-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_LINK, stageShort, stageWords, tempDiskPreview } from './words.js?v=0.9.5-beta';
-import * as F from './files.js?v=0.9.5-beta';
-import { makeZip } from './zip.js?v=0.9.5-beta';
-import version from './version.js?v=0.9.5-beta';
+import sizes from '../data/sizes.js?v=0.9.6-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
+import capacity from '../data/capacity.js?v=0.9.6-beta';
+import nvme from '../data/nvme-images.js?v=0.9.6-beta';
+import query from './query.js?v=0.9.6-beta';
+import sample from './sample.js?v=0.9.6-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.6-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.6-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
+import { COMPARE_HINT, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.6-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.6-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.6-beta';
+import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.6-beta';
+import * as F from './files.js?v=0.9.6-beta';
+import { makeZip } from './zip.js?v=0.9.6-beta';
+import version from './version.js?v=0.9.6-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -156,7 +156,7 @@ let patternFilter = 'all';
 let selected = [];
 let shown = 0;
 // The colour of each result group. Red only for no supported size; a hard gate
-// and "do this first" are amber: they are steps, not dead ends (peer, 2026-10-09).
+// and "Ready with conditions" are amber: they are steps, not dead ends (peer, 2026-10-09).
 const PILL = { modern: 'no-move', ready: 'ready', first: 'move', pool: 'pool', gate: 'move', nopath: 'no-suggestion', unchecked: 'not-checked' };
 
 // What the table asks of each VM, made once for each list: its result group, the
@@ -271,7 +271,7 @@ function machineRow(m) {
         el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
         generationCell(m),
         stageCell(m),
-        el('td', {}, el('span', { class: `pill ${PILL[g]}`, text: GROUPS[g].short })),
+        el('td', {}, el('span', { class: `pill ${PILL[g]}` }, el('span', { class: 'pill-move', text: GROUPS[g].move }), el('span', { class: 'pill-readiness', text: GROUPS[g].readiness }))),
         answer('v5'), answer('v6'), answer('v7'), answer('burstable'),
     );
     // On a narrow screen each row shows as a card; each cell gets its column name.
@@ -320,9 +320,33 @@ function stageCell(m) {
         s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity growth restricted', title: 'Microsoft restricts capacity growth for this series. Select the VM to read more.' }) : null);
 }
 
-// The details of one VM, in the same order for every VM (owner, 2026-10-10):
-// what to do, why, the notes - before the move, good to know, to check - and
-// last the sizes, which are long. Each note shows once, with its series.
+// A note for some series only names them: ' (v6 and v7 only)'.
+const only = (x) => (x.series.length ? ` (${seriesList(x.series)} only)` : '');
+// A list of notes or steps: the topic in bold, then the text.
+const noteList = (cls, items, strip) => el('ul', { class: `list ${cls}` }, items.map((x) => el('li', {},
+    el('span', { class: 'topic', text: `${x.topic}: ` }), strip ? x.text.replace(/^Check: /, '') : x.text, el('span', { class: 'only', text: only(x) }),
+    x.link ? ' ' : null, x.link ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null)));
+
+// One way to move, in its own box (0.9.6-beta, details.js whatToDo): a region named by its
+// option and its title, with all the steps of that way.
+function wayBox(m, w) {
+    const id = `way-${m.read.row}-${w.key}`;
+    const label = w.label ? el('p', { class: 'way-label', id: `${id}-label` }, w.label, w.tag ? ' ' : null, w.tag ? el('span', { class: 'way-tag', text: w.tag }) : null) : null;
+    const section = el('section', { class: `way way-${w.key}`, 'aria-labelledby': w.label ? `${id}-label ${id}` : id },
+        label, el('h4', { id, text: w.title }), ...w.lines.map((x) => el('p', { class: 'way-line', text: x })));
+    if (w.conditions) {
+        if (w.steps.length) section.append(el('p', { class: 'way-cond', id: `${id}-cond`, text: conditionsWords(w.steps.length) }), noteList('act', w.steps));
+        // A service: nothing to do on the VM says it, in place of "No conditions."
+        else if (!w.after.length || w.key !== 'pool') section.append(el('p', { class: 'way-cond none', text: NO_CONDITIONS }));
+    }
+    if (w.info.length) section.append(el('p', { class: 'way-cond', text: GOOD_TO_KNOW }), noteList('att', w.info));
+    section.append(...w.after.map((x) => el('p', { class: 'way-line hint', text: x })));
+    return section;
+}
+
+// The details of one VM, in the same order for every VM (owner, 2026-10-10; 2026-11-07):
+// what to do (the ways to move, each in a box with its steps), why, the workload type,
+// good to know, to check, and last the sizes, which are long. Each note shows once.
 function details(m) {
     const { now } = current;
     const td = el('td', { colspan: '9' });
@@ -330,13 +354,14 @@ function details(m) {
     td.append(box);
     const g = F.groupOf(m);
     const section = (title, ...content) => box.append(el('h3', { class: 'sec', text: title }), ...content);
-    const pool = POOL_PATTERNS.includes(m.pattern);
 
     if (m.read.resourceId) box.append(el('p', { class: 'hint rid', text: `Resource ID: ${m.read.resourceId}` }));
 
-    // What to do.
-    const t = todo(m, g);
-    section('What to do', el('p', { class: 'todo', text: t.main }), ...t.more.filter((x) => x).map((x) => el('p', { class: 'todo-sub', text: x })));
+    // What to do: a line to lead, the ways to move in boxes, then more lines.
+    const t = whatToDo(m, g);
+    section('What to do', t.lead ? el('p', { class: 'todo', text: t.lead }) : null,
+        t.ways.length ? el('div', { class: `ways${t.ways.length > 1 ? ' two' : ''}` }, t.ways.map((w) => wayBox(m, w))) : null,
+        ...t.more.map((x) => el('p', { class: 'todo-sub', text: x })));
 
     // Why.
     const why = whyLines(m, g, table, now);
@@ -351,44 +376,42 @@ function details(m) {
     const w = workloadFound(m);
     section('Workload type', el('p', { class: 'why' }, el('strong', { text: w.lead })), w.shown ? el('p', { class: 'why', text: w.shown }) : null);
 
-    // The notes.
-    if (m.vm && m.moveRequired === 'Yes') {
-        const n = F.allNotes(m);
-        const only = (x) => (x.series.length ? ` (${seriesList(x.series)} only)` : '');
-        const list = (cls, items, strip) => el('ul', { class: `list ${cls}` }, items.map((x) => el('li', {},
-            el('span', { class: 'topic', text: `${x.topic}: ` }), strip ? x.text.replace(/^Check: /, '') : x.text, el('span', { class: 'only', text: only(x) }))));
-        if (serviceManaged(m)) section('Before the move', el('p', { class: 'none', text: 'Nothing to do on the VM. The service manages the image and the disks.' }));
-        else if (n.actions.length) section('Before the move', list('act', n.actions));
-        if (n.attention.length) section('Good to know', list('att', n.attention));
-        if (n.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts, or this tool cannot judge them from what the list gives.' }), list('chk', n.checks, true));
-    }
+    // The notes that are not in a box: a step for the other sizes only, good to know, to check.
+    if (t.otherSteps.length) section(t.ways.length ? OTHER_STEPS : STEPS, noteList('act', t.otherSteps));
+    if (t.attention.length) section(GOOD_TO_KNOW, noteList('att', t.attention));
+    if (t.checks.length) section('To check', el('p', { class: 'hint', text: 'The list does not give these facts, or this tool cannot judge them from what the list gives.' }), noteList('chk', t.checks, true));
     // Sizes.
     // A hard gate has no size: "Why" gives the reason once.
     if (m.vm && m.rows.length && g !== 'gate' && !noSize) {
         const grid = el('div', { class: 'series' });
         let processorChange = false;
+        let used = false;
+        let others = 0;
         for (const r of m.rows) {
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
-            const card = el('div', {}, el('h4', { class: o.supported ? '' : 'no', text: title }));
+            // The size that "What to do" uses has an outline; each card has the lifecycle stage
+            // of its series and the ways to move to it (details.js, sizeCard; 0.9.6-beta).
+            const c = sizeCard(m, g, r);
+            if (o.supported && !c.used) others++;
+            const card = el('div', { class: c.used ? 'used' : null }, el('h4', { class: o.supported ? '' : 'no', text: title }),
+                c.stage ? el('span', { class: 'tag-stage' }, el('span', { class: 'vh', text: 'Lifecycle stage of the series: ' }), c.stage) : null,
+                c.used ? el('p', { class: 'used-note', text: SIZE_USED }) : null);
             if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no', text: optionReason(r, table, now) }));
-            if (o.supported && m.moveRequired === 'Yes' && !pool) {
-                // A v6 or v7 resize that needs the preview feature VMTempDiskResizePreview: the link to the Microsoft page that names it.
-                const preview = tempDiskPreview(m, r);
-                card.append(el('p', { class: 'hint' }, moveWords(r.series, o.previewFeature, o.featureFallback),
-                    preview ? ' ' : null, preview ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
-            }
+            // A v6 or v7 resize that needs the preview feature VMTempDiskResizePreview: the link to the Microsoft page that names it.
+            if (c.how) card.append(el('p', { class: 'hint' }, c.how, c.link ? ' ' : null, c.link ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;
                 if (ranked.length > 1) card.append(el('ol', { class: 'ranked' }, ranked.map((x) => el('li', {}, el('span', { class: 'size-name', text: x.size }), ` ${x.why}`))));
-                if (o.targetStage) card.append(el('p', { class: 'hint', text: `Lifecycle stage of ${o.targetSize}: ${o.targetStage.stage}.` }));
             }
             grid.append(card);
+            if (c.used) used = true;
         }
         section(g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes', grid);
         const hints = [];
+        if (used && others) hints.push(OTHER_SIZES_FIT);
         if (g === 'pool' && serviceManaged(m)) hints.push('Use a size that the service offers.');
         if (processorChange) hints.push(PROCESSOR_NOTE);
         if (hints.length) box.append(el('p', { class: 'hint', text: hints.join(' ') }));

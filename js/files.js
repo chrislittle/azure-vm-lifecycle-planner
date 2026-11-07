@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.5-beta';
-import families from '../data/families.js?v=0.9.5-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.5-beta';
-import capacity from '../data/capacity.js?v=0.9.5-beta';
-import nvme from '../data/nvme-images.js?v=0.9.5-beta';
-import { capacityRestricted } from './planner.js?v=0.9.5-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.5-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.5-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.5-beta';
+import sizes from '../data/sizes.js?v=0.9.6-beta';
+import families from '../data/families.js?v=0.9.6-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
+import capacity from '../data/capacity.js?v=0.9.6-beta';
+import nvme from '../data/nvme-images.js?v=0.9.6-beta';
+import { capacityRestricted } from './planner.js?v=0.9.6-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.6-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.6-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.6-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -67,7 +67,7 @@ function base(m) {
     };
 }
 
-const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
+export const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
     'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Storage or backup appliance', 'Zone'];
 
 // The option a VM would most likely take: a burstable size for a burstable VM
@@ -293,7 +293,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '',
         'RESULT GROUPS',
         '  "Vendor approval first" is a "hard gate" in the Microsoft guide for the move to v6 and v7.',
-        ...Object.values(GROUPS).map((g) => `  ${g.short}. ${g.long}`),
+        ...Object.values(GROUPS).flatMap((g) => [`  ${g.short}`, `    ${g.long}`]),
         '',
         'WHAT A RESULT MEANS',
         '  Supported:          Azure lets you move this VM to the new size.',
@@ -333,9 +333,22 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `  ${PROCESSOR_NOTE}`,
         '  https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience',
         '',
+        'WHAT TO DO: THE WAYS TO MOVE AND THEIR CONDITIONS',
+        '  On the page and in the report, "What to do" shows each way to move in a box, with its steps.',
+        '  v6 and v7 have two ways. Option 1: deploy a new VM in parallel. Microsoft recommends this.',
+        '  Option 2: change the size of this VM. The VM keeps its identity, disks and extensions.',
+        '  v5 and Burstable have one way: change the size of this VM.',
+        '  "Conditions" gives the number of steps for that way. A step for both ways is in the two boxes.',
+        '  The identity step is only for a new VM. The preview feature and the page file are only for a resize.',
+        '  A VM in a pool, an SAP VM, a vendor appliance and a VM with no supported size have one box.',
+        '',
         'BEFORE THE MOVE, GOOD TO KNOW, TO CHECK',
         '  These notes are the readiness signals in the Microsoft guide for the move to v6 and v7.',
         '  Before the move: a step to do before the move. It does not block the move.',
+        '  In vm-summary.csv, the column "Before the move" has the steps from the facts of the VM.',
+        '  The preview feature and the page file are in "How to move" and "Preview feature" of vm-target-sizes.csv.',
+        '  On the page and in the report, these steps are in the boxes of "What to do".',
+        '  A step for only the other sizes is under "Steps for the other sizes".',
         '  Good to know: a fact to know, with nothing to do first. A VM with only these notes is ready.',
         '  To check: the list does not give the fact, or this tool cannot judge it from what the list gives.',
         '  A VM that a service manages (AKS, Azure Red Hat OpenShift, Azure Databricks) has no notes.',

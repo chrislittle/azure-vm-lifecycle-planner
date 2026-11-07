@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.5-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.6-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -19,8 +19,8 @@ that a VM is ready to move.
    If you make the list yourself, use [template.csv](template.csv).
 2. Give the list to the tool: select **Load the CSV file**, or drag the file onto the
    page. For a list in Excel, you can also paste the rows.
-3. Read the results. Select a VM to see what to do, why, the sizes, and the steps
-   before the move.
+3. Read the results. Select a VM to see what to do (the ways to move, each with its
+   steps), why, and the sizes.
    Select **Download results (.zip)** to get the results files.
 
 To try the tool without your own data, select **Try the sample** on the page.
@@ -55,17 +55,25 @@ For each VM:
   | 2* | The list does not give the generation. The tool uses Generation 2 because of the image SKU or the security type (Trusted launch or a confidential VM). The notes of the VM give the reason. The CSV files show "Generation 2 (from the image SKU)" or "Generation 2 (from the security type)". |
   | Not given | The list does not give a generation that the tool can read. The tool does not check the VM. |
   | Set by the service | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
-- A result group:
+- A result. The Result column has two lines: "Move needed" (or "Modern size", or
+  "Readiness unknown"), and the readiness. The readiness words are similar to the
+  readiness categories of an Azure Migrate assessment: "Ready for Azure", "Ready with
+  conditions", "Not ready for Azure" and "Readiness unknown"
+  ([Review readiness](https://learn.microsoft.com/azure/migrate/tutorial-assess-vmware-azure-vm)).
+  This tool does not use Azure Migrate. "Ready" and "Not ready: no supported size" are the
+  words of this tool, with the meaning in the table below. The CSV files,
+  the counts and the filter put the two lines on one line, for example "Move needed -
+  Ready with conditions".
 
-  | Group | What it means |
+  | Result | What it means |
   |---|---|
-  | Modern size - no move needed | Microsoft fully supports the current size. |
-  | Move needed - ready | A supported size is available, and there is no action to do first. |
-  | Move needed - do this first | A supported size is available. First, do the steps in "Before the move", or check the facts in "To check". |
-  | Move needed - change in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
-  | Move needed - vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
-  | Move needed - no supported size | This tool has no supported size. The reason tells you why. |
-  | Not checked | The tool cannot read the VM or its size. |
+  | Modern size - No move needed | Microsoft fully supports the current size. |
+  | Move needed - Ready | A supported size is available. |
+  | Move needed - Ready with conditions | A supported size is available. First, do the conditions in "What to do" or check the facts in "To check". |
+  | Move needed - Change it in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
+  | Move needed - Vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
+  | Move needed - Not ready: no supported size | This tool has no supported size. The reason tells you why. |
+  | Readiness unknown - This tool cannot read this VM or its size | The tool cannot read the VM or its size. |
 
 - The supported size on v5, v6 and v7, and the reason when there is no size. For B v1,
   Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2).
@@ -111,11 +119,26 @@ For each VM:
   When a size needs the preview feature VMTempDiskResizePreview and the suggested size
   does not, the list says so.
 - The details of each VM, in the same order for every VM: **What to do**, **Why**, the
-  notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
-  - **Before the move** (amber): a step to do first. It does not block the move.
+  **Workload type**, the notes, then the **Sizes**.
+  - **What to do** gives the size to move to, and each way to move in its own box. v6 and
+    v7 have two ways: "Option 1: Deploy a new VM in parallel" (Microsoft recommends this)
+    and "Option 2: Change the size of this VM" (the VM keeps its identity, disks and
+    extensions). v5 and Burstable have one way: change the size of this VM. Each box gives
+    "Conditions" with the number of steps, and all the steps for that way. A step for both
+    ways is in the two boxes. The identity step is only for a new VM. The preview feature
+    and the page file are only for a resize. A VM in a pool or a service, a vendor
+    appliance, an SAP VM and a VM with no supported size have one box with their advice.
+  - The notes are the readiness signals in Microsoft's guide. A step (amber) is in the
+    boxes of "What to do". A step for only the other sizes is under **Steps for the other
+    sizes**. In vm-summary.csv, the column "Before the move" has the steps from the facts
+    of the VM. The preview feature and the page file are in the columns "How to move" and
+    "Preview feature" of vm-target-sizes.csv.
   - **Good to know** (blue): a fact to know, with nothing to do first.
   - **To check** (grey): the list does not give the fact, or the tool cannot judge it
     from what the list gives.
+  - **Sizes**: a card for each series, with the lifecycle stage of the series (for
+    example Extended or Current). The card of the size that "What to do" uses has an
+    outline and the words "What to do uses this size". The other sizes also fit the VM.
 
   Each note gives the value from your list that made it, for example "Hibernation" is
   Yes, or the image that is not on the Microsoft NVMe list.

@@ -9,9 +9,9 @@
 <meta name="referrer" content="no-referrer">
 <title>VM Lifecycle Planner for Azure</title>
 <meta name="description" content="Give this tool your Azure VM list. It shows the lifecycle stage of each VM and the supported v5, v6 and v7 sizes. It runs only in your browser.">
-<link rel="stylesheet" href="style.css?v=0.9.5-beta">
+<link rel="stylesheet" href="style.css?v=0.9.6-beta">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b6bcb'/%3E%3Cpath d='M8 22V10h4v12zm6 0V6h4v16zm6 0v-8h4v8z' fill='white'/%3E%3C/svg%3E">
-<script type="module" src="js/page.js?v=0.9.5-beta"></script>
+<script type="module" src="js/page.js?v=0.9.6-beta"></script>
 </head>
 <body>
 <header class="top">
@@ -88,7 +88,7 @@
       <label>Find <input type="search" id="find" placeholder="VM, size or resource group"></label>
       <span id="shown" class="hint" role="status"></span>
     </div>
-    <p class="hint open-hint">Select a VM to see what to do, the steps before the move, and the sizes.</p>
+    <p class="hint open-hint">Select a VM to see what to do, the ways to move with their steps, and the sizes.</p>
     <div class="table-wrap results-wrap">
       <table id="table">
         <thead><tr><th scope="col">VM</th><th scope="col">Current size</th><th scope="col">Generation</th><th scope="col">Lifecycle stage</th><th scope="col">Result</th><th scope="col">v5</th><th scope="col">v6</th><th scope="col">v7</th><th scope="col">Burstable</th></tr></thead>
