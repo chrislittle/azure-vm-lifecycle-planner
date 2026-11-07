@@ -1655,9 +1655,10 @@ and words change only: no result, group, size, reason code or note changes.
     (the README and the about file say so).
 - **"Ready" and the preview feature** (review fix): "Ready" comes from the notes, so some "Ready"
   VMs have the preview feature and page file steps in Option 2 or in their one box (the
-  made-up list of 4,000 VMs, seed 7: 14 of 340; seed 1: 26 of 325). The long text of "Ready" is now: "The list gives nothing
-  to do or check first. A resize can still need the preview feature: see "What to do"."
-  No answer changes.
+  made-up list of 4,000 VMs, seed 7: 14 of 340; seed 1: 26 of 325). The long texts do not say "no steps".
+  The owner chose plain long texts (2026-11-07): "Ready": "A supported size is
+  available." "Ready with conditions": "A supported size is available. First, do the
+  conditions in "What to do" or check the facts in "To check"." No answer changes.
 - **Sizes** (`sizeCard`): each card shows the lifecycle stage of its series as a small tag
   (from `targetStage`: "Current", "Extended"). The card that What to do uses
   (`likelyRow`) has an outline and "What to do uses this size". The ways on each card:

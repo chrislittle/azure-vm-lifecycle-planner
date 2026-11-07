@@ -2041,7 +2041,13 @@ test('the page and the report show the steps for the other sizes, the stage of e
 test('review: "Ready" does not say that there are no steps: a resize can still need the preview feature', async () => {
     const { GROUPS } = await import('../js/words.js');
     const { whatToDo } = await import('../js/details.js');
-    assert.equal(GROUPS.ready.long, 'The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do".');
+    // Owner, 2026-11-07: plain words, no preview feature and no "no steps" there.
+    assert.equal(GROUPS.ready.long, 'A supported size is available.');
+    assert.equal(GROUPS.first.long, 'A supported size is available. First, do the conditions in "What to do" or check the facts in "To check".');
+    for (const g of Object.values(GROUPS)) assert.doesNotMatch(g.long, /preview feature|no steps|^Move needed\./, g.short);
+    const readme = read('README.md');
+    assert.ok(readme.includes('| Move needed - Ready | A supported size is available. |'));
+    assert.ok(readme.includes(`| Move needed - Ready with conditions | ${GROUPS.first.long} |`));
     // The reason: a VM can be Ready and have the preview feature steps in a box.
     const p = run(largeList(4000, 7)).plan;
     const ready = p.machines.filter((m) => F.groupOf(m) === 'ready');

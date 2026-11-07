@@ -20,9 +20,10 @@ const group = (move, readiness, long) => ({ move, readiness, short: `${move} - $
 export const GROUPS = {
     modern: group('Modern size', 'No move needed', 'This is a modern size: Microsoft fully supports it.'),
     // "Ready" comes from the notes (files.js, signals). A resize can still need the preview
-    // feature, which is a step in a box of "What to do" (review, 2026-11-07).
-    ready: group('Move needed', 'Ready', 'The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do".'),
-    first: group('Move needed', 'Ready with conditions', 'A supported size is available. First, do the steps in "What to do", or check the facts in "To check".'),
+    // feature, a step in a box of "What to do". The owner keeps the long text plain
+    // (2026-11-07): it does not name the feature.
+    ready: group('Move needed', 'Ready', 'A supported size is available.'),
+    first: group('Move needed', 'Ready with conditions', 'A supported size is available. First, do the conditions in "What to do" or check the facts in "To check".'),
     // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).
     pool: group('Move needed', 'Change it in the service or pool', 'Change the size in the service or the pool, not on this VM.'),

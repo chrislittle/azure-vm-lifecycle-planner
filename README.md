@@ -68,8 +68,8 @@ For each VM:
   | Result | What it means |
   |---|---|
   | Modern size - No move needed | Microsoft fully supports the current size. |
-  | Move needed - Ready | A supported size is available. The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do". |
-  | Move needed - Ready with conditions | A supported size is available. First, do the steps in "What to do", or check the facts in "To check". |
+  | Move needed - Ready | A supported size is available. |
+  | Move needed - Ready with conditions | A supported size is available. First, do the conditions in "What to do" or check the facts in "To check". |
   | Move needed - Change it in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
   | Move needed - Vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
   | Move needed - Not ready: no supported size | This tool has no supported size. The reason tells you why. |
