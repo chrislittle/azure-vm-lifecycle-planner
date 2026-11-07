@@ -1581,11 +1581,15 @@ steps belong to one method only. The owner approved mockups of the new layout. A
 and words change only: no result, group, size, reason code or note changes.
 
 - **The Result** (`GROUPS` in `js/words.js`: `move`, `readiness`, `short`, `long`) has two
-  lines: "Move needed" (or "Modern size", "Readiness unknown") and the readiness, after the
-  readiness categories of an Azure Migrate assessment ("Ready for Azure", "Conditionally
-  ready for Azure", "Not ready for Azure", "Readiness unknown":
-  https://learn.microsoft.com/azure/migrate/concepts-assessment-calculation, "Calculate
-  readiness", read 2026-11-07). The same groups and colours:
+  lines: "Move needed" (or "Modern size", "Readiness unknown") and the readiness. The words
+  are similar to the readiness categories of an Azure Migrate assessment: "Ready for
+  Azure", "Ready with conditions", "Not ready for Azure", "Readiness unknown"
+  (https://learn.microsoft.com/azure/migrate/tutorial-assess-vmware-azure-vm, "Review
+  readiness", read on learn.microsoft.com 2026-11-07; review fix: the first draft cited a
+  page that now redirects). "Ready" and "Not ready: no supported size" are this tool's own
+  words with this tool's meaning (the list gives no step or fact to check first; this tool
+  has no supported size), not the sizing meaning of Azure Migrate. The same groups and
+  colours:
 
   | Group | Line 1 | Line 2 |
   |---|---|---|
@@ -1635,14 +1639,25 @@ and words change only: no result, group, size, reason code or note changes.
     0.9.5-beta says that the resize needs the feature.
   - Every other step (accelerated networking, hibernation, unmanaged disks, the NVMe OS
     image, Azure Disk Encryption, the ephemeral OS disk, SAP, the appliances): both boxes.
-  - A pool or a service keeps the whole note in its one box (it makes new VMs).
+  - A pool or a service has one box (it makes new VMs). A note with a part for each way
+    shows only its new-VM part there (review fix: the identity note no longer says that
+    the VM keeps its identity next to the pool advice). The CSV files keep the whole note.
+  - A step or a fact in a box has no series ("(v6 and v7 only)"): the box is for the size
+    that What to do uses (review fix). "Steps for the other sizes" keeps the series.
   - A step for other series only (for example accelerated networking on v5 and v6 when
     What to do uses Burstable) stays outside the boxes under "Steps for the other
     sizes", with its series. A VM with no box (it cannot be checked) has them under
     "Steps before the move". "Good to know" and "To check" stay as before.
   - The details: Resource ID, What to do, Why, Workload type, (Steps for the other
     sizes), Good to know, To check, Sizes. The column "Before the move" of vm-summary.csv
-    stays, with the same values.
+    stays, with the same values: the steps from the facts of the VM. The preview feature
+    and the page file are in "How to move" and "Preview feature" of vm-target-sizes.csv
+    (the README and the about file say so).
+- **"Ready" and the preview feature** (review fix): "Ready" comes from the notes, so some "Ready"
+  VMs have the preview feature and page file steps in Option 2 or in their one box (the
+  made-up list of 4,000 VMs, seed 7: 14 of 340; seed 1: 26 of 325). The long text of "Ready" is now: "The list gives nothing
+  to do or check first. A resize can still need the preview feature: see "What to do"."
+  No answer changes.
 - **Sizes** (`sizeCard`): each card shows the lifecycle stage of its series as a small tag
   (from `targetStage`: "Current", "Extended"). The card that What to do uses
   (`likelyRow`) has an outline and "What to do uses this size". The ways on each card:
@@ -1669,6 +1684,11 @@ and words change only: no result, group, size, reason code or note changes.
   supported size or with vendor approval; the page and the report (headings, order,
   stacking). The STE check reads every new word. 49 mutation checks, all caught (14 only
   after new tests; one condition that could never change an answer was removed).
+  Review fixes: 5 new tests; 8 mutation checks, all caught (one only after a new test).
+- Not changed (needs the owner, it would change a CSV text): on a pool or a scale set
+  that moves to v5 with Azure Disk Encryption, the note says "Use a resize: a resize keeps
+  Azure Disk Encryption." In the box of the pool it shows as it is. No sample and no VM of
+  the 4,000-VM list has it.
 
 ## Next
 

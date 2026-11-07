@@ -189,10 +189,14 @@ export function whatToDo(m, g) {
             const note = noteOf(c.state === 'problem' ? n.actions : n.attention, topic, c.text);
             if (!note) continue;
             placed.add(note);
-            const text = two && c.ways ? c.ways[key] : c.text;
+            // A pool or a service makes new VMs: a note with a part for each way gives only the
+            // part for a new VM there, never the words of a resize (review, 2026-11-07).
+            // (A note has ways only on v6 and v7, so a box with no two ways is a pool there.)
+            const text = c.ways ? c.ways[two ? key : 'parallel'] : c.text;
             if (!text) continue;
-            if (c.state === 'problem') w.steps.push({ topic, text, series: note.series, link: false });
-            else w.info.push({ topic, text, series: note.series });
+            // In a box, no series: the box is for the size that "What to do" uses (review, 2026-11-07).
+            if (c.state === 'problem') w.steps.push({ topic, text, series: [], link: false });
+            else w.info.push({ topic, text, series: [] });
         }
         if (key === 'resize') {
             // The preview feature, where the resize needs it (0.9.5-beta); on v6 and v7 with

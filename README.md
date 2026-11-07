@@ -56,17 +56,19 @@ For each VM:
   | Not given | The list does not give a generation that the tool can read. The tool does not check the VM. |
   | Set by the service | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
 - A result. The Result column has two lines: "Move needed" (or "Modern size", or
-  "Readiness unknown"), and the readiness. The readiness words follow the readiness
-  categories of an Azure Migrate assessment
-  ([Calculate readiness](https://learn.microsoft.com/azure/migrate/concepts-assessment-calculation)).
-  This tool does not use Azure Migrate. The CSV files,
+  "Readiness unknown"), and the readiness. The readiness words are similar to the
+  readiness categories of an Azure Migrate assessment: "Ready for Azure", "Ready with
+  conditions", "Not ready for Azure" and "Readiness unknown"
+  ([Review readiness](https://learn.microsoft.com/azure/migrate/tutorial-assess-vmware-azure-vm)).
+  This tool does not use Azure Migrate. "Ready" and "Not ready: no supported size" are the
+  words of this tool, with the meaning in the table below. The CSV files,
   the counts and the filter put the two lines on one line, for example "Move needed -
   Ready with conditions".
 
   | Result | What it means |
   |---|---|
   | Modern size - No move needed | Microsoft fully supports the current size. |
-  | Move needed - Ready | A supported size is available. There are no steps to do and no facts to check first. |
+  | Move needed - Ready | A supported size is available. The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do". |
   | Move needed - Ready with conditions | A supported size is available. First, do the steps in "What to do", or check the facts in "To check". |
   | Move needed - Change it in the service or pool | The VM is in an AKS node pool, a scale set or a pooled AVD host pool, or a service (for example Azure Databricks) manages it. Change the size in the service or the pool, not on the VM. |
   | Move needed - Vendor approval first | SAP or the vendor of the appliance must approve the new size first. Microsoft calls this a "hard gate". |
@@ -128,7 +130,9 @@ For each VM:
     appliance, an SAP VM and a VM with no supported size have one box with their advice.
   - The notes are the readiness signals in Microsoft's guide. A step (amber) is in the
     boxes of "What to do". A step for only the other sizes is under **Steps for the other
-    sizes**. In vm-summary.csv, the column "Before the move" has the steps.
+    sizes**. In vm-summary.csv, the column "Before the move" has the steps from the facts
+    of the VM. The preview feature and the page file are in the columns "How to move" and
+    "Preview feature" of vm-target-sizes.csv.
   - **Good to know** (blue): a fact to know, with nothing to do first.
   - **To check** (grey): the list does not give the fact, or the tool cannot judge it
     from what the list gives.

@@ -9,15 +9,19 @@
 // signals"). Peer feedback (2026-10-09): ready and "do this first" apart, and a
 // readiness signal must not read as an unsolvable blocker.
 // 0.9.6-beta (owner, 2026-11-07): the Result has two lines, "Move needed" (or "Modern
-// size", "Readiness unknown") and the readiness, after the readiness categories of an Azure
-// Migrate assessment ("Ready for Azure", "Conditionally ready for Azure", "Not ready for
-// Azure", "Readiness unknown": learn.microsoft.com/azure/migrate/concepts-assessment-calculation,
-// "Calculate readiness", read 2026-11-07). A place with one line (the
+// size", "Readiness unknown") and the readiness. The words are similar to the readiness
+// categories of an Azure Migrate assessment: "Ready for Azure", "Ready with conditions",
+// "Not ready for Azure", "Readiness unknown" (learn.microsoft.com/azure/migrate/tutorial-assess-vmware-azure-vm,
+// "Review readiness", read 2026-11-07). "Ready" and "Not ready: no supported size" are the
+// words of this tool, with its meaning (the list gives no step or fact to check first; no
+// supported size), not the sizing meaning of Azure Migrate. A place with one line (the
 // CSV files, the counts, the filter) joins them: short. The groups and their colours stay.
 const group = (move, readiness, long) => ({ move, readiness, short: `${move} - ${readiness}`, long });
 export const GROUPS = {
     modern: group('Modern size', 'No move needed', 'This is a modern size: Microsoft fully supports it.'),
-    ready: group('Move needed', 'Ready', 'A supported size is available. There are no steps to do and no facts to check first.'),
+    // "Ready" comes from the notes (files.js, signals). A resize can still need the preview
+    // feature, which is a step in a box of "What to do" (review, 2026-11-07).
+    ready: group('Move needed', 'Ready', 'The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do".'),
     first: group('Move needed', 'Ready with conditions', 'A supported size is available. First, do the steps in "What to do", or check the facts in "To check".'),
     // A node pool, a scale set, a pooled AVD host or a VM that a service manages:
     // the pool or the service changes the size, not the VM (owner, 2026-10-10).

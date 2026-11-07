@@ -1786,6 +1786,9 @@ test('what to do: Linux on v6 has no preview feature; the availability set split
     assert.deepEqual(w.ways.map((x) => x.info.map((i) => [i.topic, i.text])), [
         [['Availability set', `"Availability set" is Yes. P${AVSET_PARALLEL.slice(1)}`]],
         [['Availability set', `"Availability set" is Yes. T${AVSET_IN_PLACE.slice(1)}`]]]);
+    // No series in a box (review, 2026-11-07), although the note is for v6 and v7 only.
+    assert.deepEqual(w.ways.map((x) => x.info.map((i) => i.series)), [[[]], [[]]]);
+    assert.deepEqual(F.allNotes(m).attention.find((x) => x.text === AVSET_BOTH).series, ['v6', 'v7']);
     // Not again in "Good to know"; the v5 words (a resize) stay there, with the series.
     assert.ok(!w.attention.some((x) => x.text === AVSET_BOTH));
     assert.ok(w.attention.some((x) => x.text === AVSET_STAYS && x.series.join() === 'v5'));
@@ -1988,7 +1991,7 @@ test('what to do: the preview feature not checked, a pool with an identity, and 
     assert.equal(F.likelyRow(set).series, 'v6');
     const ws = whatToDo(set, F.groupOf(set));
     assert.deepEqual(ws.ways.map((b) => b.key), ['pool']);
-    assert.deepEqual(ws.ways[0].steps.map((s) => [s.topic, s.text]), [['Identity', IDENTITY_PARALLEL]]);
+    assert.deepEqual(ws.ways[0].steps.map((s) => [s.topic, s.text]), [['Identity', IDENTITY_NEW_VM]], 'a pool makes new VMs (review, 2026-11-07)');
     // A VM that a service manages, with no supported size: nothing to do on the VM, as before.
     const k = run('VM name,Current size,Generation,OS,Managed by,Resource type\ncontoso-k1,Standard_NC6s_v3,V2,Linux,AKS,Scale set\n').plan.machines[0];
     assert.equal(F.groupOf(k), 'nopath');
@@ -2031,4 +2034,74 @@ test('the page and the report show the steps for the other sizes, the stage of e
     assert.match(page, /c\.used \? el\('p', \{ class: 'used-note', text: SIZE_USED \}\) : null/);
     assert.match(page, /c\.stage \? el\('span', \{ class: 'tag-stage' \}, el\('span', \{ class: 'vh', text: 'Lifecycle stage of the series: ' \}\), c\.stage\) : null/);
     assert.match(page, /if \(used && others\) hints\.push\(OTHER_SIZES_FIT\);/);
+});
+
+// ---- Review of 0.9.6-beta (2026-11-07) ----
+
+test('review: "Ready" does not say that there are no steps: a resize can still need the preview feature', async () => {
+    const { GROUPS } = await import('../js/words.js');
+    const { whatToDo } = await import('../js/details.js');
+    assert.equal(GROUPS.ready.long, 'The list gives nothing to do or check first. A resize can still need the preview feature: see "What to do".');
+    // The reason: a VM can be Ready and have the preview feature steps in a box.
+    const p = run(largeList(4000, 7)).plan;
+    const ready = p.machines.filter((m) => F.groupOf(m) === 'ready');
+    const withSteps = ready.filter((m) => whatToDo(m, 'ready').ways.some((b) => b.steps.length));
+    assert.ok(withSteps.length > 0, 'the fixture has a Ready VM with steps');
+    for (const m of withSteps) for (const b of whatToDo(m, 'ready').ways) assert.ok(b.steps.every((s) => ['Preview feature', 'Page file'].includes(s.topic)), m.read.name);
+    for (const f of ['README.md', 'PLAN.md']) assert.doesNotMatch(read(f), /no steps to do/, f);
+    const r = run(sample);
+    assert.doesNotMatch(F.aboutText(r.plan, r.list, 'sample', NOW), /no steps to do/);
+});
+
+test('review: the Azure Migrate readiness categories, cited from the current Learn page', async () => {
+    // The code names the page without https://, as a note: tools/sources.mjs watches only the pages behind an answer.
+    const page = 'learn.microsoft.com/azure/migrate/tutorial-assess-vmware-azure-vm';
+    const flat = (f) => read(f).replace(/\r\n/g, '\n').replace(/\s*\n\s*/g, ' ');
+    for (const f of ['README.md', 'js/words.js']) {
+        assert.ok(read(f).includes(page), `${f}: the link`);
+        for (const term of ['Ready for Azure', 'Ready with conditions', 'Not ready for Azure', 'Readiness unknown']) assert.ok(flat(f).includes(term), `${f}: ${term}`);
+        assert.doesNotMatch(read(f), /concepts-assessment-calculation/, f);
+    }
+    assert.ok(flat('PLAN.md').includes(page));
+    assert.ok(flat('README.md').includes('"Ready" and "Not ready: no supported size" are the words of this tool'));
+});
+
+test('review: no series tag on a step or a fact inside a box; the steps for the other sizes keep it', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const { reportHtml } = await import('../js/report.js');
+    const p = run(sample).plan;
+    const web01 = byName(p, 'contoso-web01');
+    const w = whatToDo(web01, F.groupOf(web01));
+    assert.deepEqual(w.ways.flatMap((b) => [...b.steps, ...b.info]).map((x) => x.series), [[], [], []]);
+    assert.ok(F.allNotes(web01).actions.find((x) => x.topic === 'Identity').series.length, 'the fixture: the note is for v6 and v7 only');
+    const html = reportHtml(p, table, 'sample', NOW);
+    const i = html.indexOf('<h3>contoso-web01</h3>');
+    assert.doesNotMatch(html.slice(i, html.indexOf('<h4>Why</h4>', i)), /only\)/);
+    const b02 = byName(p, 'contoso-b02');
+    assert.deepEqual(whatToDo(b02, F.groupOf(b02)).otherSteps[0].series, ['v5', 'v6']);
+});
+
+test('review: a pool or a service box has the new-VM words only, never the words of a resize', async () => {
+    const { whatToDo } = await import('../js/details.js');
+    const set = run('VM name,Current size,Generation,OS,System-assigned identity,Resource type,Managed by\ncontoso-ss,Standard_D4s_v3,V2,Linux,Yes,Scale set,None\n').plan.machines[0];
+    assert.deepEqual(whatToDo(set, F.groupOf(set)).ways[0].steps.map((s) => [s.topic, s.text]), [['Identity', IDENTITY_NEW_VM]]);
+    // The CSV files keep the note as it was.
+    assert.equal(rowOf(set, 'v6').caveats['Identity'].text, IDENTITY_PARALLEL);
+    // No box of a pool or a service, in the samples and the 4,000-VM list, says to resize or to change the size of the current VM.
+    for (const text of [...readdirSync(new URL('../samples/', import.meta.url)).map((f) => read(`samples/${f}`)), largeList(4000, 7)]) {
+        const r = run(text);
+        if (r.list.stops.length) continue;
+        for (const m of r.plan.machines.filter((x) => F.groupOf(x) === 'pool')) {
+            for (const s of whatToDo(m, 'pool').ways.flatMap((b) => [...b.steps, ...b.info])) assert.doesNotMatch(s.text, /change the size of the current VM|the VM keeps its identity|stays in its set/i, `${m.read.name}: ${s.topic}`);
+        }
+    }
+});
+
+test('review: the README and the about file say where the CSV files have each kind of step', () => {
+    const flat = read('README.md').replace(/\r\n/g, '\n').replace(/\s*\n\s*/g, ' ');
+    assert.ok(flat.includes('In vm-summary.csv, the column "Before the move" has the steps from the facts of the VM. The preview feature and the page file are in the columns "How to move" and "Preview feature" of vm-target-sizes.csv.'));
+    const r = run(sample);
+    const about = F.aboutText(r.plan, r.list, 'sample', NOW);
+    assert.ok(about.includes('  In vm-summary.csv, the column "Before the move" has the steps from the facts of the VM.\r\n'));
+    assert.ok(about.includes('  The preview feature and the page file are in "How to move" and "Preview feature" of vm-target-sizes.csv.\r\n'));
 });
