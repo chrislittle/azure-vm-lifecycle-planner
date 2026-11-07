@@ -42,8 +42,9 @@ const EXTRA_LISTS = [
     + 'contoso-x10,Standard_D4s_v3,3,Linux,TrustedLaunch,1,0,,,\n'
     + 'contoso-x11,Standard_D4s_v3,3,Linux,Standard,1,0,22_04-lts-gen2,,\n',
     'VM name,Machine name,Current size,Generation\ncontoso-d1,contoso-d2,Standard_D2s_v3,V2\n',
-    // 0.9.3-beta: a Windows Generation 2 rebuild on Burstable (the preview feature) and a Generation 1 one.
-    'VM name,Current size,Generation,OS,System-assigned identity,Availability set\ncontoso-w1,Standard_B2ms,V2,Windows,Yes,Yes\ncontoso-w2,Standard_B2ms,V1,Windows,Yes,Yes\n',
+    // A Windows VM on Burstable (the preview feature), Generation 2 and Generation 1; no OS; a pool (0.9.5-beta).
+    'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Azure Disk Encryption,Resource type,Managed by\ncontoso-w1,Standard_B2ms,V2,Windows,Yes,Yes,No,VM,None\ncontoso-w2,Standard_B2ms,V1,Windows,Yes,Yes,No,VM,None\n'
+        + 'contoso-w3,Standard_B2ms,V2,,Yes,Yes,No,VM,None\ncontoso-w4,Standard_B2ms,V2,Windows,Yes,Yes,Yes,VM,None\ncontoso-w5,Standard_B2ms,V2,,Yes,Yes,Yes,VM,None\ncontoso-w6,Standard_B2ms,V2,Windows,Yes,Yes,No,Scale set,None\n',
     // Each kind of SAP sign (0.9.4-beta).
     'VM name,Current size,Generation,OS,SAP,SAP sign\n'
     + 'contoso-sap-x1,Standard_D4s_v3,V2,Windows,Yes,Azure VM extension for SAP solutions (MonitorX64Windows)\n'
@@ -84,7 +85,7 @@ function collect() {
             const g = F.groupOf(m);
             const t = todo(m, g);
             add(`${name}: what to do`, t.main, t.more, whyLines(m, g, table, NOW), m.notes);
-            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
+            if (m.vm) add(`${name}: sizes`, m.rows.map((r) => [W.moveWords(r.series, r.option.previewFeature, r.option.featureFallback), F.rankedFor(m, r, table, NOW).map((x) => x.why)]));
             // The current size beside each new size: the labels and each note.
             const c = sizeComparison(m, table);
             if (c) add(`${name}: size table`, c.rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
@@ -127,8 +128,9 @@ function collect() {
     }
     // The words in words.js.
     add('words.js', Object.values(W.GROUPS).map((g) => [g.short, g.long]), Object.values(W.PATTERNS).map((p) => [p.name, p.advice]), W.NOT_FOUND, W.PROCESSOR_NOTE,
-        W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].map((w) => W.rankWords(w, 'AMD')),
-        ['v5', 'v6', 'burstable'].flatMap((s) => [true, false].flatMap((rb) => [true, false].flatMap((os) => [true, false, null].flatMap((ch) => [true, false].map((pr) => W.moveWords(s, rb, os, ch, pr)))))), W.PREVIEW_WORDS, W.PREVIEW_LINK, W.PREVIEW_RESIZE_WORDS,
+        W.capacityWords(capacity), ['closest', 'processor', 'temp-disk-removed', 'temp-disk-added', 'more-memory', 'same-shape', 'other-shape'].flatMap((w) => [null, 'needed', 'windows'].map((f) => W.rankWords(w, 'AMD', f))),
+        ['v5', 'v6', 'burstable'].flatMap((s) => ['needed', 'windows', 'unknown', 'not-needed', null].flatMap((f) => [null, { size: null }, { size: 'Standard_D4ds_v5' }].map((fb) => W.moveWords(s, f, fb)))), W.PREVIEW_LINK,
+        ['needed', 'windows', 'unknown', 'not-needed', null].map((f) => W.featureColumn(f)),
         ['Current', 'Extended', 'Current or Extended', 'End of Life', 'Retired', null].flatMap((stage) => [null, '2028-05-01', '2025-09-30'].flatMap((d) => [null, capacity].flatMap((c) => [null, NOW].map((now) => W.stageWords({ stage, retiresUtc: d }, c, now))))),
         W.capacityWords(capacity, NOW));
     // The page: index.html, and the texts in js/page.js.

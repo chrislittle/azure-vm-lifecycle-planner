@@ -9,16 +9,16 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.4-beta';
-import capacity from '../data/capacity.js?v=0.9.4-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.5-beta';
+import capacity from '../data/capacity.js?v=0.9.5-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.4-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.4-beta';
-import { patternOf } from './patterns.js?v=0.9.4-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.4-beta';
+} from './lifecycle.js?v=0.9.5-beta';
+import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.5-beta';
+import { patternOf } from './patterns.js?v=0.9.5-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.5-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -240,7 +240,7 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     const vm = {
         vmId: `row-${rowNumber}`, name, location: region, sourceSize, gen, hyperVGeneration: gen,
         // A service makes the new nodes: this tool assumed Generation 2, it does not know it
-        // (0.9.3-beta: no preview words, lifecycle.js previewResize).
+        // (0.9.3-beta). Its pool or service gets the pool advice, not the preview feature.
         genAssumed: genNotNeeded,
         os: os || '', osVersion: '',
         classification: blockers.length ? 'Blocked' : controller === 'NVMe' ? 'ReadyNow' : 'ReadyAfterPrep',
@@ -334,20 +334,23 @@ export const BY_DESIGN = [
     // example) is outside this tool - said as such, not as "not checked".
     'family-not-in-region', 'confidential-family',
     'nva-requires-parallel-deployment', 'storage-appliance-requires-vendor', 'managed-application-requires-vendor',
+    // 0.9.5-beta: Windows, Azure Disk Encryption, and a resize that needs the preview feature
+    // VMTempDiskResizePreview: lab tests did not use the feature with the encryption.
+    'disk-encryption-preview',
 ];
 // The logic could not judge these: a person must.
 // not-in-region: no size with the same name. Another size of the series can fit
 // (for example E16-4s_v3 on v7: no E16-4s_v7, but E16s_v7 and E16-4as_v7), so this
 // is not a "no" (review, 2026-10-10).
-const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone', 'not-in-region', 'os-unknown-encryption'];
+const CANNOT_JUDGE = ['processor-unreadable', 'shape-unknown', 'mapped-unverified', 'no-path', 'chosen-size-gone', 'not-in-region', 'os-unknown-encryption', 'encryption-temp-disk-unknown'];
 // Codes that are a plain fact (no fitting size), with the label for the review list.
 export const FACT_LABELS = {
     'not-in-region': 'New size not in the size table', 'family-not-in-region': 'No size of this family in the size table',
     'too-few-data-disks': 'Data-disk limit', 'too-few-nics': 'NIC limit', 'no-shape-fit': 'No size of this shape',
     'smaller-than-source': 'New size smaller than the current size', 'shape-unknown': 'vCPUs and memory not known',
     'processor-unreadable': 'Processor type not known', 'gen1-no-size': 'No size takes Generation 1', 'mapped-unverified': 'New size not in the size table',
-    'disk-encryption-rebuild': 'Rebuild with Azure Disk Encryption',
     'os-unknown-encryption': 'OS not known, with Azure Disk Encryption',
+    'encryption-temp-disk-unknown': 'Temporary disk not known, with Azure Disk Encryption',
     'no-burstable-fit': 'No burstable size of this shape',
 };
 
@@ -361,7 +364,6 @@ export function shortAnswer(result, codes, targetSize) {
     if (result === 'No fitting size') {
         if (codes.includes('too-few-data-disks')) return 'No fitting size (data disks)';
         if (codes.includes('too-few-nics')) return 'No fitting size (NICs)';
-        if (codes.includes('disk-encryption-rebuild')) return 'No - a rebuild cannot keep Azure Disk Encryption';
         return 'No fitting size';
     }
     const by = {
@@ -372,6 +374,7 @@ export function shortAnswer(result, codes, targetSize) {
         'confidential-vm-requires-manual': 'No - confidential VM out of scope', 'size-retired': 'No - retired size out of scope',
         'not-approved': 'No - family is not a target',
         'disk-encryption-present': 'No - Azure Disk Encryption', 'sap-needs-a-certified-size': 'No - SAP',
+        'disk-encryption-preview': 'No - Azure Disk Encryption with the preview feature',
         'unmanaged-os-disk': 'No - unmanaged disks', 'ephemeral-os-disk': 'No - ephemeral OS disk',
         'family-not-in-region': 'No - no size in this family', 'confidential-family': 'No - confidential VM out of scope',
         'nva-requires-parallel-deployment': 'No - network virtual appliance',
@@ -414,9 +417,9 @@ export function plan(machines, table, now = new Date()) {
         const rows = [];
         for (const o of options) {
             const series = o.option;
-            // A pool or a service changes the size there, not on the VM: no resize with the
-            // preview feature (0.9.3-beta; the move words are the pool advice).
-            if (POOL_PATTERNS.includes(m.pattern)) o.previewResize = false;
+            // A pool or a service changes the size there, or makes new VMs, not a resize of
+            // this VM: no preview feature (0.9.3-beta; the move words are the pool advice).
+            if (POOL_PATTERNS.includes(m.pattern)) { o.previewFeature = null; o.featureFallback = null; }
             const codes = [...o.notSupported];
             const known = [...BY_DESIGN, ...Object.keys(FACT_LABELS)];
             let result;

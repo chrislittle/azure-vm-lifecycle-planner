@@ -44,6 +44,26 @@ export default {
       "readUtc": "2026-10-02"
     },
     {
+      "url": "https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv6-series",
+      "section": "feature-support",
+      "readUtc": "2026-11-06"
+    },
+    {
+      "url": "https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dasv6-series",
+      "section": "feature-support",
+      "readUtc": "2026-11-06"
+    },
+    {
+      "url": "https://learn.microsoft.com/azure/virtual-machines/sizes/memory-optimized/esv6-series",
+      "section": "feature-support",
+      "readUtc": "2026-11-06"
+    },
+    {
+      "url": "https://learn.microsoft.com/azure/virtual-machines/sizes/memory-optimized/easv6-series",
+      "section": "feature-support",
+      "readUtc": "2026-11-06"
+    },
+    {
       "url": "https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/sizes-v6-v7-modernization-plan",
       "section": "retiring-v3-workloads",
       "readUtc": "2026-10-03"
@@ -158,7 +178,24 @@ export default {
       "hyperVGenerations": [
         "V2"
       ],
-      "acceleratedNetworkingRequired": [],
+      "acceleratedNetworkingRequired": [
+        {
+          "series": "D",
+          "processor": "Intel"
+        },
+        {
+          "series": "D",
+          "processor": "AMD"
+        },
+        {
+          "series": "E",
+          "processor": "Intel"
+        },
+        {
+          "series": "E",
+          "processor": "AMD"
+        }
+      ],
       "manaProcessors": [
         "Intel",
         "AMD"

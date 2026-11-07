@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.4-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.5-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -80,22 +80,36 @@ For each VM:
   creates it. With a resize, the VM stays in its set, and you can resize the VMs one at a
   time. If Azure does not offer the new size for the set, stop (deallocate) all the VMs
   in the set first ([Resize a VM](https://learn.microsoft.com/azure/virtual-machines/sizes/resize-vm)).
-  On v6 and v7, when the temporary disk changes type, the tool also says:
-  "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview,
-  registered on the subscription, when the temporary disk changes type."
-  The source is a note on the Microsoft page
+  The tool never tells you to rebuild a VM (to make a new VM with the same disks).
+  Every move is a resize of the same VM, or a new VM in parallel.
+- The preview feature VMTempDiskResizePreview. A Windows VM needs it for a resize
+  when one of the two sizes has a SCSI temporary disk and the other size does not. A v6
+  or v7 size has no SCSI temporary disk, so a move from a size with a temporary disk on
+  v5 or older to v6 or v7 needs it. A size with no temporary disk does not need it, also
+  to a v6 or v7 size with a temporary disk. A Linux VM never needs it. Generation 1 and
+  Generation 2 are the same. Where the feature is necessary, the tool says:
+  "The resize needs the preview feature VMTempDiskResizePreview, registered on the
+  subscription. Move the page file from the temporary disk to C: before the resize."
+  When the list does not give the OS, the tool says "On a Windows VM, the resize needs
+  the preview feature". On v5, the tool also gives the size of the same shape that keeps
+  the temporary disk type, for a resize with no feature. On Burstable, it gives the v5
+  size (no Bsv2 or Basv2 size has a temporary disk). In vm-target-sizes.csv, the column
+  "Preview feature" says Needed, Not needed or Not checked, and the column Rebuild is
+  "No" for every size. A VM with Azure Disk Encryption gets a size that does not need
+  the feature, if there is one: the tool does not plan the feature with Azure Disk
+  Encryption.
+  This comes from lab tests from 2026-11-01 to 2026-11-07 on Windows Server 2016, 2019,
+  2022 and 2025: the VM kept its ID, its system-assigned identity and its extensions.
+  It does not come from a Microsoft page. Microsoft names the feature in a note about its
+  NVMe conversion script, on the page
   [Convert SCSI to NVMe](https://learn.microsoft.com/azure/virtual-machines/nvme-linux).
-  The feature is a preview. The answers of the tool do not change.
-  On v5 and Burstable, a Windows VM needs a rebuild when one size has a temporary disk
-  and the other size does not. For a Generation 2 VM, the tool also gives a resize:
-  "On Windows, Azure allows this resize only when the preview feature
-  VMTempDiskResizePreview is registered on the subscription." This comes from a lab
-  test on Windows Server 2022, Generation 2. A Generation 1 VM still needs a rebuild.
-  In vm-target-sizes.csv, the column Rebuild is "No" for v6 and v7.
+  The feature is a preview.
 - Ranked sizes: up to five sizes for each series, best first. Each one passes the same
   checks. Microsoft recommends that a workload support more than one compatible size
   ([capacity resilience](https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience)).
   A size with a different processor has an asterisk: test the application first.
+  When a size needs the preview feature VMTempDiskResizePreview and the suggested size
+  does not, the list says so.
 - The details of each VM, in the same order for every VM: **What to do**, **Why**, the
   notes, then the **Sizes**. The notes are the readiness signals in Microsoft's guide:
   - **Before the move** (amber): a step to do first. It does not block the move.
@@ -185,7 +199,7 @@ in Excel:
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
 | vm-summary.csv | One row for each VM, to sort and filter in Excel. Near the end are the columns Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. The last column is SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. |
-| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. The last column is SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. |
+| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. Near the end is the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. The last column is Preview feature: Needed, Not needed or Not checked, for the preview feature VMTempDiskResizePreview. The column Rebuild is No for every size. |
 | vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 
@@ -245,6 +259,11 @@ work in that open tab. (It does not load again while you are offline.)
   solutions, the [new version](https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-new)
   and the [standard version](https://learn.microsoft.com/azure/sap/workloads/vm-extension-for-sap-standard),
   read on 6 November 2026.
+- **Accelerated networking:** the Microsoft size pages, for example
+  [Dsv5](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv5-series) and
+  [Dsv6](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv6-series).
+  The Intel D and E sizes of v5 and every D and E size of v6 require it (the v6 pages
+  changed on 27 October 2026). The AMD v5 sizes and the v7 sizes support it.
 
 Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
 NVA policy and the Marketplace catalog again, and compares them with the data in this

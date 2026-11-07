@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.4-beta';
-import families from '../data/families.js?v=0.9.4-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.4-beta';
-import capacity from '../data/capacity.js?v=0.9.4-beta';
-import nvme from '../data/nvme-images.js?v=0.9.4-beta';
-import { capacityRestricted } from './planner.js?v=0.9.4-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.4-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, moveWords, PREVIEW_RESIZE_WORDS, PREVIEW_WORDS, rankWords, stageWords } from './words.js?v=0.9.4-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.4-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.4-beta';
+import sizes from '../data/sizes.js?v=0.9.5-beta';
+import families from '../data/families.js?v=0.9.5-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.5-beta';
+import capacity from '../data/capacity.js?v=0.9.5-beta';
+import nvme from '../data/nvme-images.js?v=0.9.5-beta';
+import { capacityRestricted } from './planner.js?v=0.9.5-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.5-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.5-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.5-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -140,14 +140,14 @@ export function groupOf(m) {
 // The ranked sizes of one supported option, in words.
 export function rankedFor(m, r, table, now = new Date()) {
     const list = rankedSizes(m.vm, table, r.option, now);
-    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel') }));
+    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel', x.feature) }));
 }
 
 // How to move to one supported option: the pattern decides it for a pool or
 // a service; otherwise the series does.
 export function howToMove(m, r) {
     if (POOL_PATTERNS.includes(m.pattern)) { const a = poolAdvice(m); return `${a.todo} ${a.more}`.trim(); }
-    return moveWords(r.series, r.option.rebuild, Boolean(m.vm.os), r.option.tempDiskChange, r.option.previewResize);
+    return moveWords(r.series, r.option.previewFeature, r.option.featureFallback);
 }
 
 function stageText(m) {
@@ -185,7 +185,9 @@ export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource
     'Workload type', 'Series', 'Target size', 'Series result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
     'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID',
     // Added in 0.9.4-beta at the end, so that the other columns keep their place.
-    'SAP sign'];
+    'SAP sign',
+    // Added in 0.9.5-beta at the end: does the resize need the preview feature VMTempDiskResizePreview?
+    'Preview feature'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
@@ -214,12 +216,9 @@ export function targetRows(p, table, now = new Date()) {
                 'Suggested': r.isDefault.map((d) => (d === 'Current default' ? 'Current stage' : 'Extended stage')).join(', '),
                 'How to move': o.supported ? howToMove(m, r) : '',
                 'Ranked sizes': o.supported ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
-                // v6 and v7 are never a rebuild: deploy in parallel, or change the size of the
-                // current VM (0.9.3-beta). A Windows Generation 2 rebuild on v5 or Burstable is a
-                // resize with the preview feature (lifecycle.js, previewResize).
-                'Rebuild': !has ? '' : r.series === 'v6' || r.series === 'v7' ? 'No'
-                    : !m.vm.os ? 'Not checked. This tool does not know the OS.'
-                    : o.previewResize ? 'Only without the preview feature VMTempDiskResizePreview' : o.rebuild ? 'Yes' : 'No',
+                // The tool never recommends a rebuild (0.9.5-beta, owner 2026-11-06). The column
+                // stays, so that the other columns keep their place.
+                'Rebuild': has ? 'No' : '',
                 'Premium SSD on target': !has ? '' : o.premiumDisks === null ? 'Not checked' : o.premiumDisks ? 'Yes' : 'No',
                 'Burstable ends': o.burstableEnds ? 'Yes. The new size has fixed CPU performance. It does not use CPU credits.' : '',
                 'Region availability': has ? 'Not checked' : '',
@@ -227,6 +226,9 @@ export function targetRows(p, table, now = new Date()) {
             };
             for (const t of CAVEAT_TOPICS) row[t] = r.caveats && r.caveats[t] ? r.caveats[t].text : '';
             row['SAP sign'] = sapSign(m);
+            // Needed, Not needed or Not checked (words.js, featureColumn). Blank with no
+            // supported size, and for a pool or a service (the move makes new VMs).
+            row['Preview feature'] = featureColumn(o.previewFeature);
             out.push(row);
         }
     }
@@ -304,30 +306,30 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '',
         'HOW TO MOVE',
         '  v5:        Resize the current VM, when Azure supports a resize to the new size. Burstable is the same.',
-        '             When one size has a temporary disk and the other size does not, a Windows VM needs a rebuild.',
-        // Measured in a lab test, 2026-11-02 (lifecycle.js, previewResize; 0.9.3-beta).
-        '             A Windows Generation 2 VM can have a resize if the preview feature VMTempDiskResizePreview',
-        '             is registered on the subscription. Move the page file to C: before the resize.',
         '  v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM.',
         '             Microsoft highly recommends this. A move to v6 or v7 is not a normal resize.',
         '             You can also change the size of the current VM. The VM then keeps its identity.',
         '  Resize:    Azure changes the size of the same VM. The VM keeps its identity and its disks.',
-        '  Rebuild:   You make a new VM. A new VM gets a new system-assigned identity,',
-        '             and a rebuild removes Azure Disk Encryption.',
-        '             In vm-target-sizes.csv, Rebuild is No for v6 and v7.',
-        '             For a Windows Generation 2 VM on v5 or Burstable where the temporary disk changes type,',
-        '             Rebuild is "Only without the preview feature VMTempDiskResizePreview".',
-        // The preview feature VMTempDiskResizePreview (words.js, PREVIEW_WORDS and PREVIEW_RESIZE_WORDS).
-        `  Preview:   ${PREVIEW_WORDS}`,
-        '             v6 and v7: this tool shows it when the temporary disk changes type.',
-        `             v5 and Burstable: ${PREVIEW_RESIZE_WORDS}`,
-        '             This tool shows it for a Windows Generation 2 VM, when the temporary disk changes type.',
-        '             The answers do not change.',
+        // 0.9.5-beta (owner, 2026-11-06): no rebuild. The column stays.
+        '  Rebuild:   This tool never tells you to rebuild a VM (to make a new VM with the same disks).',
+        '             In vm-target-sizes.csv, Rebuild is No for every size.',
+        // The preview feature VMTempDiskResizePreview (lifecycle.js, previewFeature; words.js, featureWords).
+        '  Preview:   A Windows VM needs the preview feature VMTempDiskResizePreview for some resizes.',
+        '             A resize needs it when one of the two sizes has a SCSI temporary disk and the other does not.',
+        '             A v6 or v7 size has no SCSI temporary disk. A Linux VM never needs the feature.',
+        '             Register the feature on the subscription. Move the page file to C: before the resize.',
+        '             On v5, the tool also gives a size that does not need the feature, if there is one.',
+        '             On Burstable, it gives the v5 size. No Bsv2 or Basv2 size has a temporary disk.',
+        '             This comes from lab tests from 2026-11-01 to 2026-11-07, not from a Microsoft page.',
+        '             In vm-target-sizes.csv, the column Preview feature says Needed, Not needed or Not checked.',
+        '             It is blank when there is no size, and for a VM in a pool or a service.',
+        '             Microsoft names the feature in a note about its NVMe conversion script:',
         `             ${GUIDANCE.tempDiskPreview}`,
         '',
         'RANKED SIZES',
         '  For each supported series, up to five sizes, best first. Each one passes the same checks.',
         '  Microsoft recommends that a workload support more than one compatible size (capacity resilience).',
+        '  When a size needs the preview feature VMTempDiskResizePreview and the suggested size does not, the list says so.',
         `  ${PROCESSOR_NOTE}`,
         '  https://learn.microsoft.com/azure/well-architected/design-guides/capacity-resilience',
         '',

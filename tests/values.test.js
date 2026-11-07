@@ -139,7 +139,7 @@ test('size comparison: the page and the report show it as a table with a caption
 
 test('notes: a problem or a fact to know says the value from the list that gave it', () => {
     const n = (row) => notesOf(one(row));
-    assert.equal(n({ 'Image SKU': '2016-Datacenter' })['NVMe'], 'The image MicrosoftWindowsServer / WindowsServer / 2016-Datacenter is not on the Microsoft list of OS images that support NVMe. Update the OS to a version on the Microsoft NVMe list, or rebuild from a newer image.');
+    assert.equal(n({ 'Image SKU': '2016-Datacenter' })['NVMe'], 'The image MicrosoftWindowsServer / WindowsServer / 2016-Datacenter is not on the Microsoft list of OS images that support NVMe. Update the OS to a version on the Microsoft NVMe list, or deploy a new VM from a newer image.');
     assert.match(n({ 'Azure Disk Encryption': 'Yes', 'OS': 'Linux' })['Disk encryption'], /^"Azure Disk Encryption" is Yes\. /);
     assert.equal(n({ 'Hibernation': 'Yes' })['Hibernation'], '"Hibernation" is Yes. Turn off hibernation before the move.');
     assert.equal(n({ 'Primary NIC accelerated': 'No' })['Accelerated networking'], '"Primary NIC accelerated" is No. Turn on accelerated networking before the move. The new size needs it.');

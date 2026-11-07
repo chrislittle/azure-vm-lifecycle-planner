@@ -320,10 +320,11 @@ test('result groups: ready, do this first, hard gate, no supported size', () => 
 
 test('how to move: v5 resize, v6 and v7 deploy in parallel', async () => {
     const { moveWords } = await import('../js/words.js');
-    assert.match(moveWords('v5', false, true), /^Resize the current VM/);
-    assert.match(moveWords('v5', true, true), /^Rebuild/);
-    assert.match(moveWords('v6', false, true), /^Deploy a new VM at this size in parallel/);
-    assert.match(moveWords('v7', false, true), /Microsoft highly recommends/);
+    assert.match(moveWords('v5', 'not-needed'), /^Resize the current VM/);
+    // 0.9.5-beta: never a rebuild. With the preview feature, still a resize.
+    assert.match(moveWords('v5', 'needed', { size: 'Standard_D4ds_v5' }), /^Resize the current VM\./);
+    assert.match(moveWords('v6', 'not-needed'), /^Deploy a new VM at this size in parallel/);
+    assert.match(moveWords('v7', 'needed'), /Microsoft highly recommends/);
 });
 
 test('ranked sizes: the best first, each one fits and passes the checks', async () => {
@@ -447,7 +448,8 @@ test('the availability set note says when all the VMs must stop', () => {
     const p = run(sample).plan;
     const m = byName(p, 'contoso-web02');
     const n = F.allNotes(m).attention.find((x) => x.topic === 'Availability set');
-    assert.match(n.text, /does not have the new size, stop all the VMs in the set before the resize/);
+    // 0.9.5-beta: a resize, in the words of the resize method.
+    assert.match(n.text, /If Azure does not offer the new size for this set, stop \(deallocate\) all the VMs in the set first\./);
     // v6 and v7 make a new VM: the note says how a new VM joins the set.
     const head = 'Machine name,Current size,Generation,OS,Availability set';
     const both = F.allNotes(byName(run(`${head}
@@ -800,18 +802,24 @@ test('the temporary disk is read from the size name when the table does not give
     assert.equal(diskArchitecture('Standard_D4s_v6', null), 'diskless');
 });
 
-test('a Windows VM whose temporary disk changes type needs a rebuild, and a rebuild never keeps Azure Disk Encryption', () => {
+test('a Windows VM whose temporary disk changes type: a resize with the preview feature, never a rebuild', () => {
     const rows = F.targetRows(run(sample).plan, table, NOW).filter((r) => r['VM name'] === 'contoso-web01' && r['Region'] === 'eastus2');
-    // 0.9.3-beta: v6 and v7 are never a rebuild (deploy in parallel, or a change of the size of the current VM).
-    assert.deepEqual(rows.map((r) => r['Rebuild']), ['No', 'No', 'No'], 'v5 keeps a SCSI temporary disk; v6 and v7 are not a rebuild');
-    assert.equal(rowOf(byName(run(sample).plan, 'contoso-web01'), 'v6').option.rebuild, true, 'the fixture: v6 changes the temporary disk to NVMe on Windows');
-    // A v5 size with a temporary disk, for a VM without one.
+    // 0.9.5-beta: the tool never recommends a rebuild. The column stays, and says No.
+    assert.deepEqual(rows.map((r) => r['Rebuild']), ['No', 'No', 'No']);
+    assert.deepEqual(rows.map((r) => r['Preview feature']), ['Not needed', 'Needed', 'Needed'], 'v5 keeps a SCSI temporary disk; v6 and v7 have none');
+    assert.equal(rowOf(byName(run(sample).plan, 'contoso-web01'), 'v6').option.rebuild, undefined, 'no rebuild flag');
+    // A v5 size with a temporary disk, for a VM without one (a changed table): a resize
+    // with the feature. Azure Disk Encryption: no size that keeps the temporary disk type.
     const t = tableWith({ Standard_D4s_v5: { MaxResourceVolumeMB: '153600' } });
     const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption';
-    const p = runWith(`${head}\ncontoso-r1,Standard_D4s_v4,V2,Windows,No\ncontoso-r2,Standard_D4s_v4,V2,Windows,Yes\ncontoso-r3,Standard_D4s_v4,V2,,Yes\n`, t);
-    assert.equal(rowOf(byName(p, 'contoso-r1'), 'v5').option.rebuild, true);
-    assert.deepEqual(rowOf(byName(p, 'contoso-r2'), 'v5').codes, ['disk-encryption-rebuild']);
+    const p = runWith(`${head}\ncontoso-r1,Standard_D4s_v4,V2,Windows,No\ncontoso-r2,Standard_D4s_v4,V2,Windows,Yes\ncontoso-r3,Standard_D4s_v4,V2,,Yes\ncontoso-r4,Standard_D4s_v4,V2,Linux,Yes\n`, t);
+    const r1 = rowOf(byName(p, 'contoso-r1'), 'v5');
+    assert.deepEqual([r1.result, r1.option.targetSize, r1.option.previewFeature, r1.option.featureFallback], ['Supported', 'Standard_D4s_v5', 'needed', { size: null }]);
+    const r2 = rowOf(byName(p, 'contoso-r2'), 'v5');
+    assert.deepEqual([r2.codes, r2.result], [['disk-encryption-preview'], 'Not supported by design']);
     assert.deepEqual(rowOf(byName(p, 'contoso-r3'), 'v5').codes, ['os-unknown-encryption'], 'unknown OS: not checked');
+    assert.equal(rowOf(byName(p, 'contoso-r3'), 'v5').result, 'Needs team review');
+    assert.deepEqual([rowOf(byName(p, 'contoso-r4'), 'v5').result, rowOf(byName(p, 'contoso-r4'), 'v5').option.previewFeature], ['Supported', 'not-needed'], 'Linux needs no feature');
 });
 
 test('ranked sizes: none smaller than the VM, none that loses Azure Disk Encryption, five at most', () => {
@@ -821,7 +829,8 @@ test('ranked sizes: none smaller than the VM, none that loses Azure Disk Encrypt
     assert.ok(!rankedSizes(m.vm, t, v6.option, NOW).some((x) => x.size === 'Standard_D4ads_v6'), 'a smaller size is not ranked');
     const w = run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-k2,Standard_D4s_v3,V2,Windows,Yes\n').plan.machines[0];
     const v5 = rowOf(w, 'v5');
-    assert.ok(!rankedSizes(w.vm, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'no temporary disk: a rebuild on Windows');
+    assert.ok(!rankedSizes(w.vm, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'no temporary disk: on Windows the preview feature, which this tool does not plan with Azure Disk Encryption');
+    assert.ok(rankedSizes({ ...w.vm, os: 'Linux' }, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'the fixture: Linux gets it');
     // These VMs have more than five sizes that fit on v5.
     for (const [n, gen] of [['Standard_D2_v2', 'V2'], ['Standard_D16_v3', 'V1']]) {
         const a = run(`VM name,Current size,Generation,OS\ncontoso-k3,${n},${gen},Linux\n`).plan.machines[0];
@@ -856,11 +865,11 @@ test('notes: a new VM on v6 and v7 gets a new identity; unknown accelerated netw
 // VM. v6 and v7 have two methods (deploy in parallel: a new VM; change the size of the
 // current VM: the same VM), so the note gives both. A rebuild is a new VM. A resize keeps it.
 const IDENTITY_PARALLEL = '"System-assigned identity" is Yes. If you deploy a new VM in parallel, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again. If you change the size of the current VM, the VM keeps its identity.';
-const IDENTITY_REBUILD = '"System-assigned identity" is Yes. Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
-test('notes: the identity note follows the method of each series (v6 and v7 both methods, a rebuild a new VM, a resize nothing)', () => {
+// A new VM: a pool or a service makes new nodes (0.9.4-beta words, kept).
+const IDENTITY_NEW_VM = '"System-assigned identity" is Yes. Record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
+test('notes: the identity note follows the method of each series (v6 and v7 both methods, a resize nothing)', () => {
     const head = 'VM name,Current size,Generation,OS,System-assigned identity\n';
     const p = run(`${head}contoso-i2,Standard_B2ms,V2,Windows,Yes\ncontoso-i3,Standard_B2ms,V2,Linux,Yes\ncontoso-i4,Standard_D4s_v3,V2,,Yes\n`).plan;
-    // A Windows VM on B2ms: v5 is a resize, Burstable (B2s_v2, no temporary disk) a rebuild.
     const win = byName(p, 'contoso-i2');
     for (const s of ['v6', 'v7']) {
         const c = rowOf(win, s).caveats['Identity'];
@@ -868,178 +877,428 @@ test('notes: the identity note follows the method of each series (v6 and v7 both
         assert.match(c.text, /If you deploy a new VM in parallel, /);
         assert.match(c.text, /If you change the size of the current VM, the VM keeps its identity\.$/);
     }
-    // Burstable (B2s_v2, no temporary disk): a Generation 2 VM can use the preview feature (0.9.3-beta).
-    assert.equal(rowOf(win, 'burstable').option.rebuild, true, 'the fixture: Burstable is a rebuild');
-    assert.match(rowOf(win, 'burstable').caveats['Identity'].text, /^"System-assigned identity" is Yes\. With the preview feature, the VM keeps its identity\. If you rebuild, /);
-    assert.equal(rowOf(win, 'v5').option.rebuild, false, 'the fixture: v5 is a resize');
-    assert.deepEqual(rowOf(win, 'v5').caveats['Identity'], { state: '', text: '' }, 'a resize keeps the identity: no note');
-    // The page, the report and the files show the two texts as two notes, each with its series.
+    // 0.9.5-beta: Burstable (B2s_v2, no temporary disk) is a resize with the preview
+    // feature, and v5 a plain resize. Both keep the VM: no note.
+    assert.equal(rowOf(win, 'burstable').option.previewFeature, 'needed', 'the fixture: Burstable needs the feature');
+    for (const s of ['v5', 'burstable']) assert.deepEqual(rowOf(win, s).caveats['Identity'], { state: '', text: '' }, `${s}: a resize keeps the identity`);
     const ids = F.allNotes(win).actions.filter((x) => x.topic === 'Identity');
-    assert.deepEqual(ids.map((x) => [x.text, x.series]), [[IDENTITY_PARALLEL, ['v6', 'v7']], [rowOf(win, 'burstable').caveats['Identity'].text, ['burstable']]]);
-    // Generation 1: Burstable is only a rebuild, a new VM.
+    assert.deepEqual(ids.map((x) => [x.text, x.series]), [[IDENTITY_PARALLEL, ['v6', 'v7']]]);
+    // Generation 1: the same resize as Generation 2.
     const gen1 = byName(run(`${head}contoso-i5,Standard_B2ms,V1,Windows,Yes\n`).plan, 'contoso-i5');
-    assert.deepEqual([rowOf(gen1, 'burstable').caveats['Identity'].state, rowOf(gen1, 'burstable').caveats['Identity'].text], ['problem', IDENTITY_REBUILD]);
-    assert.doesNotMatch(rowOf(gen1, 'burstable').caveats['Identity'].text, /change the size|keeps its identity|in parallel|preview/, 'a rebuild is only a new VM');
+    assert.deepEqual(rowOf(gen1, 'burstable').caveats['Identity'], { state: '', text: '' });
     // Linux: v5 and Burstable are a resize.
     const linux = byName(p, 'contoso-i3');
     for (const s of ['v5', 'burstable']) assert.deepEqual(rowOf(linux, s).caveats['Identity'], { state: '', text: '' }, s);
     assert.equal(rowOf(linux, 'v6').caveats['Identity'].text, IDENTITY_PARALLEL);
-    // No OS in the list: v6 and v7 still give both methods; v5 stays a check.
+    // No OS in the list: v6 and v7 still give both methods; v5 is a resize on any OS.
     const noOs = byName(p, 'contoso-i4');
     assert.equal(rowOf(noOs, 'v7').caveats['Identity'].text, IDENTITY_PARALLEL);
-    assert.deepEqual(rowOf(noOs, 'v5').caveats['Identity'], { state: 'check', text: 'Check: the list does not give the OS. A rebuild removes the system-assigned identity.' });
-    // A rebuild on v5 (the method of the option, not the series, decides it).
-    const vm = { os: 'Windows', sourceSize: 'Standard_D4s_v3' };
-    const base = { targetSize: 'Standard_D4s_v5', acceleratedNetworking: {} };
-    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', rebuild: true })['Identity'].text, IDENTITY_REBUILD);
-    assert.deepEqual(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', rebuild: false })['Identity'], { state: '', text: '' });
-    // v6 with a rebuild flag (Windows, the temporary disk changes type): still both methods.
-    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, targetSize: 'Standard_D4ds_v6', option: 'v6', rebuild: true })['Identity'].text, IDENTITY_PARALLEL);
+    assert.deepEqual(rowOf(noOs, 'v5').caveats['Identity'], { state: '', text: '' });
+    // The method of the option decides it: v5 with the feature is still a resize.
+    const vm = { os: 'Windows', sourceSize: 'Standard_D4s_v3', sourceDiskArch: 'scsi-temp' };
+    const base = { targetSize: 'Standard_D4s_v5', targetDiskArch: 'diskless', acceleratedNetworking: {} };
+    assert.deepEqual(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', previewFeature: 'needed' })['Identity'], { state: '', text: '' });
+    // A pool makes new nodes: the new-VM words where 0.9.4-beta had them (Windows, the temporary disk changes type).
+    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', previewFeature: null }, true)['Identity'].text, IDENTITY_NEW_VM);
+    assert.deepEqual(caveats(vm, { systemIdentity: true }, { ...base, targetDiskArch: 'scsi-temp', option: 'v5', previewFeature: null }, true)['Identity'], { state: '', text: '' });
+    assert.deepEqual(caveats({ ...vm, os: 'Linux' }, { systemIdentity: true }, { ...base, option: 'v5', previewFeature: null }, true)['Identity'], { state: '', text: '' }, 'a Linux pool: as in 0.9.4-beta');
+    assert.equal(caveats(vm, { availabilitySet: true }, { ...base, option: 'burstable', previewFeature: null }, true)['Availability set'].text, '"Availability set" is Yes. Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.');
+    assert.deepEqual(caveats(vm, { systemIdentity: true }, { ...base, option: 'v5', previewFeature: 'needed' }, false)['Identity'], { state: '', text: '' }, 'not a pool: a resize');
+    assert.equal(caveats(vm, { systemIdentity: true }, { ...base, targetSize: 'Standard_D4ds_v6', targetDiskArch: 'nvme-temp', option: 'v6', previewFeature: 'needed' })['Identity'].text, IDENTITY_PARALLEL);
 });
 
-// 0.9.3-beta (owner, 2026-11-06, from a lab test, 2026-11-02): a Windows Generation 2 VM
-// on v5 or Burstable whose temporary disk changes type can have a resize with the preview
-// feature VMTempDiskResizePreview. Without it, a rebuild. No answer changes.
-const PREVIEW_RESIZE = 'On Windows, Azure allows this resize only when the preview feature VMTempDiskResizePreview is registered on the subscription.';
-const LAB_MOVE = `Change the size of the current VM. ${PREVIEW_RESIZE} Move the page file from the temporary disk to C: before the resize. Without the feature, rebuild from a current image.`;
-const LAB_TODO = (size) => `Resize to ${size}. First register the preview feature VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image.`;
-const LAB_REBUILD_COLUMN = 'Only without the preview feature VMTempDiskResizePreview';
-const IDENTITY_LAB = '"System-assigned identity" is Yes. With the preview feature, the VM keeps its identity. If you rebuild, record the role assignments of the system-assigned identity. A new VM gets a new identity: add them to it again.';
-// 0.9.4-beta (owner, 2026-11-06): each method in the same words, on v6 and v7 and on the preview rows.
+// 0.9.5-beta (owner, 2026-11-06 and 2026-11-07): the tool never recommends a rebuild.
+// Measured in lab tests, 2026-11-01 to 2026-11-07: a Windows VM on a size with a SCSI
+// temporary disk resizes in place to a size without one (every v6 and v7 size counts as
+// "without one") only with the preview feature VMTempDiskResizePreview, on Generation 1
+// and Generation 2. A size with no temporary disk resizes to any v6 or v7 size with no
+// feature. Linux never needs it.
+const FEATURE = 'The resize needs the preview feature VMTempDiskResizePreview, registered on the subscription. Move the page file from the temporary disk to C: before the resize.';
+const FEATURE_NO_OS = 'On a Windows VM, the resize needs the preview feature VMTempDiskResizePreview, registered on the subscription. On Windows, move the page file from the temporary disk to C: before the resize.';
+const FEATURE_UNKNOWN = 'The size table does not give the temporary disk of each size. This tool cannot tell if a Windows VM needs the preview feature VMTempDiskResizePreview for this resize.';
+const FALLBACK_SIZE = (s) => `Without the feature, resize to ${s}.`;
+const FALLBACK_NONE = 'Without the feature, this tool finds no v5 size of this shape that keeps the temporary disk type.';
+const FALLBACK_V5 = (s) => `Without the feature, use the v5 size ${s}.`;
+const FALLBACK_NO_V5 = 'Without the feature, this tool finds no other size for a resize.';
+const FEATURE_TODO = (size, fallback) => `Resize to ${size}. First register the preview feature VMTempDiskResizePreview on the subscription. ${fallback}`;
+const FEATURE_TODO_NO_OS = (size, fallback) => `Resize to ${size}. On a Windows VM, first register the preview feature VMTempDiskResizePreview on the subscription. ${fallback}`;
+const COLUMN = { needed: 'Needed', notNeeded: 'Not needed', noOs: 'Not checked. Needed on Windows.', unknown: 'Not checked. The size table does not give the temporary disk.' };
+// 0.9.4-beta: each method in the same words. 0.9.5-beta: v5 and Burstable are only a resize.
 const AVSET_PARALLEL = 'put the new VM in the same availability set when you create it. Azure cannot add an existing VM to a set.';
 const AVSET_IN_PLACE = 'the VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
 const AVSET_BOTH = `"Availability set" is Yes. If you deploy a new VM in parallel: ${AVSET_PARALLEL} If you change the size of the current VM: ${AVSET_IN_PLACE}`;
-const AVSET_LAB = `"Availability set" is Yes. With the preview feature: ${AVSET_IN_PLACE} If you rebuild: ${AVSET_PARALLEL}`;
+const AVSET_STAYS = '"Availability set" is Yes. The VM stays in its set. You can resize the VMs one at a time. If Azure does not offer the new size for this set, stop (deallocate) all the VMs in the set first.';
 const AVSET_NEW_VM = '"Availability set" is Yes. Azure adds a VM to an availability set only when it creates the VM. Deploy the new VM into the set.';
-const AVSET_RESIZE = '"Availability set" is Yes. If the hardware of the set does not have the new size, stop all the VMs in the set before the resize.';
-const REBUILD_WORDS = 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
+const B = 'Burstable (Bsv2, Basv2)';
+const PARALLEL = 'Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.';
+const RESIZE = 'Resize the current VM. Azure supports a resize to this size.';
+const POOL = (m) => ['A', 'B', 'C', 'D'].includes(m.pattern);
 
-test('a Windows Generation 2 VM whose temporary disk changes type on v5 or Burstable: the preview feature, or a rebuild', async () => {
-    const { todo } = await import('../js/details.js');
-    const { reportHtml } = await import('../js/report.js');
-    const head = 'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Azure Disk Encryption\n';
-    const text = `${head}contoso-lw2,Standard_B2ms,V2,Windows,Yes,Yes,No\ncontoso-lw1,Standard_B2ms,V1,Windows,Yes,Yes,No\n`
-        + 'contoso-ll2,Standard_B2ms,V2,Linux,Yes,Yes,No\ncontoso-lu2,Standard_B2ms,V2,,Yes,Yes,No\ncontoso-le2,Standard_B2ms,V2,Windows,Yes,Yes,Yes\n'
-        + 'contoso-lt2,Standard_B2ms,,Windows,Yes,Yes,No\n';
-    const { plan: p, list } = run(text);
-    const all = F.targetRows(p, table, NOW);
-    const col = (name, series, c) => all.find((r) => r['VM name'] === name && r['Series'] === series)[c];
-    const B = 'Burstable (Bsv2, Basv2)';
+test('the preview feature: each word, and the rule for each fact (made-up facts)', async () => {
+    const W = await import('../js/words.js');
+    const { previewFeature } = await import('../js/lifecycle.js');
+    const PAR = 'Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.';
+    const RES = 'Resize the current VM. Azure supports a resize to this size.';
+    for (const s of ['v6', 'v7']) {
+        assert.equal(W.moveWords(s, 'needed'), `${PAR} ${FEATURE}`);
+        assert.equal(W.moveWords(s, 'windows'), `${PAR} ${FEATURE_NO_OS}`);
+        assert.equal(W.moveWords(s, 'unknown'), `${PAR} ${FEATURE_UNKNOWN}`);
+        for (const f of ['not-needed', null, undefined]) assert.equal(W.moveWords(s, f), PAR, String(f));
+    }
+    assert.equal(W.moveWords('v5', 'needed', { size: 'Standard_D4ds_v5' }), `Resize the current VM. ${FEATURE} ${FALLBACK_SIZE('Standard_D4ds_v5')}`);
+    assert.equal(W.moveWords('v5', 'needed', { size: null }), `Resize the current VM. ${FEATURE} ${FALLBACK_NONE}`);
+    assert.equal(W.moveWords('v5', 'windows', { size: 'Standard_D4ds_v5' }), `Resize the current VM. ${FEATURE_NO_OS} ${FALLBACK_SIZE('Standard_D4ds_v5')}`);
+    assert.equal(W.moveWords('burstable', 'needed', { size: 'Standard_D2ds_v5' }), `Resize the current VM. ${FEATURE} ${FALLBACK_V5('Standard_D2ds_v5')}`);
+    assert.equal(W.moveWords('burstable', 'windows', { size: null }), `Resize the current VM. ${FEATURE_NO_OS} ${FALLBACK_NO_V5}`);
+    for (const s of ['v5', 'burstable']) {
+        assert.equal(W.moveWords(s, 'unknown'), `Resize the current VM. ${FEATURE_UNKNOWN}`);
+        assert.equal(W.moveWords(s, 'unknown', { size: 'Standard_D4ds_v5' }), `Resize the current VM. ${FEATURE_UNKNOWN}`, 'a fallback only with the feature');
+        assert.equal(W.moveWords(s, 'not-needed', { size: 'Standard_D4ds_v5' }), RES);
+        for (const f of ['not-needed', null, undefined]) assert.equal(W.moveWords(s, f), RES, `${s} ${f}`);
+    }
+    // No word "rebuild" in any move.
+    for (const s of ['v5', 'v6', 'v7', 'burstable']) for (const f of ['needed', 'windows', 'unknown', 'not-needed', null]) for (const fb of [null, { size: null }, { size: 'Standard_D4ds_v5' }]) assert.doesNotMatch(W.moveWords(s, f, fb), /rebuild/i);
+    assert.equal(W.featureColumn('needed'), COLUMN.needed);
+    assert.equal(W.featureColumn('not-needed'), COLUMN.notNeeded);
+    assert.equal(W.featureColumn('windows'), COLUMN.noOs);
+    assert.equal(W.featureColumn('unknown'), COLUMN.unknown);
+    assert.equal(W.featureColumn(null), '');
 
-    // Generation 2, Windows: the answer stays the same (a supported Burstable size, a rebuild flag).
-    const w2 = byName(p, 'contoso-lw2');
-    const b = rowOf(w2, 'burstable');
-    assert.deepEqual([b.result, b.option.targetSize, b.option.rebuild, b.option.previewResize], ['Supported', 'Standard_B2s_v2', true, true]);
-    assert.equal(rowOf(w2, 'v5').option.previewResize, false, 'v5 keeps the SCSI temporary disk: a plain resize');
-    for (const s of ['v6', 'v7']) assert.equal(rowOf(w2, s).option.previewResize, false, `${s}: the NVMe conversion has its own words`);
-    assert.equal(col('contoso-lw2', B, 'How to move'), LAB_MOVE);
-    assert.equal(col('contoso-lw2', B, 'Rebuild'), LAB_REBUILD_COLUMN);
-    for (const s of ['v5', 'v6', 'v7']) assert.equal(col('contoso-lw2', s, 'Rebuild'), 'No', s);
-    assert.equal(F.likelyRow(w2).series, 'burstable');
-    assert.equal(todo(w2, F.groupOf(w2)).main, LAB_TODO('Standard_B2s_v2'));
-    assert.deepEqual([b.caveats['Identity'].state, b.caveats['Identity'].text], ['problem', IDENTITY_LAB]);
-    assert.deepEqual([b.caveats['Availability set'].state, b.caveats['Availability set'].text], ['attention', AVSET_LAB]);
-    assert.equal(rowOf(w2, 'v5').caveats['Availability set'].text, AVSET_RESIZE);
-
-    // Generation 1: a rebuild, as before.
-    const w1 = byName(p, 'contoso-lw1');
-    const b1 = rowOf(w1, 'burstable');
-    assert.deepEqual([b1.result, b1.option.targetSize, b1.option.rebuild, b1.option.previewResize], ['Supported', 'Standard_B2s_v2', true, false]);
-    assert.equal(col('contoso-lw1', B, 'How to move'), REBUILD_WORDS);
-    assert.equal(col('contoso-lw1', B, 'Rebuild'), 'Yes');
-    assert.equal(todo(w1, F.groupOf(w1)).main, 'Rebuild at Standard_B2s_v2 from a current image.');
-    assert.equal(b1.caveats['Identity'].text, IDENTITY_REBUILD);
-    assert.equal(b1.caveats['Availability set'].text, AVSET_NEW_VM);
-
-    // Linux: a resize. No OS: the hedge, and "Not checked" on v5 and Burstable, "No" on v6 and v7.
-    const l2 = byName(p, 'contoso-ll2');
-    assert.deepEqual([rowOf(l2, 'burstable').option.rebuild, rowOf(l2, 'burstable').option.previewResize], [false, false]);
-    assert.equal(col('contoso-ll2', B, 'Rebuild'), 'No');
-    assert.equal(rowOf(byName(p, 'contoso-lu2'), 'burstable').option.previewResize, false);
-    assert.equal(col('contoso-lu2', B, 'Rebuild'), 'Not checked. This tool does not know the OS.');
-    assert.equal(col('contoso-lu2', 'v6', 'Rebuild'), 'No', 'v6 is never a rebuild, whatever the OS');
-    assert.equal(col('contoso-lu2', B, 'How to move'), 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.');
-
-    // Azure Disk Encryption: still no size (a rebuild removes it), and no preview words.
-    const e2 = rowOf(byName(p, 'contoso-le2'), 'burstable');
-    assert.deepEqual([e2.option.supported, e2.codes, e2.option.previewResize], [false, ['disk-encryption-rebuild'], false]);
-    assert.equal(col('contoso-le2', B, 'How to move'), '');
-    assert.equal(col('contoso-le2', B, 'Rebuild'), '');
-
-    // No generation in the list: not checked, as before.
-    assert.equal(byName(p, 'contoso-lt2').vm, null);
-
-    // The report: the first sentence of the move, then the rest under it.
-    const html = reportHtml(p, table, 'lab', NOW);
-    const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); return html.slice(i, html.indexOf('</section>', i)); };
-    assert.ok(card('contoso-lw2').includes('Change the size of the current VM.</span><br><span class="muted">'), 'the report: the move');
-    assert.ok(card('contoso-lw2').includes(PREVIEW_RESIZE) && card('contoso-lw2').includes('Without the feature, rebuild from a current image.'), 'the report: the condition');
-    assert.ok(!card('contoso-lw1').includes('Change the size of the current VM.'), 'Generation 1: no lab words');
-
-    // The about file.
-    const about = F.aboutText(p, list, 'lab', NOW).replace(/\r\n/g, '\n');
-    for (const line of [
-        '  v5:        Resize the current VM, when Azure supports a resize to the new size. Burstable is the same.',
-        '             When one size has a temporary disk and the other size does not, a Windows VM needs a rebuild.',
-        '             A Windows Generation 2 VM can have a resize if the preview feature VMTempDiskResizePreview',
-        '             is registered on the subscription. Move the page file to C: before the resize.',
-        '             In vm-target-sizes.csv, Rebuild is No for v6 and v7.',
-        '             For a Windows Generation 2 VM on v5 or Burstable where the temporary disk changes type,',
-        `             Rebuild is "${LAB_REBUILD_COLUMN}".`,
-        `             v5 and Burstable: ${PREVIEW_RESIZE}`,
-        '             This tool shows it for a Windows Generation 2 VM, when the temporary disk changes type.',
-    ]) assert.ok(about.includes(`${line}\n`), line);
-    assert.ok(!about.includes('A Windows VM needs a rebuild when one size has a temporary disk and the other size does not.'), 'the 0.9.2-beta line is gone');
+    // The rule: Windows (or no OS), and a SCSI temporary disk on one side only.
+    const opt = (targetDiskArch, tempDiskChange = true, supported = true) => ({ supported, targetSize: 'Standard_X', targetDiskArch, tempDiskChange });
+    const vm = (os, sourceDiskArch) => ({ os, sourceDiskArch });
+    assert.equal(previewFeature(vm('Windows', 'scsi-temp'), opt('diskless')), 'needed');
+    assert.equal(previewFeature(vm('Windows', 'scsi-temp'), opt('nvme-temp')), 'needed', 'every v6 and v7 size counts as no temporary disk');
+    assert.equal(previewFeature(vm('Windows', 'nvme-temp'), opt('scsi-temp')), 'needed', 'the other direction too');
+    assert.equal(previewFeature(vm('Windows', 'diskless'), opt('scsi-temp')), 'needed', 'no temporary disk to a SCSI one');
+    assert.equal(previewFeature(vm('Windows', 'diskless'), opt('nvme-temp')), 'not-needed', 'no temporary disk to an NVMe one: measured 2026-11-07');
+    assert.equal(previewFeature(vm('Windows', 'nvme-temp'), opt('diskless')), 'not-needed');
+    assert.equal(previewFeature(vm('Windows', 'scsi-temp'), opt('scsi-temp', false)), 'not-needed', 'same kind');
+    assert.equal(previewFeature(vm('Windows', 'diskless'), opt('diskless', false)), 'not-needed');
+    assert.equal(previewFeature(vm('Linux', 'scsi-temp'), opt('nvme-temp')), 'not-needed', 'Linux never needs it');
+    assert.equal(previewFeature(vm('Linux', 'scsi-temp'), opt('nvme-temp', null)), 'not-needed', 'Linux, also when the table cannot tell');
+    assert.equal(previewFeature(vm('', 'scsi-temp'), opt('diskless')), 'windows', 'no OS: on Windows');
+    assert.equal(previewFeature(vm('', 'scsi-temp'), opt('scsi-temp', false)), 'not-needed');
+    assert.equal(previewFeature(vm('Windows', 'scsi-temp'), opt('scsi-temp', null)), 'unknown', 'unknown is never a pass');
+    assert.equal(previewFeature(vm('', 'scsi-temp'), opt('diskless', null)), 'unknown');
+    assert.equal(previewFeature(vm('Windows', 'scsi-temp'), opt('diskless', true, false)), null, 'no supported size');
+    assert.equal(previewFeature({ ...vm('Windows', 'scsi-temp'), gen: 'V1' }, opt('diskless')), 'needed', 'Generation 1 the same as Generation 2');
+    assert.equal(previewFeature({ ...vm('Windows', 'scsi-temp'), gen: 'V2', genAssumed: true }, opt('diskless')), 'needed', 'the pool rule, not this one, decides for a service');
 });
 
-test('a pool or a service, or a generation that this tool assumed: no preview words, the words of 0.9.2-beta', async () => {
-    // Review, 2026-11-06: a service (AKS) with no generation gets Generation 2 as "not
-    // needed". That is not a known Generation 2. A pool gets the pool advice, not a resize.
-    const head = 'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Managed by,Resource type\n';
-    const { plan: p } = run(`${head}contoso-pa1,Standard_B2ms,,Windows,Yes,Yes,AKS,VM\ncontoso-ps1,Standard_B2ms,V2,Windows,Yes,Yes,None,Scale set\n`);
+test('the preview feature on each row type: Burstable and v6 and v7, Generation 1 and 2, Linux, no OS, a pool', async () => {
+    const { todo } = await import('../js/details.js');
+    const head = 'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Azure Disk Encryption,Managed by,Resource type\n';
+    const text = `${head}contoso-n2,Standard_B2ms,V2,Windows,Yes,Yes,No,None,VM\ncontoso-n1,Standard_B2ms,V1,Windows,Yes,Yes,No,None,VM\n`
+        + 'contoso-nl,Standard_B2ms,V2,Linux,Yes,Yes,No,None,VM\ncontoso-nu,Standard_B2ms,V2,,Yes,Yes,No,None,VM\n'
+        + 'contoso-nw,Standard_D4s_v3,V2,Windows,Yes,Yes,No,None,VM\ncontoso-nd,Standard_D4s_v4,V2,Windows,Yes,Yes,No,None,VM\n'
+        + 'contoso-na,Standard_B2ms,,Windows,Yes,Yes,No,AKS,VM\ncontoso-ns,Standard_B2ms,V2,Windows,Yes,Yes,No,None,Scale set\n';
+    const p = run(text).plan;
     const all = F.targetRows(p, table, NOW);
-    const B = 'Burstable (Bsv2, Basv2)';
-    for (const name of ['contoso-pa1', 'contoso-ps1']) {
+    const col = (name, series, c) => all.find((r) => r['VM name'] === name && r['Series'] === series)[c];
+
+    // Windows on B2ms (a SCSI temporary disk), Generation 2 and Generation 1 the same:
+    // Burstable (no temporary disk) needs the feature, v5 keeps a temporary disk.
+    for (const name of ['contoso-n2', 'contoso-n1']) {
+        const m = byName(p, name);
+        const b = rowOf(m, 'burstable');
+        const v5 = rowOf(m, 'v5').option.targetSize;
+        assert.match(v5, /^Standard_[A-Z]\d+[a-z]*d[a-z]*_v5$/, `${name}: the v5 size has a temporary disk`);
+        assert.deepEqual([b.result, b.option.targetSize, b.option.previewFeature, b.option.featureFallback], ['Supported', 'Standard_B2s_v2', 'needed', { size: v5 }], name);
+        assert.equal(col(name, B, 'How to move'), `Resize the current VM. ${FEATURE} ${FALLBACK_V5(v5)}`, name);
+        assert.equal(col(name, 'v5', 'How to move'), 'Resize the current VM. Azure supports a resize to this size.', name);
+        assert.deepEqual(['v5', B].map((s) => col(name, s, 'Rebuild')), ['No', 'No'], name);
+        assert.deepEqual(['v5', B].map((s) => col(name, s, 'Preview feature')), [COLUMN.notNeeded, COLUMN.needed], name);
+        assert.equal(F.likelyRow(m).series, 'burstable');
+        assert.equal(todo(m, F.groupOf(m)).main, FEATURE_TODO('Standard_B2s_v2', FALLBACK_V5(v5)), name);
+        assert.deepEqual(b.caveats['Identity'], { state: '', text: '' }, `${name}: a resize keeps the identity`);
+        assert.deepEqual([b.caveats['Availability set'].state, b.caveats['Availability set'].text], ['attention', AVSET_STAYS], name);
+        assert.equal(rowOf(m, 'v5').caveats['Availability set'].text, AVSET_STAYS, name);
+    }
+    // Generation 2 only: v6 and v7 (Generation 1 has no v6 or v7 size).
+    for (const s of ['v6', 'v7']) {
+        assert.equal(col('contoso-n2', s, 'How to move'), `${PARALLEL} ${FEATURE}`, s);
+        assert.equal(col('contoso-n2', s, 'Preview feature'), COLUMN.needed, s);
+        assert.equal(rowOf(byName(p, 'contoso-n1'), s).option.supported, false, `Generation 1 ${s}`);
+    }
+    // Linux: never the feature.
+    for (const s of ['v5', 'v6', 'v7', B]) {
+        assert.doesNotMatch(col('contoso-nl', s, 'How to move'), /VMTempDiskResizePreview/, s);
+        assert.equal(col('contoso-nl', s, 'Preview feature'), COLUMN.notNeeded, s);
+    }
+    // No OS: "On a Windows VM".
+    const nuV5 = rowOf(byName(p, 'contoso-nu'), 'v5').option.targetSize;
+    assert.equal(col('contoso-nu', B, 'How to move'), `Resize the current VM. ${FEATURE_NO_OS} ${FALLBACK_V5(nuV5)}`);
+    assert.equal(col('contoso-nu', 'v6', 'How to move'), `${PARALLEL} ${FEATURE_NO_OS}`);
+    assert.deepEqual(['v5', 'v6', B].map((s) => col('contoso-nu', s, 'Preview feature')), [COLUMN.notNeeded, COLUMN.noOs, COLUMN.noOs]);
+    assert.deepEqual(['v5', 'v6', B].map((s) => col('contoso-nu', s, 'Rebuild')), ['No', 'No', 'No']);
+    const nu = byName(p, 'contoso-nu');
+    assert.equal(todo(nu, F.groupOf(nu)).main, FEATURE_TODO_NO_OS('Standard_B2s_v2', FALLBACK_V5(nuV5)));
+    // Windows on a v3 size with a SCSI temporary disk: v6 and v7 need it, v5 (a d size) not.
+    assert.deepEqual(['v5', 'v6', 'v7'].map((s) => col('contoso-nw', s, 'Preview feature')), [COLUMN.notNeeded, COLUMN.needed, COLUMN.needed]);
+    // Windows with no temporary disk (D4s_v4): never the feature.
+    assert.deepEqual(['v5', 'v6', 'v7'].map((s) => col('contoso-nd', s, 'Preview feature')), [COLUMN.notNeeded, COLUMN.notNeeded, COLUMN.notNeeded]);
+    for (const s of ['v5', 'v6', 'v7']) assert.doesNotMatch(col('contoso-nd', s, 'How to move'), /VMTempDiskResizePreview/, s);
+    // A pool or a service (and the generation that this tool assumed for AKS): the pool
+    // advice, no feature, and the new-VM notes of 0.9.4-beta.
+    for (const name of ['contoso-na', 'contoso-ns']) {
         const m = byName(p, name);
         assert.ok(POOL(m), `${name}: the fixture is a pool or a service`);
         const b = rowOf(m, 'burstable');
-        assert.deepEqual([b.result, b.option.rebuild, b.option.previewResize], ['Supported', true, false], name);
-        const row = all.find((r) => r['VM name'] === name && r['Series'] === B);
-        assert.equal(row['Rebuild'], 'Yes', `${name}: as in 0.9.2-beta`);
-        assert.ok(!row['How to move'].includes('VMTempDiskResizePreview'), name);
-        assert.equal(b.caveats['Identity'].text, IDENTITY_REBUILD, name);
+        assert.deepEqual([b.result, b.option.previewFeature, b.option.featureFallback], ['Supported', null, null], name);
+        assert.equal(col(name, B, 'Rebuild'), 'No', name);
+        assert.equal(col(name, B, 'Preview feature'), '', name);
+        assert.ok(!col(name, B, 'How to move').includes('VMTempDiskResizePreview'), name);
+        assert.equal(b.caveats['Identity'].text, IDENTITY_NEW_VM, name);
         assert.equal(b.caveats['Availability set'].text, AVSET_NEW_VM, name);
     }
-    assert.equal(byName(p, 'contoso-pa1').read.generationFrom, 'not-needed');
-    assert.equal(byName(p, 'contoso-pa1').vm.genAssumed, true);
-    assert.equal(byName(p, 'contoso-ps1').vm.genAssumed, false);
-    // The assumed generation on its own (the pool rule also covers this VM): the option itself says no.
-    const { burstableOption } = await import('../js/lifecycle.js');
-    const pa1 = byName(p, 'contoso-pa1').vm;
-    assert.equal(burstableOption(pa1, table, NOW).previewResize, false);
-    assert.equal(burstableOption({ ...pa1, genAssumed: false }, table, NOW).previewResize, true, 'the fixture: known Generation 2 would get it');
-    // A generation that the security type gives is known: Trusted launch needs Generation 2.
-    const tl = byName(run('VM name,Current size,Generation,OS,Security type\ncontoso-pt1,Standard_B2ms,,Windows,TrustedLaunch\n').plan, 'contoso-pt1');
-    assert.deepEqual([tl.read.generationFrom, tl.vm.genAssumed, rowOf(tl, 'burstable').option.previewResize], ['security-type', false, true]);
+    assert.equal(byName(p, 'contoso-na').vm.genAssumed, true);
+    // Burstable: the v5 size is the way without the feature only when it needs no feature
+    // itself (a changed table where the v5 size loses its SCSI temporary disk).
+    const v5size = rowOf(byName(p, 'contoso-n2'), 'v5').option.targetSize;
+    const t = tableWith({ [v5size]: { MaxResourceVolumeMB: '0' } });
+    const q = runWith('VM name,Current size,Generation,OS\ncontoso-nq,Standard_B2ms,V2,Windows\n', t).machines[0];
+    assert.equal(rowOf(q, 'v5').option.previewFeature, 'needed', 'the fixture: v5 needs the feature too');
+    assert.deepEqual(rowOf(q, 'burstable').option.featureFallback, { size: null });
+    assert.equal(F.targetRows(runWith('VM name,Current size,Generation,OS\ncontoso-nq,Standard_B2ms,V2,Windows\n', t), t, NOW).find((r) => r['Series'] === B)['How to move'], `Resize the current VM. ${FEATURE} ${FALLBACK_NO_V5}`);
+    // An unknown kind is not a crossing either way.
+    const { crossesScsiTempDisk } = await import('../js/lifecycle.js');
+    for (const [a, b] of [[null, 'scsi-temp'], ['scsi-temp', null], [undefined, 'diskless'], ['', 'nvme-temp']]) assert.equal(crossesScsiTempDisk(a, b), null, `${a} ${b}`);
 });
 
-test('v5: a Windows Generation 2 rebuild gets the preview words too, Generation 1 does not', () => {
-    // A v5 size with a temporary disk, for a VM without one (the size picker does not give it in the real table).
-    const t = tableWith({ Standard_D4s_v5: { MaxResourceVolumeMB: '153600' } });
-    const p = runWith('VM name,Current size,Generation,OS,Azure Disk Encryption,Availability set\ncontoso-lv2,Standard_D4s_v4,V2,Windows,No,No\ncontoso-lv1,Standard_D4s_v4,V1,Windows,No,No\ncontoso-lv3,Standard_D4s_v4,V2,Windows,Yes,Yes\n', t);
-    const v2 = rowOf(byName(p, 'contoso-lv2'), 'v5');
-    const v1 = rowOf(byName(p, 'contoso-lv1'), 'v5');
-    assert.deepEqual([v2.option.supported, v2.option.rebuild, v2.option.previewResize], [true, true, true]);
-    assert.deepEqual([v1.option.supported, v1.option.rebuild, v1.option.previewResize], [true, true, false]);
-    // Azure Disk Encryption: no size (a rebuild removes it), so no preview words, also in the notes of the blocked row.
-    const v3 = rowOf(byName(p, 'contoso-lv3'), 'v5');
-    assert.deepEqual([v3.option.supported, v3.codes, v3.option.rebuild, v3.option.previewResize], [false, ['disk-encryption-rebuild'], true, false]);
-    assert.doesNotMatch(v3.caveats['Availability set'].text, /preview/);
-    const rows = F.targetRows(p, t, NOW);
-    assert.equal(rows.find((r) => r['VM name'] === 'contoso-lv2' && r['Series'] === 'v5')['How to move'], LAB_MOVE);
-    assert.equal(rows.find((r) => r['VM name'] === 'contoso-lv1' && r['Series'] === 'v5')['How to move'], REBUILD_WORDS);
-    assert.equal(rows.find((r) => r['VM name'] === 'contoso-lv2' && r['Series'] === 'v5')['Rebuild'], LAB_REBUILD_COLUMN);
-    assert.equal(rows.find((r) => r['VM name'] === 'contoso-lv1' && r['Series'] === 'v5')['Rebuild'], 'Yes');
+test('v5 with the preview feature: the d size of the same shape without it (a chosen size, Generation 1 and 2)', async () => {
+    const { adviceOption } = await import('../js/lifecycle.js');
+    const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption,NIC count,Data-disk count\n';
+    const p = run(`${head}contoso-c2,Standard_D4s_v3,V2,Windows,No,1,0\ncontoso-c1,Standard_D4s_v3,V1,Windows,No,1,0\ncontoso-ca,Standard_D4as_v4,V2,Windows,No,1,0\n`
+        + 'contoso-ce,Standard_D4s_v3,V2,Windows,Yes,1,0\ncontoso-cu,Standard_D4s_v3,V2,,Yes,1,0\ncontoso-cl,Standard_D4s_v3,V2,Linux,No,1,0\n').plan;
+    // The size picker gives the d size; for a v3 size, a size without a temporary disk is
+    // one of the choices. (Generation 1 chooses by shape, from d sizes only: its row with
+    // no d size is below, with a changed table.)
+    for (const name of ['contoso-c2', 'contoso-c1']) assert.equal(rowOf(byName(p, name), 'v5').option.targetSize, 'Standard_D4ds_v5', `${name}: the fixture`);
+    const vm = byName(p, 'contoso-c2').vm;
+    const o = adviceOption(vm, 'v5', table, 'Standard_D4s_v5', NOW);
+    assert.deepEqual([o.supported, o.targetSize, o.previewFeature, o.featureFallback], [true, 'Standard_D4s_v5', 'needed', { size: 'Standard_D4ds_v5' }]);
+    // The generation does not change it (measured on Generation 1 and Generation 2).
+    assert.deepEqual(adviceOption({ ...vm, gen: 'V1', hyperVGeneration: 'V1' }, 'v5', table, null, NOW).previewFeature, 'not-needed', 'Generation 1: the d size, a plain resize');
+    // Ranked sizes: the d size comes second.
+    assert.deepEqual(rankedSizes(vm, table, o, NOW).slice(0, 2).map((x) => [x.size, x.why]), [['Standard_D4s_v5', 'closest'], ['Standard_D4ds_v5', 'temp-disk-added']]);
+    // The processor maker stays (AMD: Dasv4 to Dadsv5).
+    const amd = adviceOption(byName(p, 'contoso-ca').vm, 'v5', table, 'Standard_D4as_v5', NOW);
+    assert.deepEqual([amd.previewFeature, amd.featureFallback], ['needed', { size: 'Standard_D4ads_v5' }]);
+    // Azure Disk Encryption: the size that keeps the temporary disk type, as a plain resize
+    // (a resize keeps the encryption). This tool does not plan the feature with it.
+    const ade = adviceOption(byName(p, 'contoso-ce').vm, 'v5', table, 'Standard_D4s_v5', NOW);
+    assert.deepEqual([ade.supported, ade.targetSize, ade.previewFeature], [true, 'Standard_D4ds_v5', 'not-needed']);
+    const adeNoOs = adviceOption(byName(p, 'contoso-cu').vm, 'v5', table, 'Standard_D4s_v5', NOW);
+    assert.deepEqual([adeNoOs.supported, adeNoOs.targetSize, adeNoOs.previewFeature], [true, 'Standard_D4ds_v5', 'not-needed'], 'no OS: a resize on any OS');
+    // A size choice that this VM can only reach with the feature is not offered with Azure Disk Encryption.
+    assert.ok(!rowOf(byName(p, 'contoso-ce'), 'v5').option.sizeChoices.some((c) => c.size === 'Standard_D4s_v5'));
+    assert.ok(rowOf(byName(p, 'contoso-c2'), 'v5').option.sizeChoices.some((c) => c.size === 'Standard_D4s_v5'), 'the fixture: offered without it');
+    // Linux: no feature, no fallback.
+    const lin = adviceOption(byName(p, 'contoso-cl').vm, 'v5', table, 'Standard_D4s_v5', NOW);
+    assert.deepEqual([lin.targetSize, lin.previewFeature, lin.featureFallback], ['Standard_D4s_v5', 'not-needed', null]);
+
+    // An NVMe temporary disk (FXmdsv2) to a v5 d size crosses the boundary the other way:
+    // the size without the d is the fallback. The list says Generation 1, so the size is
+    // chosen by shape. Azure Disk Encryption takes the fallback (a plain resize).
+    const fx = run(`${head}contoso-f1,Standard_FX12mds_v2,V1,Windows,No,1,0\ncontoso-fe,Standard_FX12mds_v2,V1,Windows,Yes,1,0\ncontoso-fu,Standard_FX12mds_v2,V1,,Yes,1,0\n`).plan;
+    const f1 = rowOf(byName(fx, 'contoso-f1'), 'v5').option;
+    assert.deepEqual([f1.supported, f1.targetSize, f1.previewFeature, f1.featureFallback], [true, 'Standard_E32ds_v5', 'needed', { size: 'Standard_E32s_v5' }]);
+    assert.deepEqual(rankedSizes(byName(fx, 'contoso-f1').vm, table, f1, NOW).slice(0, 2).map((x) => [x.size, x.why]), [['Standard_E32ds_v5', 'closest'], ['Standard_E32s_v5', 'temp-disk-removed']]);
+    for (const name of ['contoso-fe', 'contoso-fu']) {
+        const o = rowOf(byName(fx, name), 'v5').option;
+        assert.deepEqual([o.supported, o.targetSize, o.previewFeature], [true, 'Standard_E32s_v5', 'not-needed'], name);
+    }
+    // A VM already on v6 (with Azure Disk Encryption in the list): v5 is "not needed", as for any v6 VM.
+    const v6 = run(`${head}contoso-f6,Standard_D4ds_v6,V2,Windows,Yes,1,0\n`).plan.machines[0];
+    assert.deepEqual(rowOf(v6, 'v5').codes, ['source-is-newer']);
+
+    // No d size of this shape (a changed table): the feature, and no fallback. Azure Disk
+    // Encryption: not in this tool on Windows, not checked with no OS.
+    const t = tableWith({ Standard_D4ds_v5: null });
+    const q = runWith(`${head}contoso-x2,Standard_D4s_v3,V2,Windows,No,1,0\ncontoso-x1,Standard_D4s_v3,V1,Windows,No,1,0\ncontoso-xe,Standard_D4s_v3,V2,Windows,Yes,1,0\ncontoso-xu,Standard_D4s_v3,V2,,Yes,1,0\n`, t);
+    const rows = F.targetRows(q, t, NOW);
+    for (const name of ['contoso-x2', 'contoso-x1']) {
+        const o = rowOf(byName(q, name), 'v5').option;
+        assert.deepEqual([o.supported, o.targetSize, o.previewFeature, o.featureFallback], [true, 'Standard_D4s_v5', 'needed', { size: null }], name);
+        const r = rows.find((x) => x['VM name'] === name && x['Series'] === 'v5');
+        assert.deepEqual([r['How to move'], r['Rebuild'], r['Preview feature']], [`Resize the current VM. ${FEATURE} ${FALLBACK_NONE}`, 'No', COLUMN.needed], name);
+    }
+    assert.deepEqual(rowOf(byName(q, 'contoso-xe'), 'v5').codes, ['disk-encryption-preview']);
+    assert.equal(rows.find((x) => x['VM name'] === 'contoso-xe' && x['Series'] === 'v5')['Series result'], 'Not in this tool');
+    assert.deepEqual([rowOf(byName(q, 'contoso-xu'), 'v5').codes, rowOf(byName(q, 'contoso-xu'), 'v5').result], [['os-unknown-encryption'], 'Needs team review']);
+    // No OS: the same fallback rule ("On a Windows VM").
+    const nu = runWith(`${head}contoso-xn,Standard_D4s_v3,V2,,No,1,0\n`, t).machines[0];
+    assert.deepEqual([rowOf(nu, 'v5').option.previewFeature, rowOf(nu, 'v5').option.featureFallback], ['windows', { size: null }]);
+    // v6 and v7 have no fallback: deploy in parallel is the first method.
+    for (const s of ['v6', 'v7']) assert.deepEqual([rowOf(byName(p, 'contoso-c2'), s).option.previewFeature, rowOf(byName(p, 'contoso-c2'), s).option.featureFallback], ['needed', null], s);
+    // The fallback must pass every check of a target: not smaller than the VM ...
+    const small = tableWith({ Standard_D4ds_v5: { MemoryGB: '8' } });
+    const sm = runWith(`${head}contoso-xs,Standard_D4s_v3,V2,Windows,No,1,0\n`, small).machines[0];
+    assert.deepEqual([rowOf(sm, 'v5').option.targetSize, rowOf(sm, 'v5').option.featureFallback], ['Standard_D4s_v5', { size: null }], 'the d size is smaller than the VM');
+    // ... and a NIC limit that the size table gives (unknown is not a pass).
+    const nics = tableWith({ Standard_D4ds_v5: { MaxNetworkInterfaces: undefined } });
+    const two = runWith(`${head}contoso-xk,Standard_D4s_v3,V2,Windows,No,2,0\n`, nics).machines[0];
+    const chosen = adviceOption(two.vm, 'v5', nics, 'Standard_D4s_v5', NOW);
+    assert.deepEqual([chosen.targetSize, chosen.previewFeature, chosen.featureFallback], ['Standard_D4s_v5', 'needed', { size: null }]);
+    assert.deepEqual(adviceOption(byName(p, 'contoso-c2').vm, 'v5', nics, 'Standard_D4s_v5', NOW).featureFallback, { size: 'Standard_D4ds_v5' }, 'the fixture: one NIC fits');
+});
+
+test('Burstable with Azure Disk Encryption: no resize with the preview feature; unknown temporary disk: not checked', async () => {
+    const { todo } = await import('../js/details.js');
+    const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption\n';
+    const p = run(`${head}contoso-be,Standard_B2ms,V2,Windows,Yes\ncontoso-bu,Standard_B2ms,V1,,Yes\ncontoso-bl,Standard_B2ms,V2,Linux,Yes\n`).plan;
+    const be = rowOf(byName(p, 'contoso-be'), 'burstable');
+    assert.deepEqual([be.option.supported, be.codes, be.result], [false, ['disk-encryption-preview'], 'Not supported by design']);
+    assert.equal(byName(p, 'contoso-be').short.burstable, 'No - Azure Disk Encryption with the preview feature');
+    const { answerWords } = await import('../js/words.js');
+    assert.equal(answerWords(byName(p, 'contoso-be'), 'burstable'), 'No - the preview feature with Azure Disk Encryption is not in this tool');
+    assert.match(F.targetRows(p, table, NOW).find((r) => r['VM name'] === 'contoso-be' && r['Series'] === B)['Reason'], /Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it\./);
+    assert.ok(rowOf(byName(p, 'contoso-be'), 'v5').option.supported, 'v5 keeps the temporary disk: a plain resize');
+    assert.deepEqual(rowOf(byName(p, 'contoso-bu'), 'burstable').codes, ['os-unknown-encryption']);
+    assert.equal(rowOf(byName(p, 'contoso-bl'), 'burstable').option.supported, true, 'Linux: a plain resize');
+    // The size table does not give the temporary disk of the current size: not checked, never a pass.
+    const gone = tableWith({ Standard_D4s_v3: null });
+    const q = runWith('VM name,Current size,Generation,OS\ncontoso-gw,Standard_D4s_v3,V2,Windows\ncontoso-gl,Standard_D4s_v3,V2,Linux\n', gone);
+    const rows = F.targetRows(q, gone, NOW);
+    const r = (name, s) => rows.find((x) => x['VM name'] === name && x['Series'] === s);
+    for (const s of ['v5', 'v6']) {
+        assert.equal(rowOf(byName(q, 'contoso-gw'), s).option.previewFeature, 'unknown', s);
+        assert.equal(r('contoso-gw', s)['Preview feature'], COLUMN.unknown, s);
+        assert.ok(r('contoso-gw', s)['How to move'].endsWith(FEATURE_UNKNOWN), s);
+        assert.equal(r('contoso-gl', s)['Preview feature'], COLUMN.notNeeded, s);
+    }
+    const gw = byName(q, 'contoso-gw');
+    if (F.likelyRow(gw).series === 'v5') assert.ok(todo(gw, F.groupOf(gw)).more.includes(FEATURE_UNKNOWN));
+    const v5only = runWith('VM name,Current size,Generation,OS\ncontoso-gv,Standard_D4s_v3,V1,Windows\n', gone).machines[0];
+    assert.equal(F.likelyRow(v5only).series, 'v5', 'the fixture: Generation 1 has no v6 or v7 size');
+    assert.ok(todo(v5only, F.groupOf(v5only)).more.includes(FEATURE_UNKNOWN), 'What to do says it too');
+});
+
+test('no rebuild anywhere: no customer text recommends one, and the Rebuild column is No', async () => {
+    const { todo, whyLines } = await import('../js/details.js');
+    const { reportHtml } = await import('../js/report.js');
+    const lists = ['contoso-from-azure.csv', 'contoso-every-series.csv', 'contoso-by-hand.csv'].map((f) => read(`samples/${f}`));
+    lists.push(sample, 'VM name,Current size,Generation,OS,System-assigned identity,Availability set,Azure Disk Encryption\n'
+        + 'contoso-z1,Standard_B2ms,V1,Windows,Yes,Yes,No\ncontoso-z2,Standard_B2ms,V2,,Yes,Yes,Yes\ncontoso-z3,Standard_A2_v2,V1,Windows,Yes,Yes,No\ncontoso-z4,Standard_D4s_v3,V2,Windows,Yes,Yes,Yes\n');
+    let rows = 0;
+    for (const text of lists) {
+        const { plan: p, list } = run(text);
+        for (const r of F.targetRows(p, table, NOW)) {
+            if (r['Target size'] || r['How to move']) { assert.equal(r['Rebuild'], 'No', `${r['VM name']} ${r['Series']}`); rows++; }
+            for (const c of F.TARGET_COLUMNS) assert.doesNotMatch(String(r[c] ?? ''), /rebuild/i, `${r['VM name']} ${r['Series']} ${c}`);
+        }
+        for (const r of F.summaryRows(p)) for (const c of F.SUMMARY_COLUMNS) assert.doesNotMatch(String(r[c] ?? ''), /rebuild/i, `${r['VM name']} ${c}`);
+        for (const m of p.machines) {
+            const g = F.groupOf(m);
+            const t = todo(m, g);
+            assert.doesNotMatch([t.main, ...t.more, ...whyLines(m, g, table, NOW)].join(' '), /rebuild/i, m.read.name);
+        }
+        assert.doesNotMatch(reportHtml(p, table, 'x', NOW), /rebuild/i);
+        // The about file says only that the tool never recommends one.
+        const about = F.aboutText(p, list, 'x', NOW).split('\r\n').filter((l) => /rebuild/i.test(l));
+        assert.deepEqual(about, ['  Rebuild:   This tool never tells you to rebuild a VM (to make a new VM with the same disks).', '             In vm-target-sizes.csv, Rebuild is No for every size.']);
+    }
+    assert.ok(rows > 100, `${rows} rows with a size`);
+    assert.deepEqual(F.TARGET_COLUMNS.slice(-2), ['SAP sign', 'Preview feature'], 'the new column at the end');
+    assert.ok(F.TARGET_COLUMNS.includes('Rebuild'), 'the column stays');
+    // The page.
+    assert.doesNotMatch(read('index.html').replace(/<head>[\s\S]*?<\/head>/, ''), /rebuild/i);
+    assert.doesNotMatch(read('js/page.js'), /rebuild/i);
+});
+
+// Review of 0.9.5-beta (2026-11-06).
+test('review: the report says which resize needs the feature on v6 and v7', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const p = run('VM name,Current size,Generation,OS\ncontoso-rv1,Standard_D4s_v3,V2,Windows\ncontoso-rv2,Standard_D4s_v3,V2,\n').plan;
+    const html = reportHtml(p, table, 'x', NOW);
+    const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); return html.slice(i, html.indexOf('</section>', i)); };
+    // The report shows only the first sentence of the move: the feature words come after the second method.
+    assert.ok(card('contoso-rv1').includes(`Deploy a new VM at this size in parallel, move the workload, then delete the old VM.</span><br><span class="muted">You can also change the size of the current VM. ${FEATURE} <a href=`));
+    assert.ok(card('contoso-rv2').includes(`<br><span class="muted">You can also change the size of the current VM. ${FEATURE_NO_OS} <a href=`));
+    // The page and the CSV have the whole move, where the same sentence comes first.
+    const row = F.targetRows(p, table, NOW).find((r) => r['VM name'] === 'contoso-rv1' && r['Series'] === 'v6');
+    assert.ok(row['How to move'].includes(`You can also change the size of the current VM, but that has more steps and more risk. ${FEATURE}`));
+});
+
+test('review: ranked sizes - Azure Disk Encryption with no OS, and the sizes that need the feature', async () => {
+    // No OS, Azure Disk Encryption: no other size that changes the temporary disk type.
+    const e = run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-rk1,Standard_D4ds_v4,V2,,Yes\n').plan.machines[0];
+    const v5 = rowOf(e, 'v5');
+    assert.equal(v5.option.targetSize, 'Standard_D4ds_v5');
+    assert.ok(!rankedSizes(e.vm, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'no OS with Azure Disk Encryption: as Windows');
+    assert.ok(rankedSizes({ ...e.vm, os: 'Linux' }, table, v5.option, NOW).some((x) => x.size === 'Standard_D4s_v5'), 'the fixture: Linux gets it');
+    // An other size that needs the feature when the suggested size does not says so.
+    const p = run('VM name,Current size,Generation,OS\ncontoso-rk2,Standard_D4s_v3,V2,Windows\ncontoso-rk3,Standard_D4s_v3,V2,\ncontoso-rk4,Standard_D4s_v3,V2,Linux\n').plan;
+    const ranked = (name, s) => F.targetRows(p, table, NOW).find((r) => r['VM name'] === name && r['Series'] === s)['Ranked sizes'];
+    assert.match(ranked('contoso-rk2', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\. A resize to it needs the preview feature VMTempDiskResizePreview\)/);
+    assert.match(ranked('contoso-rk3', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\. On Windows, a resize to it needs the preview feature VMTempDiskResizePreview\)/);
+    assert.match(ranked('contoso-rk4', 'v5'), /\d\. Standard_D4s_v5 \(Same shape, no temporary disk\)/);
+    assert.doesNotMatch(ranked('contoso-rk2', 'v5'), /Standard_D4ds_v5 \([^)]*preview/, 'the suggested size keeps the temporary disk type');
+    // v6 and v7: the move already says that the resize needs it, for every size.
+    assert.doesNotMatch(ranked('contoso-rk2', 'v6'), /preview/);
+    const rf = F.rankedFor(byName(p, 'contoso-rk2'), rowOf(byName(p, 'contoso-rk2'), 'v5'), table, NOW);
+    assert.ok(rf.some((x) => x.why.endsWith('VMTempDiskResizePreview')), 'the page and the report use the same words');
+    // A processor change keeps its asterisk at the end.
+    const { rankWords } = await import('../js/words.js');
+    assert.equal(rankWords('processor', 'AMD', 'needed'), 'Same shape, AMD processor. A resize to it needs the preview feature VMTempDiskResizePreview*');
+});
+
+test('review: Azure Disk Encryption when the size table does not give the temporary disk: not checked', () => {
+    const head = 'VM name,Current size,Generation,OS,Azure Disk Encryption\n';
+    // The current size has no temporary disk reading: its kind comes from the name only.
+    const t = tableWith({ Standard_D4s_v3: { MaxResourceVolumeMB: undefined }, Standard_D4ds_v5: null, Standard_B2ms: { MaxResourceVolumeMB: undefined } });
+    const p = runWith(`${head}contoso-ru1,Standard_D4s_v3,V2,Windows,Yes\ncontoso-ru2,Standard_D4s_v3,V2,,Yes\ncontoso-ru3,Standard_D4s_v3,V2,Linux,Yes\ncontoso-ru4,Standard_B2ms,V2,Windows,Yes\ncontoso-ru5,Standard_D4s_v3,V2,Windows,No\n`, t);
+    for (const name of ['contoso-ru1', 'contoso-ru2']) {
+        const r = rowOf(byName(p, name), 'v5');
+        assert.deepEqual([r.codes, r.result], [['encryption-temp-disk-unknown'], 'Needs team review'], name);
+    }
+    assert.equal(rowOf(byName(p, 'contoso-ru4'), 'burstable').result, 'Needs team review', 'Burstable the same');
+    assert.deepEqual(rowOf(byName(p, 'contoso-ru4'), 'burstable').codes, ['encryption-temp-disk-unknown']);
+    assert.equal(rowOf(byName(p, 'contoso-ru3'), 'v5').result, 'Supported', 'Linux needs no feature');
+    assert.equal(rowOf(byName(p, 'contoso-ru5'), 'v5').option.previewFeature, 'unknown', 'no encryption: the resize words say not checked');
+    const why = F.targetRows(p, t, NOW).find((r) => r['VM name'] === 'contoso-ru1' && r['Series'] === 'v5')['Reason'];
+    assert.match(why, /The size table does not give the temporary disk/);
+    // The new size has no reading: the same.
+    const nt = tableWith({ Standard_D4ds_v5: { MaxResourceVolumeMB: undefined } });
+    const n = runWith(`${head}contoso-rt,Standard_D4s_v3,V2,Windows,Yes\n`, nt).machines[0];
+    assert.deepEqual([rowOf(n, 'v5').option.targetSize, rowOf(n, 'v5').codes], ['Standard_D4ds_v5', ['encryption-temp-disk-unknown']]);
+    // With the readings (only the d size taken away): the answer of 0.9.5-beta.
+    const k = tableWith({ Standard_D4ds_v5: null });
+    assert.deepEqual(rowOf(runWith(`${head}contoso-rk,Standard_D4s_v3,V2,Windows,Yes\n`, k).machines[0], 'v5').codes, ['disk-encryption-preview']);
+});
+
+test('review: the Burstable reason says that no Bsv2 or Basv2 size has a temporary disk', async () => {
+    const { reasonFor } = await import('../js/reasons.js');
+    assert.equal(reasonFor('disk-encryption-preview', { series: 'burstable' }), 'This VM has Azure Disk Encryption. The resize to burstable needs the preview feature VMTempDiskResizePreview, because the temporary disk changes type. Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it. No Bsv2 or Basv2 size has a temporary disk.');
+    assert.match(reasonFor('disk-encryption-preview', { series: 'v5' }), /No v5 size of this shape keeps the temporary disk type\.$/);
+    // True in the size table: every Bsv2 and Basv2 size reports no SCSI temporary disk.
+    const b = Object.entries(sizes.sizes).filter(([n]) => /^Standard_B\d+a?[lt]?s_v2$/.test(n));
+    assert.ok(b.length > 10 && b.every(([, s]) => s.capabilities.MaxResourceVolumeMB === '0'));
+});
+
+test('v6 accelerated networking: Required on every D and E v6 size since 2026-10-27; F v6 and v7 stay Supported', async () => {
+    const { targetRequiresAcceleratedNetworking } = await import('../js/lifecycle.js');
+    for (const s of ['Standard_D4s_v6', 'Standard_D4ds_v6', 'Standard_D4ls_v6', 'Standard_D4as_v6', 'Standard_D4ads_v6', 'Standard_E4s_v6', 'Standard_E4as_v6', 'Standard_E16-4ds_v6']) assert.equal(targetRequiresAcceleratedNetworking(s), true, s);
+    for (const s of ['Standard_F4als_v6', 'Standard_D4s_v7', 'Standard_D4as_v7', 'Standard_E4s_v7']) assert.equal(targetRequiresAcceleratedNetworking(s), false, s);
+    assert.equal(targetRequiresAcceleratedNetworking('Standard_D4as_v5'), false, 'AMD v5: Supported, as before');
+    // The note: off on the VM, so turn it on before the move (it was "The new size does not need it.").
+    const head = 'VM name,Current size,Generation,OS,NIC count,Accelerated NICs,Primary NIC accelerated\n';
+    const m = run(`${head}contoso-an1,Standard_D4as_v4,V2,Linux,1,0,No\n`).plan.machines[0];
+    const v6 = rowOf(m, 'v6');
+    assert.equal(v6.option.targetSize, 'Standard_D4ads_v6');
+    assert.deepEqual([v6.caveats['Accelerated networking'].state, v6.option.acceleratedNetworking.required], ['problem', true]);
+    assert.deepEqual([rowOf(m, 'v7').caveats['Accelerated networking'].state, rowOf(m, 'v7').option.acceleratedNetworking.required], ['', false], 'v7: Supported, no note');
+    // The source: the Microsoft size pages, cited, watched and in the snapshot.
+    const families = (await import('../data/families.js')).default;
+    const { SOURCES } = await import('../tools/sources.mjs');
+    const snapshot = JSON.parse(read('tools/source-snapshot.json'));
+    for (const page of ['general-purpose/dsv6-series', 'general-purpose/dasv6-series', 'memory-optimized/esv6-series', 'memory-optimized/easv6-series']) {
+        assert.ok(families.sources.some((x) => x.url.endsWith(`/sizes/${page}`)), `${page} is cited`);
+        const s = SOURCES.find((x) => x.url.endsWith(`/sizes/${page}`));
+        assert.ok(s, `${page} is watched`);
+        assert.ok(snapshot[s.id].facts.includes('Feature support :: Feature name | Support status = Accelerated Networking | Required'), `${page}: the snapshot says Required`);
+    }
 });
 
 test('v6 and v7: Azure Disk Encryption is always the plain answer, never "a rebuild"', async () => {
@@ -1054,7 +1313,6 @@ test('v6 and v7: Azure Disk Encryption is always the plain answer, never "a rebu
             const r = rowOf(m, s);
             assert.equal(r.option.supported, false, s);
             assert.deepEqual(r.codes, ['disk-encryption-present'], s);
-            assert.equal(r.option.rebuild, false, s);
             assert.equal(m.short[s], 'No - Azure Disk Encryption', s);
         }
         assert.deepEqual(rowOf(m, 'v5').codes, [], 'v5 is a resize: it keeps Azure Disk Encryption');
@@ -1071,7 +1329,8 @@ test('v6 and v7: Azure Disk Encryption is always the plain answer, never "a rebu
 test('the about file and the page: on v6 and v7, a change of the size of the current VM keeps the identity', () => {
     const about = F.aboutText(run(sample).plan, readList(sample), 'sample', NOW).replace(/\r\n/g, '\n');
     assert.match(about, /\n {2}v6 and v7: Deploy a new VM in parallel, move the workload, then delete the old VM\.\n {13}Microsoft highly recommends this\. A move to v6 or v7 is not a normal resize\.\n {13}You can also change the size of the current VM\. The VM then keeps its identity\.\n/);
-    assert.match(read('index.html'), /For v6 and v7, you deploy a new VM in parallel and move the workload to it\. You can also change the size of the current VM\. A new VM gets a new system-assigned identity, and a rebuild removes Azure Disk Encryption\. When Azure changes the size of the same VM, the VM keeps its identity\.<\/li>/);
+    // 0.9.5-beta: a move is a resize or a new VM in parallel (no rebuild).
+    assert.match(read('index.html'), /<li>A move is a resize or a new VM in parallel\. In a resize, Azure changes the size of the same VM\. For v6 and v7, you deploy a new VM in parallel and move the workload to it\. You can also change the size of the current VM\. A new VM gets a new system-assigned identity\. When Azure changes the size of the same VM, the VM keeps its identity\.<\/li>/);
 });
 
 test('workload type: ARO is a pool that the service manages; a SQL Server image is a database; unknown "Managed by" is not E', async () => {
@@ -1100,7 +1359,7 @@ test('the files: no size on an option that is not supported, and "Not checked" i
     assert.equal(F.summaryRows(p).find((r) => r['VM name'] === 'contoso-odd01')['Move needed'], 'Not checked');
     const e1 = F.targetRows(run('VM name,Current size,Generation\ncontoso-e1,Standard_E16-4s_v3,V2\n').plan, table, NOW);
     assert.equal(e1.find((r) => r['Series'] === 'v7')['Supported'], 'Not checked');
-    assert.equal(e1.find((r) => r['Series'] === 'v5')['Rebuild'], 'Not checked. This tool does not know the OS.');
+    assert.equal(e1.find((r) => r['Series'] === 'v5')['Rebuild'], 'No', '0.9.5-beta: never a rebuild, whatever the OS');
     const t = tableWith({ Standard_D4ds_v6: { PremiumIO: undefined } });
     const pr = F.targetRows(runWith('VM name,Current size,Generation,OS\ncontoso-p1,Standard_D4s_v3,V2,Linux\n', t), t, NOW);
     assert.equal(pr.find((r) => r['Series'] === 'v6')['Premium SSD on target'], 'Not checked');
@@ -1133,8 +1392,8 @@ test('what to do: burstable first for a B VM, the OS note, SAP, and v7 in parall
     const { todo, whyLines } = await import('../js/details.js');
     const b = run('VM name,Current size,Generation\ncontoso-b7,Standard_B2s,V2\n').plan.machines[0];
     const t = todo(b, F.groupOf(b));
-    assert.match(t.main, /^Resize to Standard_B\d+\w*_v2\.$/);
-    assert.ok(t.more.includes('The list does not give the OS. For a Windows VM, a rebuild can be necessary.'));
+    // No OS: on a Windows VM, Burstable (no temporary disk) needs the preview feature (0.9.5-beta).
+    assert.match(t.main, /^Resize to Standard_B\d+\w*_v2\. On a Windows VM, first register the preview feature VMTempDiskResizePreview on the subscription\. Without the feature, use the v5 size Standard_\w+_v5\.$/);
     const p = run(sample).plan;
     const sap = byName(p, 'contoso-sap01');
     assert.match(todo(sap, F.groupOf(sap)).main, /^Ask SAP /);
@@ -1314,17 +1573,11 @@ test('an Azure source issue lists the README facts, and the new size fact', asyn
 
 
 
-// ---- 0.9.2-beta: the temporary-disk preview ----
+// ---- The preview feature on the page, in the files and the report (0.9.2-beta, changed in 0.9.5-beta) ----
 
 // The Microsoft page whose Note names the preview feature VMTempDiskResizePreview, for
 // its NVMe conversion script ("Migrate a VM from SCSI to NVMe > 3. Usage").
 const PREVIEW_PAGE = 'https://learn.microsoft.com/azure/virtual-machines/nvme-linux';
-const PREVIEW = "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview, registered on the subscription, when the temporary disk changes type.";
-const PARALLEL = 'Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.';
-const RESIZE = 'Resize the current VM. Azure supports a resize to this size.';
-const HEDGE = 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.';
-const REBUILD = 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
-const POOL = (m) => ['A', 'B', 'C', 'D'].includes(m.pattern);
 
 // One list with each case, on the real size table. In that table the size picker gives
 // a v6 or v7 size with another kind of temporary disk only from a SCSI temporary disk
@@ -1332,197 +1585,80 @@ const POOL = (m) => ['A', 'B', 'C', 'D'].includes(m.pattern);
 // size with none.
 const CASES = 'VM name,Current size,Generation,OS,Azure Disk Encryption\n'
     + 'contoso-pw1,Standard_D4s_v3,V2,Windows,No\n'      // SCSI temporary disk: v6 and v7 change it to NVMe
-    + 'contoso-pl1,Standard_D4s_v3,V2,Linux,No\n'        // the same on Linux: the Note is about the script, not the OS
-    + 'contoso-pu1,Standard_D4s_v3,V2,,No\n'             // and with no OS
+    + 'contoso-pl1,Standard_D4s_v3,V2,Linux,No\n'        // the same on Linux: no feature
+    + 'contoso-pu1,Standard_D4s_v3,V2,,No\n'             // and with no OS: "On a Windows VM"
     + 'contoso-pd1,Standard_D4s_v4,V2,Windows,No\n'      // no temporary disk, and no temporary disk on v6 and v7
-    + 'contoso-pb1,Standard_B2s,V2,Windows,No\n'         // B v1: Burstable is a rebuild, v6 and v7 change the disk
-    + 'contoso-pb2,Standard_B2s,V2,,No\n'                // B v1, no OS: Burstable changes the disk, v5 keeps it
+    + 'contoso-pb1,Standard_B2s,V2,Windows,No\n'         // B v1: Burstable, v6 and v7 need the feature
+    + 'contoso-pb2,Standard_B2s,V2,,No\n'                // B v1, no OS
     + 'contoso-pe1,Standard_D4s_v3,V2,Windows,Yes\n';    // Azure Disk Encryption: no v6 or v7 size
-const changes = (m) => Object.fromEntries(m.rows.filter((r) => r.series !== 'gen1Route').map((r) => [r.series, r.option.tempDiskChange]));
-const shows = (m, f) => Object.fromEntries(m.rows.filter((r) => r.series !== 'gen1Route').map((r) => [r.series, f(m, r)]));
 
-test('the temporary-disk preview: the words, the link, and the Microsoft page', async () => {
+test('the preview feature: the link to the Microsoft page that names it, on v6 and v7 rows that need it', async () => {
     const W = await import('../js/words.js');
     assert.equal(W.GUIDANCE.tempDiskPreview, PREVIEW_PAGE);
-    assert.equal(W.PREVIEW_WORDS, PREVIEW);
-    // v6 and v7: the words after the move, only when the temporary disk changes type.
-    for (const s of ['v6', 'v7']) {
-        assert.equal(W.moveWords(s, false, true, true), `${PARALLEL} ${PREVIEW}`);
-        assert.equal(W.moveWords(s, true, true, true), `${PARALLEL} ${PREVIEW}`);
-        assert.equal(W.moveWords(s, false, false, true), `${PARALLEL} ${PREVIEW}`, 'any OS');
-        assert.equal(W.moveWords(s, true, true, false), PARALLEL);
-        assert.equal(W.moveWords(s, true, true, null), PARALLEL, 'unknown is not a change');
-        assert.equal(W.moveWords(s, true, true), PARALLEL);
-    }
-    // v5 and Burstable name the preview only for a Windows Generation 2 rebuild (0.9.3-beta, a lab test).
-    for (const s of ['v5', 'burstable']) {
-        for (const c of [true, false, null]) assert.ok(!W.moveWords(s, true, true, c).includes('VMTempDiskResizePreview') && !W.moveWords(s, false, false, c).includes('VMTempDiskResizePreview'));
-        assert.equal(W.moveWords(s, true, true, true), REBUILD);
-        assert.equal(W.moveWords(s, true, true, true, true), LAB_MOVE);
-        assert.equal(W.moveWords(s, false, true, true, true), RESIZE, 'the lab words are for a rebuild only');
-        // No OS in the list: the rebuild hedge only when the disk changes type, or when the table cannot tell.
-        assert.equal(W.moveWords(s, false, false, true), HEDGE);
-        assert.equal(W.moveWords(s, false, false, null), HEDGE);
-        assert.equal(W.moveWords(s, false, false), HEDGE);
-        assert.equal(W.moveWords(s, false, false, false), RESIZE);
-        assert.equal(W.moveWords(s, false, true, true), RESIZE);
-    }
-    // The page is watched, and the snapshot holds the Note that the words come from.
     const { SOURCES } = await import('../tools/sources.mjs');
     const s = SOURCES.find((x) => x.url.endsWith('/azure/virtual-machines/nvme-linux'));
     assert.ok(s, 'the nvme-linux page is in tools/sources.mjs');
     const snapshot = JSON.parse(read('tools/source-snapshot.json'));
     assert.ok(snapshot[s.id].facts.some((f) => f.includes('must be registered for the VMTempDiskResizePreview feature') && f.includes('the script exits with an error')), 'the Note is in the snapshot');
     assert.ok(SOURCES.some((x) => x.url.endsWith('/azure/virtual-machines/migration/scsi-to-nvme-migration')), 'the SCSI to NVMe page (its Tip) is watched');
-});
-
-test('the temporary-disk preview: v6 and v7 rows where the temporary disk changes type, for any OS', async () => {
-    const { tempDiskPreview } = await import('../js/words.js');
     const p = run(CASES).plan;
+    const shows = (m) => Object.fromEntries(m.rows.filter((r) => r.series !== 'gen1Route').map((r) => [r.series, W.tempDiskPreview(m, r)]));
     const no = { v5: false, v6: false, v7: false };
-    assert.deepEqual(changes(byName(p, 'contoso-pw1')), { v5: false, v6: true, v7: true }, 'SCSI to SCSI on v5, SCSI to NVMe on v6 and v7');
-    for (const n of ['contoso-pw1', 'contoso-pl1', 'contoso-pu1']) assert.deepEqual(shows(byName(p, n), tempDiskPreview), { v5: false, v6: true, v7: true }, n);
-    assert.equal(rowOf(byName(p, 'contoso-pw1'), 'v6').option.targetSize, 'Standard_D4ds_v6');
-    assert.deepEqual(changes(byName(p, 'contoso-pd1')), no, 'no temporary disk, and none on the new sizes');
-    assert.deepEqual(shows(byName(p, 'contoso-pd1'), tempDiskPreview), no);
-    assert.deepEqual(shows(byName(p, 'contoso-pb1'), tempDiskPreview), { v5: false, v6: true, v7: true, burstable: false }, 'Burstable: a rebuild, but no NVMe');
-    assert.equal(rowOf(byName(p, 'contoso-pb1'), 'burstable').option.rebuild, true);
-    assert.deepEqual(changes(byName(p, 'contoso-pb2')), { v5: false, v6: true, v7: true, burstable: true });
-    assert.deepEqual(shows(byName(p, 'contoso-pe1'), tempDiskPreview), no, 'Azure Disk Encryption: no v6 or v7 size');
-    // A VM in a pool or a service gets the pool advice, not the series words.
-    const pool = run('VM name,Current size,Generation,OS,Managed by,Resource type\ncontoso-pp1,Standard_D4s_v3,V2,Linux,None,Scale set\n').plan.machines[0];
-    assert.ok(POOL(pool) && rowOf(pool, 'v6').option.tempDiskChange === true);
-    assert.deepEqual(shows(pool, tempDiskPreview), no);
-    // The other direction (no temporary disk to one): a table where Standard_D4s_v6 has
-    // a temporary disk. The size picker does not give it in the real table.
-    const up = runWith('VM name,Current size,Generation,OS\ncontoso-pn1,Standard_D4s_v4,V2,Linux\n', tableWith({ Standard_D4s_v6: { MaxResourceVolumeMB: '153600' } })).machines[0];
-    assert.equal(rowOf(up, 'v6').option.targetSize, 'Standard_D4s_v6');
-    assert.deepEqual(shows(up, tempDiskPreview), { v5: false, v6: true, v7: false });
-    // Each fact of the rule on its own, with made-up facts. A temporary disk that goes
-    // away (a SCSI disk to none) is a change too.
-    const vm = (os) => ({ vm: { os }, pattern: 'E' });
-    const row = (series, tempDiskChange, supported = true) => ({ series, option: { supported, rebuild: false, tempDiskChange } });
-    for (const os of ['Windows', 'Linux', '']) assert.equal(tempDiskPreview(vm(os), row('v7', true)), true, `any OS: '${os}'`);
-    assert.equal(tempDiskPreview(vm('Linux'), row('v6', false)), false);
-    assert.equal(tempDiskPreview(vm('Linux'), row('v6', null)), false, 'unknown is not a change');
-    assert.equal(tempDiskPreview(vm('Linux'), row('v6', true, false)), false, 'no supported size');
-    for (const s of ['v5', 'burstable', 'gen1Route']) assert.equal(tempDiskPreview(vm('Windows'), row(s, true)), false, s);
-    assert.equal(tempDiskPreview({ vm: null }, row('v6', true)), false);
-    assert.equal(tempDiskPreview(vm('Linux'), null), false);
+    for (const n of ['contoso-pw1', 'contoso-pu1']) assert.deepEqual(shows(byName(p, n)), { v5: false, v6: true, v7: true }, n);
+    for (const n of ['contoso-pl1', 'contoso-pd1', 'contoso-pe1']) assert.deepEqual(shows(byName(p, n)), no, n);
+    assert.deepEqual(shows(byName(p, 'contoso-pb1')), { v5: false, v6: true, v7: true, burstable: false }, 'Burstable: the words, no NVMe link');
+    const pool = run('VM name,Current size,Generation,OS,Managed by,Resource type\ncontoso-pp1,Standard_D4s_v3,V2,Windows,None,Scale set\n').plan.machines[0];
+    assert.ok(POOL(pool));
+    assert.deepEqual(shows(pool), no, 'a pool gets the pool advice');
+    // Each fact on its own, with made-up facts.
+    const row = (series, previewFeature, supported = true) => ({ series, option: { supported, previewFeature } });
+    const vm = { vm: { os: 'Windows' }, pattern: 'E' };
+    for (const f of ['needed', 'windows']) assert.equal(W.tempDiskPreview(vm, row('v6', f)), true, f);
+    for (const f of ['not-needed', 'unknown', null]) assert.equal(W.tempDiskPreview(vm, row('v7', f)), false, String(f));
+    assert.equal(W.tempDiskPreview(vm, row('v6', 'needed', false)), false, 'no supported size');
+    for (const s of ['v5', 'burstable', 'gen1Route']) assert.equal(W.tempDiskPreview(vm, row(s, 'needed')), false, s);
+    assert.equal(W.tempDiskPreview({ vm: null }, row('v6', 'needed')), false);
+    assert.equal(W.tempDiskPreview(vm, null), false);
 });
 
-test('the temporary-disk preview: unknown is not a change', async () => {
-    const { tempDiskPreview } = await import('../js/words.js');
-    // A current size that is not in the size table still gives v6 and v7 sizes (its
-    // name and the size rules give them), but the table does not give its temporary disk.
-    const gone = tableWith({ Standard_D4ds_v4: null, Standard_D4s_v3: null });
-    const p = runWith('VM name,Current size,Generation,OS\ncontoso-pk1,Standard_D4ds_v4,V2,Linux\ncontoso-pk2,Standard_D4s_v3,V2,\n', gone);
-    for (const m of p.machines) {
-        assert.ok(m.notes.some((n) => n.includes('is not in the size table')), m.read.name);
-        assert.equal(rowOf(m, 'v6').option.supported, true, `${m.read.name}: a v6 size`);
-        assert.equal(m.vm.sourceTempDiskKnown, false);
-        assert.deepEqual(changes(m), { v5: null, v6: null, v7: null }, m.read.name);
-        assert.deepEqual(shows(m, tempDiskPreview), { v5: false, v6: false, v7: false });
-    }
-    // No OS and not known: the rebuild hedge stays.
-    assert.equal(F.targetRows(p, gone, NOW).find((r) => r['VM name'] === 'contoso-pk2' && r['Series'] === 'v5')['How to move'], HEDGE);
-    // In the table, but without its temporary disk.
-    const noSource = runWith('VM name,Current size,Generation,OS\ncontoso-pk3,Standard_D4s_v3,V2,Linux\n', tableWith({ Standard_D4s_v3: { MaxResourceVolumeMB: undefined } })).machines[0];
-    assert.deepEqual(changes(noSource), { v5: null, v6: null, v7: null });
-    // A target size without its temporary disk: that series only.
-    const noTarget = runWith('VM name,Current size,Generation,OS\ncontoso-pk4,Standard_D4s_v3,V2,Linux\n', tableWith({ Standard_D4ds_v6: { MaxResourceVolumeMB: undefined } })).machines[0];
-    assert.equal(rowOf(noTarget, 'v6').option.targetSize, 'Standard_D4ds_v6');
-    assert.deepEqual(changes(noTarget), { v5: false, v6: null, v7: true });
-    assert.deepEqual(shows(noTarget, tempDiskPreview), { v5: false, v6: false, v7: true });
-});
-
-test('the temporary-disk preview on the page, in the CSV file, the report and the about file', async () => {
+test('the preview feature on the page, in the CSV file, the report and the about file', async () => {
     const { reportHtml } = await import('../js/report.js');
-    const { todo } = await import('../js/details.js');
     const p = run(CASES).plan;
     const all = F.targetRows(p, table, NOW);
     const how = (name, series) => all.find((r) => r['VM name'] === name && r['Series'] === series)['How to move'];
-    const withPreview = all.filter((r) => String(r['How to move'] ?? '').includes('VMTempDiskResizePreview')).map((r) => `${r['VM name']} ${r['Series']}`).sort((a, b) => a.localeCompare(b, 'en'));
-    // contoso-pb1 Burstable: a Windows Generation 2 rebuild, with the lab words (0.9.3-beta).
-    assert.deepEqual(withPreview, ['contoso-pb1 Burstable (Bsv2, Basv2)', 'contoso-pb1 v6', 'contoso-pb1 v7', 'contoso-pb2 v6', 'contoso-pb2 v7', 'contoso-pl1 v6', 'contoso-pl1 v7', 'contoso-pu1 v6', 'contoso-pu1 v7', 'contoso-pw1 v6', 'contoso-pw1 v7']);
-    assert.equal(how('contoso-pl1', 'v6'), `${PARALLEL} ${PREVIEW}`);
+    const withFeature = all.filter((r) => String(r['How to move'] ?? '').includes('VMTempDiskResizePreview')).map((r) => `${r['VM name']} ${r['Series']}`).sort((a, b) => a.localeCompare(b, 'en'));
+    assert.deepEqual(withFeature, ['contoso-pb1 Burstable (Bsv2, Basv2)', 'contoso-pb1 v6', 'contoso-pb1 v7', 'contoso-pb2 Burstable (Bsv2, Basv2)', 'contoso-pb2 v6', 'contoso-pb2 v7', 'contoso-pu1 v6', 'contoso-pu1 v7', 'contoso-pw1 v6', 'contoso-pw1 v7']);
+    assert.equal(how('contoso-pw1', 'v6'), `${PARALLEL} ${FEATURE}`);
+    assert.equal(how('contoso-pl1', 'v6'), PARALLEL);
     assert.equal(how('contoso-pd1', 'v6'), PARALLEL);
-    // 0.9.3-beta: a Windows Generation 2 VM: the preview feature, or a rebuild.
-    assert.equal(how('contoso-pb1', 'Burstable (Bsv2, Basv2)'), LAB_MOVE);
-    // No OS: v5 keeps the SCSI temporary disk, so a resize; Burstable changes it, so the hedge.
     assert.equal(how('contoso-pu1', 'v5'), RESIZE);
-    assert.equal(how('contoso-pb2', 'v5'), RESIZE);
-    assert.equal(how('contoso-pb2', 'Burstable (Bsv2, Basv2)'), HEDGE);
-    // "What to do" agrees with the move words.
-    const hint = 'The list does not give the OS. For a Windows VM, a rebuild can be necessary.';
-    const pu1 = byName(p, 'contoso-pu1');
-    assert.ok(!todo(pu1, F.groupOf(pu1)).more.includes(hint), 'the disk keeps its type: no hedge');
-    // A VM whose main move is v5 (Azure Disk Encryption stops v6 and v7), no OS in the list.
-    const pe2 = run('VM name,Current size,Generation,OS,Azure Disk Encryption\ncontoso-pe2,Standard_D4s_v3,V2,,Yes\n').plan.machines[0];
-    assert.equal(F.likelyRow(pe2).series, 'v5');
-    assert.equal(F.likelyRow(pe2).option.tempDiskChange, false);
-    assert.match(todo(pe2, F.groupOf(pe2)).main, /^Resize to Standard_D4ds_v5\.$/);
-    assert.ok(!todo(pe2, F.groupOf(pe2)).more.includes(hint), 'v5 keeps the SCSI temporary disk: no hedge');
-    const b7 = run('VM name,Current size,Generation\ncontoso-b7,Standard_B2s,V2\n').plan.machines[0];
-    assert.ok(todo(b7, F.groupOf(b7)).more.includes(hint), 'Burstable changes the temporary disk: the hedge stays');
-    // The Rebuild column: never a rebuild on v6 and v7 (0.9.3-beta).
-    assert.equal(all.find((r) => r['VM name'] === 'contoso-pw1' && r['Series'] === 'v6')['Rebuild'], 'No');
-    assert.equal(all.find((r) => r['VM name'] === 'contoso-pl1' && r['Series'] === 'v6')['Rebuild'], 'No');
-    // The report: the words and the link, only in the cards of these VMs.
+    // The report: the first sentence of the move, then the feature (and the link on v6 and v7) on a line of their own.
     const html = reportHtml(p, table, 'cases', NOW);
     const card = (name) => { const i = html.indexOf(`<h3>${name}</h3>`); assert.ok(i > 0, name); return html.slice(i, html.indexOf('</section>', i)); };
-    const esc = (s) => s.replace(/'/g, '&#39;');
-    for (const name of ['contoso-pw1', 'contoso-pl1', 'contoso-pu1', 'contoso-pb1', 'contoso-pb2']) {
-        assert.ok(card(name).includes(esc(PREVIEW)) || card(name).includes(PREVIEW), name);
+    for (const name of ['contoso-pw1', 'contoso-pu1', 'contoso-pb1', 'contoso-pb2']) {
         assert.ok(card(name).includes(`href="${PREVIEW_PAGE}"`), `${name}: the link`);
-        // contoso-pb1 also has a Burstable rebuild of a Windows Generation 2 VM (0.9.3-beta): its
-        // move line and its "What to do" (Burstable is its main move) name the feature too.
-        assert.equal(card(name).split('VMTempDiskResizePreview').length - 1, name === 'contoso-pb1' ? 4 : 2, `${name}: v6 and v7 only`);
+        assert.ok(card(name).includes(name === 'contoso-pw1' || name === 'contoso-pb1' ? FEATURE : FEATURE_NO_OS), name);
     }
-    assert.ok(!card('contoso-pe1').includes('VMTempDiskResizePreview') && !card('contoso-pe1').includes(PREVIEW_PAGE));
+    const pb1 = rowOf(byName(p, 'contoso-pb1'), 'v5').option.targetSize;
+    assert.ok(card('contoso-pb1').includes(`Resize the current VM.</span><br><span class="muted">${FEATURE} ${FALLBACK_V5(pb1)}</span>`), 'Burstable: the move, then the feature');
+    // contoso-pb1: Burstable (its main move: "What to do"), v6 and v7 name the feature.
+    // ... and its v5 list names it for the size with no temporary disk (review, 2026-11-06).
+    assert.equal(card('contoso-pb1').split('VMTempDiskResizePreview').length - 1, 5);
+    for (const name of ['contoso-pl1', 'contoso-pe1']) assert.ok(!card(name).includes('VMTempDiskResizePreview') && !card(name).includes(PREVIEW_PAGE), name);
     // The page: the same rule, and the words and the link in each size card (js/page.js).
     const page = read('js/page.js').replace(/\r\n/g, '\n');
-    assert.match(page, /const preview = tempDiskPreview\(m, r\);\n\s*card\.append\(el\('p', \{ class: 'hint' \}, moveWords\(r\.series, o\.rebuild, Boolean\(m\.vm\.os\), o\.tempDiskChange, o\.previewResize\),/);
+    assert.match(page, /const preview = tempDiskPreview\(m, r\);\n\s*card\.append\(el\('p', \{ class: 'hint' \}, moveWords\(r\.series, o\.previewFeature, o\.featureFallback\),/);
     assert.match(page, /preview \? el\('a', \{ href: GUIDANCE\.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK \}\) : null/);
-    // The about file, the README and the plan: the same sentence, and when it shows.
-    const about = F.aboutText(p, readList('VM name,Current size,Generation\n'), 'cases', NOW);
-    assert.ok(about.includes(`  Preview:   ${PREVIEW}`), 'the entry');
-    assert.ok(about.includes('             v6 and v7: this tool shows it when the temporary disk changes type.'));
-    assert.ok(about.includes('             The answers do not change.'));
-    assert.ok(about.includes(`             ${PREVIEW_PAGE}`), 'the page');
+    // The about file, the README and the plan.
+    const about = F.aboutText(p, readList('VM name,Current size,Generation\n'), 'cases', NOW).replace(/\r\n/g, '\n');
+    for (const line of [
+        '  v5:        Resize the current VM, when Azure supports a resize to the new size. Burstable is the same.',
+        '  Preview:   A Windows VM needs the preview feature VMTempDiskResizePreview for some resizes.',
+        `             ${PREVIEW_PAGE}`,
+    ]) assert.ok(about.includes(`${line}\n`), line);
     const readme = read('README.md').replace(/\r\n/g, '\n').replace(/\s*\n\s*/g, ' ');
-    assert.ok(readme.includes(PREVIEW) && readme.includes(PREVIEW_PAGE), 'README');
-    assert.ok(read('PLAN.md').replace(/\r\n/g, '\n').replace(/\s*\n\s*/g, ' ').includes(PREVIEW), 'PLAN');
-});
-
-test('the temporary-disk preview changes no answer: only "How to move" changes, as listed', async () => {
-    const { tempDiskPreview, moveWords } = await import('../js/words.js');
-    // For each sample list, each "How to move" is the 0.9.1-beta words, with two changes
-    // only: the preview after the v6 or v7 words, and a resize (not the rebuild hedge)
-    // for a VM with no OS where the size table shows that the temporary disk keeps its type.
-    let shown = 0;
-    for (const f of ['contoso-from-azure.csv', 'contoso-every-series.csv', 'contoso-by-hand.csv']) {
-        const p = run(read(`samples/${f}`)).plan;
-        const rows = F.targetRows(p, table, NOW);
-        let i = 0;
-        for (const m of p.machines) {
-            if (!m.vm) { i++; continue; }
-            for (const r of m.rows) {
-                const row = rows[i++];
-                if (!r.option.supported) { assert.equal(row['How to move'], ''); continue; }
-                if (POOL(m)) { assert.ok(!tempDiskPreview(m, r) && !row['How to move'].includes('VMTempDiskResizePreview')); continue; }
-                const old = moveWords(r.series, r.option.rebuild, Boolean(m.vm.os));
-                // 0.9.3-beta: a Windows Generation 2 rebuild on v5 or Burstable gets the lab words.
-                const want = tempDiskPreview(m, r) ? `${old} ${PREVIEW}`
-                    : r.option.previewResize ? LAB_MOVE
-                    : old === HEDGE && r.option.tempDiskChange === false ? RESIZE : old;
-                if (tempDiskPreview(m, r)) shown++;
-                assert.equal(row['How to move'], want, `${f} ${m.read.name} ${r.series}`);
-            }
-        }
-        assert.equal(i, rows.length);
-    }
-    assert.ok(shown > 0, 'the samples reach the preview');
+    assert.ok(readme.includes(FEATURE) && readme.includes(PREVIEW_PAGE), 'README');
+    assert.ok(read('PLAN.md').replace(/\r\n/g, '\n').replace(/\s*\n\s*/g, ' ').includes(FEATURE), 'PLAN');
 });
 
 // ---- 0.9.4-beta: the availability set note gives both methods on v6 and v7 ----
@@ -1535,7 +1671,7 @@ test('availability set on v6 and v7: both methods; a rebuild-only row (Generatio
     const note = (name, series) => rowOf(byName(p, name), series).caveats['Availability set'];
     for (const name of ['contoso-av1', 'contoso-av2']) {
         for (const s of ['v6', 'v7']) assert.deepEqual([note(name, s).state, note(name, s).text], ['attention', AVSET_BOTH], `${name} ${s}`);
-        assert.equal(note(name, 'v5').text, AVSET_RESIZE, `${name} v5: a resize, as before`);
+        assert.equal(note(name, 'v5').text, AVSET_STAYS, `${name} v5: a resize, in the words of the resize method (0.9.5-beta)`);
     }
     // The page shows it once, for v6 and v7.
     const shown = F.allNotes(byName(p, 'contoso-av1')).attention.filter((x) => x.topic === 'Availability set');

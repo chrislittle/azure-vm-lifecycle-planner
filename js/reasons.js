@@ -1,8 +1,8 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.4-beta';
-import { dateWords, stageWords } from './words.js?v=0.9.4-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.5-beta';
+import { dateWords, stageWords } from './words.js?v=0.9.5-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -54,8 +54,13 @@ export const REASONS = {
     'smaller-than-source': ({ series, facts }) => `Each ${series} size of this name is smaller than this VM (${facts.vcpus} vCPUs, ${facts.memoryGB} GiB). This tool does not suggest a smaller size.`,
     'no-burstable-fit': ({ facts }) => `No Bsv2 or Basv2 size has at least ${facts?.vcpus} vCPUs and ${facts?.memoryGB} GiB and also supports the generation, NICs and data disks of this VM.`,
     'gen1-no-size': ({ series }) => `No ${series} size for this VM supports Generation 1 VMs.`,
-    'os-unknown-encryption': () => 'The list does not give the OS. On a Windows VM, this move is a rebuild, and a rebuild removes Azure Disk Encryption. Give the OS in the list.',
-    'disk-encryption-rebuild': ({ series }) => `This VM has Azure Disk Encryption. The move to ${series} is a rebuild, and a rebuild removes the encryption. Only a resize keeps it.`,
+    // 0.9.5-beta: a resize that crosses the SCSI temporary disk boundary needs the preview
+    // feature on Windows (lifecycle.js, previewFeature). Lab tests did not use the feature
+    // with Azure Disk Encryption, and no size of this shape keeps the temporary disk type.
+    'os-unknown-encryption': () => 'The list does not give the OS. On a Windows VM, this resize needs the preview feature VMTempDiskResizePreview. Lab tests did not use the feature with Azure Disk Encryption. Give the OS in the list.',
+    'disk-encryption-preview': ({ series }) => `This VM has Azure Disk Encryption. The resize to ${series} needs the preview feature VMTempDiskResizePreview, because the temporary disk changes type. Lab tests did not use the feature with Azure Disk Encryption, so this tool does not plan it. ${series === 'burstable' ? 'No Bsv2 or Basv2 size has a temporary disk.' : `No ${series} size of this shape keeps the temporary disk type.`}`,
+    // The size table does not give the temporary disk of one of the two sizes (review, 2026-11-06).
+    'encryption-temp-disk-unknown': () => 'This VM has Azure Disk Encryption. The size table does not give the temporary disk of the current size or the new size. On Windows, a resize to another type of temporary disk needs the preview feature VMTempDiskResizePreview. This tool does not plan the feature with Azure Disk Encryption.',
 
     // ---- Not checked ----
     'processor-unreadable': () => 'This tool cannot read the processor type from the size name.',

@@ -22,8 +22,10 @@ export const GROUPS = {
 };
 
 // Why a size is on the ranked list. processor: the name of the other processor.
-export function rankWords(why, processor) {
-    return {
+// feature: 'needed' or 'windows' when this size needs the preview feature and the suggested
+// size does not (lifecycle.js, rankedSizes; review 2026-11-06). The asterisk stays at the end.
+export function rankWords(why, processor, feature = null) {
+    const words = {
         'closest': 'Closest match',
         'processor': `Same shape, ${processor} processor*`,
         'temp-disk-removed': 'Same shape, no temporary disk',
@@ -32,52 +34,63 @@ export function rankWords(why, processor) {
         'same-shape': 'Same shape, other family',
         'other-shape': 'Other shape that fits',
     }[why] || why;
+    const add = { needed: '. A resize to it needs the preview feature VMTempDiskResizePreview', windows: '. On Windows, a resize to it needs the preview feature VMTempDiskResizePreview' }[feature] || '';
+    return words.endsWith('*') ? `${words.slice(0, -1)}${add}*` : `${words}${add}`;
 }
 export const PROCESSOR_NOTE = '* A processor change. Test the application, and check its licence terms.';
 
 // How to move to a supported size. Microsoft: v5 - "Resize the current VM" when
 // the VM supports the target size (v5 overview, "Choose a transition method");
 // v6 and v7 - "not a normal VM resize": deploy in parallel, highly recommended
-// (v6/v7 FAQ and Plan page).
-// tempDiskChange: the temporary disk changes type (none, SCSI, NVMe) from the current
-// size to this size; true, false, or null when the size table cannot tell.
-// A Windows VM needs a rebuild when it changes. With no OS in the list, the words say
-// so only when it changes or this tool cannot tell (0.9.2-beta).
-// v6 and v7: when it changes, the words also name the preview feature (PREVIEW_WORDS).
-// previewResize: a Windows Generation 2 rebuild on v5 or Burstable that the preview
-// feature makes a resize (lifecycle.js, measured in a lab test, 2026-11-02; 0.9.3-beta).
-export function moveWords(series, rebuild, osKnown, tempDiskChange = null, previewResize = false) {
+// (v6/v7 FAQ and Plan page). The tool never recommends a rebuild (0.9.5-beta, owner
+// 2026-11-06): every move is a resize of the same VM, or a new VM in parallel.
+// feature: the option's previewFeature (lifecycle.js): 'needed', 'windows' (no OS in the
+// list), 'unknown' (the size table cannot tell), 'not-needed' or null.
+// fallback: { size } on v5 and Burstable, the size to use without the feature (null: none).
+// v6 and v7 keep Microsoft's order: the feature words follow the second method, the
+// change of the size of the current VM.
+export function moveWords(series, feature = null, fallback = null) {
+    const extra = [featureWords(feature), fallbackWords(series, feature, fallback)].filter((w) => w).join(' ');
     if (series === 'v6' || series === 'v7') {
-        return `Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.${tempDiskChange === true ? ` ${PREVIEW_WORDS}` : ''}`;
+        return `Deploy a new VM at this size in parallel, move the workload, then delete the old VM. Microsoft highly recommends this for v6 and v7. You can also change the size of the current VM, but that has more steps and more risk.${extra ? ` ${extra}` : ''}`;
     }
-    if (rebuild && previewResize) return `Change the size of the current VM. ${PREVIEW_RESIZE_WORDS} Move the page file from the temporary disk to C: before the resize. Without the feature, rebuild from a current image.`;
-    if (rebuild) return 'Rebuild from a current image. A Windows VM needs a rebuild here because the temporary disk changes type.';
-    if (!osKnown && tempDiskChange !== false) return 'Resize the current VM. If it is a Windows VM, a rebuild can be necessary because the temporary disk changes type.';
-    return 'Resize the current VM. Azure supports a resize to this size.';
+    return extra ? `Resize the current VM. ${extra}` : 'Resize the current VM. Azure supports a resize to this size.';
 }
 
-// The preview feature VMTempDiskResizePreview (owner, 2026-11-06; review, 2026-11-06).
-// The source is a Note in "3. Usage" on Microsoft's page about the NVMe conversion
-// script (GUIDANCE.tempDiskPreview): when "converting between VM sizes with different
-// resource (temporary) disk support", the subscription "must be registered for the
-// VMTempDiskResizePreview feature", or "the script exits with an error". The Note is
-// about the script, for Linux and Windows. The script converts to NVMe, so the words
-// show only for v6 and v7 (NVMe), for any OS. Microsoft gives no terms, limits or date
-// for the preview: the words say no more than the Note. No answer depends on them.
-export const PREVIEW_WORDS = "Microsoft's NVMe conversion script needs the preview feature VMTempDiskResizePreview, registered on the subscription, when the temporary disk changes type.";
+// The preview feature VMTempDiskResizePreview, named only where a resize needs it
+// (0.9.5-beta, owner 2026-11-06 and 2026-11-07). Measured in lab tests, 2026-11-01 to
+// 2026-11-07 (lifecycle.js, previewFeature): Windows, a SCSI temporary disk on one of the
+// two sizes only. Never for Linux, never from a size with no temporary disk to a v6 or v7
+// size. Microsoft names the feature in a Note about its NVMe conversion script
+// (GUIDANCE.tempDiskPreview); it gives no terms, limits or date for the preview.
+export const FEATURE_WORDS = 'The resize needs the preview feature VMTempDiskResizePreview, registered on the subscription. Move the page file from the temporary disk to C: before the resize.';
+export const FEATURE_WORDS_NO_OS = 'On a Windows VM, the resize needs the preview feature VMTempDiskResizePreview, registered on the subscription. On Windows, move the page file from the temporary disk to C: before the resize.';
+export const FEATURE_WORDS_UNKNOWN = 'The size table does not give the temporary disk of each size. This tool cannot tell if a Windows VM needs the preview feature VMTempDiskResizePreview for this resize.';
+export function featureWords(feature) {
+    return { needed: FEATURE_WORDS, windows: FEATURE_WORDS_NO_OS, unknown: FEATURE_WORDS_UNKNOWN }[feature] || '';
+}
+// Without the feature (owner, 2026-11-07): on v5 the size of the same shape that keeps the
+// temporary disk type, a plain resize; on Burstable (no size there has a temporary disk)
+// the v5 size. Said honestly when there is none.
+export function fallbackWords(series, feature, fallback) {
+    if (!['needed', 'windows'].includes(feature) || !fallback || (series !== 'v5' && series !== 'burstable')) return '';
+    if (series === 'burstable') return fallback.size ? `Without the feature, use the v5 size ${fallback.size}.` : 'Without the feature, this tool finds no other size for a resize.';
+    return fallback.size ? `Without the feature, resize to ${fallback.size}.` : 'Without the feature, this tool finds no v5 size of this shape that keeps the temporary disk type.';
+}
+// The column "Preview feature" of vm-target-sizes.csv (0.9.5-beta).
+export function featureColumn(feature) {
+    return { needed: 'Needed', 'not-needed': 'Not needed', windows: 'Not checked. Needed on Windows.', unknown: 'Not checked. The size table does not give the temporary disk.' }[feature] || '';
+}
 export const PREVIEW_LINK = 'Convert SCSI to NVMe (Microsoft)';
-// v5 and Burstable (0.9.3-beta): the same feature lets Azure resize a Windows
-// Generation 2 VM across the temporary-disk boundary. Measured in a lab test,
-// 2026-11-02 (lifecycle.js, previewResize). Only these rows show it.
-export const PREVIEW_RESIZE_WORDS = 'On Windows, Azure allows this resize only when the preview feature VMTempDiskResizePreview is registered on the subscription.';
 
-// Whether one row (m: a planned VM, r: one of its rows) shows PREVIEW_WORDS: a
-// supported v6 or v7 size, the temporary disk changes type, and the VM is not in a pool
-// or a service (they get other advice). Unknown is not a change: no words.
+// Whether one row (m: a planned VM, r: one of its rows) shows the link to the Microsoft
+// page that names the feature (PREVIEW_LINK): a supported v6 or v7 size (the page is
+// about the conversion to NVMe) whose resize needs the feature, and a VM that is not in a
+// pool or a service (they get other advice).
 export function tempDiskPreview(m, r) {
     const o = r && r.option;
     if (!m || !m.vm || !o || !o.supported || POOL_PATTERNS.includes(m.pattern)) return false;
-    return (r.series === 'v6' || r.series === 'v7') && o.tempDiskChange === true;
+    return (r.series === 'v6' || r.series === 'v7') && ['needed', 'windows'].includes(o.previewFeature);
 }
 
 // Microsoft's workload patterns (v6/v7 modernization guide, "Discover"). The
@@ -229,7 +242,7 @@ const SHORT = {
     'No fitting size': 'No size with these vCPUs and memory',
     'No fitting size (data disks)': 'The size for this VM holds too few data disks',
     'No fitting size (NICs)': 'The size for this VM holds too few NICs',
-    'No - a rebuild cannot keep Azure Disk Encryption': 'No - the move removes Azure Disk Encryption',
+    'No - Azure Disk Encryption with the preview feature': 'No - the preview feature with Azure Disk Encryption is not in this tool',
     'No - needs Gen2': 'No - needs a Generation 2 VM',
     'Not needed - already newer': 'Not needed - already newer',
     'Not needed - already on it': 'Not needed - already on this series',
@@ -272,6 +285,6 @@ export const GUIDANCE = {
     endOfLife: 'https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/end-of-life-sizes-list',
     retirements: 'https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/retirements-and-capacity-restrictions',
     diskEncryption: 'https://learn.microsoft.com/azure/virtual-machines/disk-encryption-migrate',
-    // Names the preview feature VMTempDiskResizePreview (PREVIEW_WORDS above).
+    // Names the preview feature VMTempDiskResizePreview, in a Note about the NVMe conversion script (PREVIEW_LINK above).
     tempDiskPreview: 'https://learn.microsoft.com/azure/virtual-machines/nvme-linux',
 };

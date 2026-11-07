@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.4-beta';
-import { likelyRow, signals } from './files.js?v=0.9.4-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.4-beta';
-import { PATTERNS, POOL_PATTERNS, poolAdvice, stageWords } from './words.js?v=0.9.4-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.4-beta';
-import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.4-beta';
+import { capacityRestricted } from './planner.js?v=0.9.5-beta';
+import { likelyRow, signals } from './files.js?v=0.9.5-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.5-beta';
+import { FEATURE_WORDS_UNKNOWN, PATTERNS, POOL_PATTERNS, fallbackWords, poolAdvice, stageWords } from './words.js?v=0.9.5-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.5-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.5-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -103,10 +103,13 @@ export function todo(m, g) {
     if (g === 'nopath') return { main: 'This tool has no supported size for this VM.', more: ['See "Why" for the reason.'] };
     const r = likelyRow(m);
     const o = r.option;
+    // v5 and Burstable are always a resize (0.9.5-beta). The preview feature first, where
+    // the resize needs it, with the size to use without it (words.js, fallbackWords).
+    const fallback = fallbackWords(r.series, o.previewFeature, o.featureFallback);
     const main = r.series === 'v6' || r.series === 'v7' ? `Deploy a new VM at ${o.targetSize} in parallel. Then move the workload.`
-        // A Windows Generation 2 rebuild that the preview feature makes a resize (0.9.3-beta).
-        : o.rebuild && o.previewResize ? `Resize to ${o.targetSize}. First register the preview feature VMTempDiskResizePreview on the subscription. Without it, rebuild from a current image.`
-        : o.rebuild ? `Rebuild at ${o.targetSize} from a current image.` : `Resize to ${o.targetSize}.`;
+        : o.previewFeature === 'needed' ? `Resize to ${o.targetSize}. First register the preview feature VMTempDiskResizePreview on the subscription.${fallback ? ` ${fallback}` : ''}`
+        : o.previewFeature === 'windows' ? `Resize to ${o.targetSize}. On a Windows VM, first register the preview feature VMTempDiskResizePreview on the subscription.${fallback ? ` ${fallback}` : ''}`
+        : `Resize to ${o.targetSize}.`;
     const more = [];
     // "Do this first" is steps, facts to check, or both (review, 2026-10-10).
     if (g === 'first') {
@@ -114,9 +117,9 @@ export function todo(m, g) {
         more.push(s.actions.length && s.checks.length ? 'First, do the steps in "Before the move" and check the facts in "To check".'
             : s.actions.length ? 'Do the steps in "Before the move" first.' : 'Check the facts in "To check" first.');
     }
-    // A resize on Linux can be a rebuild on Windows (the temporary disk changes type).
-    // Not when the size table shows that the temporary disk keeps its type (0.9.2-beta).
-    if (!m.vm.os && !o.rebuild && o.tempDiskChange !== false && r.series !== 'v6' && r.series !== 'v7') more.push('The list does not give the OS. For a Windows VM, a rebuild can be necessary.');
+    // The size table does not give the temporary disk: this tool cannot tell if a Windows
+    // VM needs the preview feature (unknown is never a pass, 0.9.5-beta).
+    if (o.previewFeature === 'unknown' && r.series !== 'v6' && r.series !== 'v7') more.push(FEATURE_WORDS_UNKNOWN);
     if (m.pattern === 'F') more.push(PATTERNS.F.advice);
     const others = m.rows.filter((x) => x !== r && x.option.supported && x.series !== 'gen1Route').map((x) => x.series);
     if (others.length) more.push(`You can also use ${seriesList(others)}. See "Sizes".`);

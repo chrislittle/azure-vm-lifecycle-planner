@@ -121,7 +121,7 @@ contractions, no Microsoft sentences pasted in (say what they mean). One term fo
 meaning: **VM** (the column stays "Machine name"), **notes** for the per-topic notes
 (fine / problem / "Check:", where "Check:" means only that the list did not give the
 fact, or, since 0.9.0-beta, that this tool cannot judge it from what the list gives), **Problems** for the problem notes in the summary, **move** with its two kinds
-**resize** and **rebuild** (defined on the page and in the about file), and
+**resize** and **new VM** (defined on the page and in the about file; 0.9.5-beta: no **rebuild**, the tool never recommends one), and
 **Supported** only for a target size. The wording in the tables below was rewritten in
 STE on 2026-10-09; the code (`js/words.js`, `js/reasons.js`, `js/extras.js`) holds
 the current text.
@@ -185,7 +185,7 @@ Agreed so far:
   | No fitting size | No size of this shape |
   | No fitting size (data disks) | No size holds this many data disks |
   | No fitting size (NICs) | No size holds this many NICs |
-  | No - a rebuild cannot keep Azure Disk Encryption | No - would lose Azure Disk Encryption |
+  | No - a rebuild cannot keep Azure Disk Encryption (gone in 0.9.5-beta) | No - would lose Azure Disk Encryption |
   | No - needs Gen2 | No - needs a Generation 2 VM |
   | Not needed - already newer | Not needed - already newer |
   | Not needed - already on it | Not needed - already on this series |
@@ -217,7 +217,7 @@ Agreed so far:
   | SAP | Not SAP | SAP - only sizes SAP certifies are supported; check SAP Note 1928533 | Check: SAP workloads need an SAP-certified size (from 0.9.4-beta: no note, only Yes shows one) |
   | Unmanaged disks | Managed disks | Unmanaged disks - convert to managed disks first | Check: disks must be managed disks |
   | Ephemeral OS disk | Not ephemeral | Ephemeral OS disk - the new size needs room for it; its contents are lost | Check: ephemeral OS disk |
-  | Identity | No system-assigned identity | System-assigned identity - kept on a resize, lost on a rebuild | Check: system-assigned identity |
+  | Identity | No system-assigned identity | System-assigned identity - kept on a resize, lost on a new VM (0.9.5-beta: no rebuild) | Check: system-assigned identity |
   | Availability set | Not in a set | In an availability set - every VM in the set may need to move together | Check: availability set |
   | Zone | {zone} / None | | Check: zone (the new size must be offered in it) |
 
@@ -1411,6 +1411,166 @@ result, reason code, size, rebuild flag and ranked size is the same. Text change
 the SAP note, the SAP reason, "SAP sign", the Evidence of SAP VMs, "To check" (no SAP
 check), and the Availability set note on v6 and v7 (4 rows of contoso-from-azure.csv, 52
 of the 4,000-VM list).
+
+## 0.9.5-beta (2026-11-06): no rebuild, and the preview feature only where it is needed
+
+Owner, 2026-11-06 and 2026-11-07: **the tool never recommends a rebuild** (a new VM
+around the same disks), anywhere: the page, "How to move", the column Rebuild, the notes,
+the report, the about file and the README. Every move is a resize of the same VM, or a
+new VM in parallel (v6 and v7, Microsoft's order kept). The preview feature
+`VMTempDiskResizePreview` is named only where a resize needs it.
+
+- **The source: lab tests, 2026-11-01 to 2026-11-07** (one subscription, centralus;
+  Windows Server 2016, 2019, 2022 and 2025). With the feature registered, Azure resized a
+  Windows VM in place across the SCSI temporary disk boundary, forward and back, on
+  Generation 2 and on Generation 1 (Generation 1 to v5 and Bsv2 only, seven checks, one
+  of them Windows Server 2016). The VM kept its vmId, its system-assigned identity and its
+  extensions; the page file was moved to C: first. Without the feature, Azure refused. Six
+  checks on 2026-11-07, feature not registered: a size with no temporary disk (D2s_v4,
+  D2s_v5, D2as_v5) resized in place to v6 and v7 sizes with an NVMe temporary disk (Azure
+  counts only a SCSI temporary disk as a resource disk). Linux never needs the feature.
+  As in 0.9.3-beta, the owner uses the lab results over the Microsoft FAQ about VM sizes
+  with no temporary disk. The code cites them as "measured in lab tests, 2026-11-01 to
+  2026-11-07".
+- **The rule** (`previewFeature` in `js/lifecycle.js`, a new fact on each option):
+  - `needed`: Windows, and one of the two sizes has a SCSI temporary disk and the other
+    does not (`crossesScsiTempDisk`). Every v6 and v7 size counts as a size with none.
+  - `windows`: the same, when the list does not give the OS.
+  - `not-needed`: Linux, or the resize does not cross the boundary (a SCSI temporary disk
+    to a SCSI one, none to none, none to an NVMe one).
+  - `unknown`: Windows or no OS, and the size table does not give the temporary disk of
+    one of the two sizes. Unknown is never a pass: "not checked".
+  - No supported size, or a VM in a pool or a service (patterns A to D, also the
+    generation that the tool assumed for a service): none, and the pool advice.
+  - The generation does not matter (0.9.3-beta needed a known Generation 2: removed).
+- **Without the feature** (`featureFallback`): on v5, the size of the same shape on the
+  VM's side of the boundary (Standard_D4s_v5 for a VM with a temporary disk: Standard_D4ds_v5;
+  the letters keep the processor maker), when it passes every check of a target. It comes
+  second in the ranked sizes. On Burstable (no Bsv2 or Basv2 size has a temporary disk),
+  the v5 size, when that is a resize with no feature. With none, the words say so.
+  The suggested size does not change: it is today's size, with the feature words.
+  In the size table of 2026-10-16 the size picker already gives a v5 size with a
+  temporary disk to every VM with a SCSI one, so on v5 the feature shows only for a size
+  chosen among the size choices, or for an NVMe temporary disk (FXmdsv2) to a v5 d size.
+- **The words** (`js/words.js`; STE, read line by line):
+  - v5 and Burstable, How to move: "Resize the current VM. The resize needs the preview
+    feature VMTempDiskResizePreview, registered on the subscription. Move the page file from
+    the temporary disk to C: before the resize." Then one of: "Without the feature, resize
+    to {size}." / "Without the feature, this tool finds no v5 size of this shape that keeps
+    the temporary disk type." (v5) / "Without the feature, use the v5 size {size}." /
+    "Without the feature, this tool finds no other size for a resize." (Burstable).
+  - No OS: "On a Windows VM, the resize needs the preview feature VMTempDiskResizePreview,
+    registered on the subscription. On Windows, move the page file from the temporary disk
+    to C: before the resize."
+  - Not checked: "The size table does not give the temporary disk of each size. This tool
+    cannot tell if a Windows VM needs the preview feature VMTempDiskResizePreview for this
+    resize."
+  - v6 and v7: the parallel words, then the same feature words (they follow the second
+    method, the change of the size of the current VM), with the link to the Microsoft page
+    that names the feature. The 0.9.2-beta sentence about Microsoft's NVMe conversion
+    script is gone: it showed also on Linux and was not a rule for the resize.
+  - What to do: "Resize to {size}. First register the preview feature
+    VMTempDiskResizePreview on the subscription." (no OS: "On a Windows VM, first
+    register ..."), then the sentence for "without the feature".
+  - vm-target-sizes.csv: a new last column **Preview feature**: Needed, Not needed, "Not
+    checked. Needed on Windows.", "Not checked. The size table does not give the
+    temporary disk.", or blank (no size, a pool or a service). The column **Rebuild**
+    stays, so that the other columns keep their place: "No" for every row with a size.
+    A new column is simpler for a customer than a Rebuild column with three meanings.
+  - Notes: v5 and Burstable are always a resize. Identity: no note (the VM keeps its
+    identity; also no "Check" when the list does not give the OS). Availability set: the
+    resize words of 0.9.4-beta for every v5 and Burstable row: `"Availability set" is Yes.
+    The VM stays in its set. You can resize the VMs one at a time. If Azure does not offer
+    the new size for this set, stop (deallocate) all the VMs in the set first.` (it said
+    "If the hardware of the set does not have the new size, stop all the VMs in the set
+    before the resize": one term for one meaning). v6 and v7 keep both methods. A pool or
+    a service keeps the new-VM notes of 0.9.4-beta.
+  - The NVMe note: "or rebuild from a newer image" is now "or deploy a new VM from a
+    newer image".
+  - The page (the hint under the table), the about file (HOW TO MOVE: Rebuild, Preview)
+    and the README say the same.
+- **Azure Disk Encryption** (owner: an answer change): a resize keeps it, and lab tests
+  did not use the feature with it. On v5, where the resize would need the feature (Windows,
+  or no OS), the target is the size of the same shape that keeps the temporary disk type:
+  a plain resize (`encryption-keeps-temp-disk`). With none: on Windows the new code
+  `disk-encryption-preview` ("Not in this tool": the tool does not plan the feature with
+  Azure Disk Encryption); with no OS, `os-unknown-encryption` (not checked) with new
+  words. Burstable: the same codes. The code `disk-encryption-rebuild` is gone. v6 and v7
+  keep "No - Azure Disk Encryption" for any OS (now also if the series rules change). The
+  note "Disk encryption" (Microsoft retires it on 15 September 2028, plan encryption at
+  host) does not change.
+- **v6 accelerated networking is Required.** Every D and E v6 size page, Intel and AMD,
+  says "Accelerated Networking | Required" since 2026-10-27 (read on learn.microsoft.com
+  on 2026-11-06: Dsv6, Ddsv6, Dlsv6, Dldsv6, Dasv6, Dadsv6, Dalsv6, Daldsv6, Esv6, Edsv6,
+  Easv6, Eadsv6, Ebsv6, Ebdsv6). Falsv6, Fasv6, Famsv6 and every v7 page still say
+  Supported. `data/families.js` v6 `acceleratedNetworkingRequired` now has D and E,
+  Intel and AMD; the Dsv6, Dasv6, Esv6 and Easv6 pages are cited, watched
+  (`tools/sources.mjs`, now 33 pages) and in the snapshot (only their entries, read
+  2026-11-06). The Accelerated networking note follows, as on Intel v5.
+- **Answer changes against 0.9.4-beta (9ebb4dc)**, for the three sample lists, the
+  sample in `js/sample.js` and the made-up list of 4,000 VMs: no result, result group,
+  workload type, size, suggested size, reason code or ranked size changes. Text changes:
+  - How to move on v6 and v7: the script sentence goes; the feature words on Windows rows
+    from a SCSI temporary disk (contoso-from-azure.csv 8 rows, contoso-by-hand.csv 4, the
+    4,000-VM list 142, and 15 more with "On a Windows VM"). Linux and diskless rows lose
+    the sentence (contoso-every-series.csv 41 rows, contoso-from-azure.csv 4, the 4,000-VM
+    list 671).
+  - The Accelerated networking note on v6 (turn it on: contoso-from-azure.csv 2 rows, the
+    4,000-VM list 42; "Check": contoso-by-hand.csv 3 rows, so "To check" of one VM adds it).
+  - The Availability set note on v5 (contoso-from-azure.csv 3 rows, the 4,000-VM list 43).
+  - The NVMe note (contoso-from-azure.csv 4 rows, the 4,000-VM list 62).
+  - The column Rebuild: "Not checked" to "No" (the 4,000-VM list 14 rows); the lab row of
+    contoso-by-hand.csv (Burstable): "Only without the preview feature" to "No", with the
+    new words. One Identity "Check" goes (the 4,000-VM list, a v5 row with no OS).
+  - The new column Preview feature.
+  - For every size of the size table, as Generation 1 and 2, Windows, Linux and no OS,
+    with and without Azure Disk Encryption: v5 gains a size for FXmdsv2 with Azure Disk
+    Encryption on Windows or no OS (17 sizes, for example Standard_FX12mds_v2 to
+    Standard_E32s_v5); Burstable with Azure Disk Encryption on Windows is "Not in this
+    tool" (it was "No size fits", 34 rows); a VM already on v6 or v7 with Azure Disk
+    Encryption is "Not needed - already newer" on v5 (it was a rebuild refusal on Windows
+    and "not checked" with no OS, 229 sizes each: the v5 size of the same shape keeps the
+    temporary disk type, so the reason "already newer" now comes first). No sample has these rows: the expected "Azure
+    Disk Encryption VMs gain a v5 size" does not show in the samples, because their v5
+    size already keeps the temporary disk type.
+- Tests: new in `tests/planner.test.js` (each word and the rule for each fact; each row
+  type: Windows Generation 1 and 2 on Burstable, v6 and v7, v5 with a d size, Windows with
+  no temporary disk, Linux, no OS, a pool and a service; v5 with the feature and its
+  fallback, AMD, FXmdsv2, a changed table with no d size; Azure Disk Encryption on v5,
+  Burstable, v6 and v7; not checked; no customer text says "rebuild"; v6 accelerated
+  networking and its sources), and the tests of 0.9.2-beta and 0.9.3-beta changed for the
+  new rule. The STE check reads every new word. 48 mutation checks, all caught (two only
+  after new tests: an unknown kind of temporary disk, and a Burstable VM whose v5 size
+  needs the feature too). Checked in a browser at 375 px and 1280 px, light and dark.
+
+### Review fixes in 0.9.5-beta (2026-11-06)
+
+- **The report on v6 and v7** shows only the first sentence of the move, so "the resize"
+  had no meaning there. Its line now starts with the second method: "You can also change
+  the size of the current VM. The resize needs the preview feature ..." (no OS: the "On a
+  Windows VM" words). The page and vm-target-sizes.csv already have the whole move.
+- **Ranked sizes, Azure Disk Encryption with no OS** are now treated as Windows, as for
+  the size itself: no other size that changes the temporary disk type. For every size of
+  the size table this removes such a size from the list of 586 made-up rows (no OS,
+  Azure Disk Encryption); no sample row changes.
+- **Ranked sizes that need the feature.** When an other size needs the preview feature and
+  the suggested size does not, its reason says so: "Same shape, no temporary disk. A
+  resize to it needs the preview feature VMTempDiskResizePreview" (no OS: "On Windows, a
+  resize to it needs ..."). A processor change keeps its asterisk at the end. When the
+  suggested size needs the feature (v6 and v7 from a SCSI temporary disk), the move
+  already says so, so the list does not repeat it on every size. Linux and the sizes that
+  keep the temporary disk type: nothing. Text change only: "Ranked sizes" on 6 v5 rows of
+  contoso-from-azure.csv, 3 of contoso-by-hand.csv and 116 of the 4,000-VM list.
+- **Azure Disk Encryption when the size table does not give the temporary disk** of the
+  current size or the new size (the kind comes from a name only): the new code
+  `encryption-temp-disk-unknown`, not checked, on v5 and Burstable, for Windows and no
+  OS. Never a fallback size or a "no". Every size in the size table has the reading, so
+  only a size that is not in the table reaches it.
+- **The Burstable reason** of `disk-encryption-preview` ends "No Bsv2 or Basv2 size has a
+  temporary disk." (all 22 Bsv2 and Basv2 sizes in the size table report no SCSI
+  temporary disk).
+- 13 more mutation checks, all caught. No answer of the samples or the 4,000-VM list
+  changes against the first round; only the ranked-size words above.
 
 ## Next
 
