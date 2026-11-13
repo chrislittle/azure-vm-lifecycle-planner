@@ -239,7 +239,7 @@ export function imageSupportsNvme(publisher, offer, sku) {
 // The image columns decide, as for NVMe; the OS column only tells Linux from Windows.
 // { code, facts }: the reason code of the Generation 1 to 2 row (reasons.js).
 //   gen1-windows-server-2016  a Windows Server 2016 image, also SQL Server or Visual Studio on it (ws2016)
-//   gen1-os-registration      Debian or Azure Linux (CBL-Mariner is its old name)
+//   gen1-os-not-supported     Debian or Azure Linux (CBL-Mariner is its old name)
 //   gen1-linux-custom-image   Linux with no Azure Marketplace image: "Check:"
 //   gen1-custom-image         no Azure Marketplace image, Windows or no OS: "Check:"
 //   gen1-image-unknown        the list gives no image: "Check:"
@@ -264,8 +264,8 @@ export function gen1Upgrade(x, os) {
     if ((p === 'microsoftwindowsserver' && /2016/.test(both)) || (!linux && (ws2016(o) || ws2016(String(x.imageSku ?? '').toLowerCase())))) {
         return { code: 'gen1-windows-server-2016', facts: { image: imageWords(x) } };
     }
-    if (p === 'debian' || /^debian/.test(o)) return { code: 'gen1-os-registration', facts: { os: 'Debian', image: imageWords(x), oldName: false } };
-    if (p === 'microsoftcblmariner') return { code: 'gen1-os-registration', facts: { os: 'Azure Linux', image: imageWords(x), oldName: /cbl-mariner/.test(both) } };
+    if (p === 'debian' || /^debian/.test(o)) return { code: 'gen1-os-not-supported', facts: { os: 'Debian', image: imageWords(x), oldName: false } };
+    if (p === 'microsoftcblmariner') return { code: 'gen1-os-not-supported', facts: { os: 'Azure Linux', image: imageWords(x), oldName: /cbl-mariner/.test(both) } };
     return { code: 'not-built-yet', facts: { linux } };
 }
 

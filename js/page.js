@@ -15,7 +15,7 @@ import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
 import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
 import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.7-beta';
 import { REPORT_NAME, reportHtml } from './report.js?v=0.9.7-beta';
-import { GEN1_PAGES_READ, GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
+import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
 import * as F from './files.js?v=0.9.7-beta';
 import { makeZip } from './zip.js?v=0.9.7-beta';
 import version from './version.js?v=0.9.7-beta';
@@ -39,8 +39,8 @@ function el(tag, attrs = {}, ...children) {
     return e;
 }
 
-// A text with each https address in it as a link (details.js, linkParts).
-const linked = (text) => linkParts(text).map((x) => (typeof x === 'string' ? x : el('a', { href: x.href, target: '_blank', rel: 'noopener noreferrer', text: x.href })));
+// A text with its named links as links (details.js, linkParts).
+const linked = (text) => linkParts(text).map((x) => (typeof x === 'string' ? x : el('a', { href: x.href, target: '_blank', rel: 'noopener noreferrer', text: x.text })));
 
 // The tool runs only in its own tab, never inside another site's page: another
 // site could put its own controls over this page (review, 2026-10-10). A meta
@@ -391,6 +391,8 @@ function details(m) {
         let used = false;
         let others = 0;
         for (const r of m.rows) {
+            // No card for the row "Generation 1 to 2" (owner, 2026-11-13): the v6 and v7 cards say it.
+            if (r.series === 'gen1Route') continue;
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
@@ -506,7 +508,4 @@ $('sources').replaceChildren(
         `. This tool read them on ${dateWords(endOfLife.sources[0].readUtc)}.`),
     el('li', {}, 'NVMe support of the OS: the Microsoft ', link(nvme.source, 'list of OS images that support NVMe'), `. This tool read it on ${dateWords(nvme.readUtc)}.`),
     el('li', {}, 'Capacity growth restrictions: ', capacityWords(capacity).join(' ')),
-    // 0.9.7-beta: the row "Generation 1 to 2" (reasons.js).
-    el('li', {}, 'The Trusted launch upgrade of a Generation 1 VM: the Microsoft page ', link(GUIDANCE.gen1Upgrade, 'Upgrade Gen1 VMs to Trusted launch'),
-        ' and, for Windows Server 2016, the page ', link(GUIDANCE.inPlaceUpgrade, 'In-place upgrade for VMs running Windows Server'), `. This tool read them on ${dateWords(GEN1_PAGES_READ.readUtc)}.`),
 );

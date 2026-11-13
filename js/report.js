@@ -16,8 +16,8 @@ export const REPORT_NAME = 'vm-lifecycle-report.html';
 export function reportHtml(p, table, sourceName, now = new Date()) {
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const short = (s) => String(s || '').replace(/^Standard_/, '');
-    // A text with each https address in it as a link (details.js, linkParts), as on the page.
-    const linked = (s) => linkParts(s).map((x) => (typeof x === 'string' ? esc(x) : `<a class="url" href="${esc(x.href)}">${esc(x.href)}</a>`)).join('');
+    // A text with its named links as links (details.js, linkParts), as on the page.
+    const linked = (s) => linkParts(s).map((x) => (typeof x === 'string' ? esc(x) : `<a class="url" href="${esc(x.href)}">${esc(x.text)}</a>`)).join('');
 
     const target = (m, g) => { if (!m.vm || ['modern', 'gate', 'nopath', 'unchecked'].includes(g)) return ''; const r = F.likelyRow(m); return r ? `${r.series === 'burstable' ? 'Burstable' : r.series}: ${short(r.option.targetSize)}` : ''; };
     const where = (m) => [m.read.resourceGroup, m.read.region].filter((x) => x).join(' · ');
@@ -88,7 +88,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
         if (m.vm && !['gate', 'nopath'].includes(g)) {
             const rows = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => {
                 const o = r.option; const name = r.series === 'burstable' ? 'Burstable' : r.series;
-                if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${esc(optionReason(r, table, now))}</td></tr>`;
+                if (!o.supported) return `<tr><th scope="row">${name}</th><td class="muted" colspan="2">${linked(optionReason(r, table, now))}</td></tr>`;
                 const ranked = F.rankedFor(m, r, table, now);
                 // The lifecycle stage of the series, the size that "What to do" uses, and the
                 // ways to move to it (details.js, sizeCard), as on the page.

@@ -2,7 +2,7 @@
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
 import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.7-beta';
-import { GUIDANCE, dateWords, stageWords } from './words.js?v=0.9.7-beta';
+import { GUIDANCE, dateWords, namedLink, stageWords } from './words.js?v=0.9.7-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -44,13 +44,13 @@ export const REASONS = {
         + 'First, update the guest OS to Windows Server 2019 or 2022 with an in-place upgrade. '
         + 'Then use the Trusted launch upgrade to change the VM to Generation 2. You cannot undo this upgrade. This tool does not give the steps. '
         + `See the Microsoft pages: ${GUIDANCE.inPlaceUpgrade} and ${GUIDANCE.gen1Upgrade}.`,
-    // Debian and Azure Linux: no workaround, only the registration. Never a new VM or a
-    // rebuild (0.9.5-beta): the v5 size, when this tool has one, takes Generation 1.
-    'gen1-os-registration': ({ facts }) => {
+    // Debian and Azure Linux: no workaround, and no link to a form (owner, 2026-11-13).
+    // Never a new VM or a rebuild (0.9.5-beta): the v5 size, when this tool
+    // has one, takes Generation 1.
+    'gen1-os-not-supported': ({ facts }) => {
         const os = facts?.os || 'this OS';
         return `${facts?.image ? `The image ${facts.image} is ${os}. ` : ''}${facts?.oldName ? 'CBL-Mariner is the old name of Azure Linux. ' : ''}`
             + `Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with ${os}. `
-            + `Microsoft has a registration for Generation 1 Linux VMs that need this upgrade: ${GUIDANCE.gen1Registration}. `
             // A fact of the size table (Azure's resource SKU list, HyperVGenerations), not of the Learn page.
             + (facts?.v5 ? `Azure lists Generation 1 for the v5 size ${facts.v5}. A move to it does not need the upgrade. ` : '')
             + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
@@ -59,7 +59,6 @@ export const REASONS = {
     'gen1-linux-custom-image': ({ facts }) => 'Check: this tool cannot tell if Microsoft supports the Trusted launch upgrade for this VM. '
         + `The list gives no Azure Marketplace image for this Linux VM.${facts?.imageId ? ` The image ID is ${facts.imageId}.` : ''} `
         + 'Microsoft supports the upgrade of a Generation 1 Linux VM only when the VM comes from a supported OS image in the Azure Marketplace. '
-        + `For other Generation 1 Linux VMs, Microsoft has a registration: ${GUIDANCE.gen1Registration}. `
         + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`,
     // "For custom OS images or disks, the base image should be Trusted launch capable."
     'gen1-custom-image': ({ facts }) => `Check: the list gives no Azure Marketplace image for this VM.${facts?.imageId ? ` The image ID is ${facts.imageId}.` : ''} `
@@ -137,6 +136,22 @@ export const REASONS = {
     'must-move-no-target': ({ stage }) => `${stageWords(stage, null)} No size fits this VM.`,
 };
 
+// The v6 and v7 boxes of a Generation 1 VM (owner, 2026-11-13): after "v6 sizes support only
+// Generation 2 VMs. This VM is Generation 1.", one sentence for the OS of the image
+// (extras.js, gen1Upgrade), then the link to the Microsoft page. The CSV row "Generation 1 to 2"
+// has the full words (REASONS above).
+const GEN1_BOX = {
+    'gen1-windows-server-2016': () => 'To change to Generation 2, first upgrade Windows Server 2016 to 2019 or 2022. Then use the Trusted launch upgrade.',
+    'gen1-os-not-supported': (facts) => `Microsoft does not support the change to Generation 2 for ${facts?.os || 'this OS'}.`,
+    'not-built-yet': () => 'To change to Generation 2, use the Trusted launch upgrade. You cannot undo it.',
+};
+const GEN1_BOX_UNKNOWN = 'This tool cannot see if this VM can change to Generation 2.';
+export function gen1BoxWords(vm) {
+    const g = vm && vm.gen1Upgrade;
+    const f = g && GEN1_BOX[g.code];
+    return `${f ? f(g.facts) : GEN1_BOX_UNKNOWN} ${namedLink(GUIDANCE.gen1Upgrade)}`;
+}
+
 const MAPPING_CODES = ['not-in-region', 'family-not-in-region', 'no-shape-fit', 'too-few-data-disks', 'too-few-nics',
     'smaller-than-source', 'gen1-no-size', 'not-approved', 'processor-not-approved'];
 
@@ -165,7 +180,10 @@ export function optionReason(row, table, now = new Date()) {
         return r;
     }
     const sapSign = row.machine.extra ? row.machine.extra.sapSign : null;
-    const why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined, sapSign })).join(' ');
+    let why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined, sapSign })).join(' ');
+    // v6 and v7 of a Generation 1 VM (the only series with this code), when Generation 2 is the
+    // only reason: can it change? (0.9.7-beta)
+    if (row.codes.length === 1 && row.codes[0] === 'gen1-requires-redeploy') why += ` ${gen1BoxWords(vm)}`;
     // Not moving: the option is for reference only.
     // A "Check:" reason keeps its own word.
     if (row.moveRequired === 'No' && !why.startsWith('Not needed')) return `No move needed. ${why.startsWith('Check:') ? '' : 'Note: '}${why}`;

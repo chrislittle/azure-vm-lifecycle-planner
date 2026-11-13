@@ -342,7 +342,7 @@ export const BY_DESIGN = [
     // 0.9.7-beta: the Generation 1 to 2 row, by the OS of the image. This tool does not plan
     // the Trusted launch upgrade for any OS, so the row stays "Not in this tool". The words
     // say "Check:" when the image does not tell (reasons.js).
-    'gen1-windows-server-2016', 'gen1-os-registration', 'gen1-linux-custom-image', 'gen1-custom-image', 'gen1-image-unknown',
+    'gen1-windows-server-2016', 'gen1-os-not-supported', 'gen1-linux-custom-image', 'gen1-custom-image', 'gen1-image-unknown',
 ];
 // The logic could not judge these: a person must.
 // not-in-region: no size with the same name. Another size of the series can fit
