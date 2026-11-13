@@ -15,7 +15,7 @@ import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
 import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
 import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.7-beta';
 import { REPORT_NAME, reportHtml } from './report.js?v=0.9.7-beta';
-import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
+import { GEN1_PAGES_READ, GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
 import * as F from './files.js?v=0.9.7-beta';
 import { makeZip } from './zip.js?v=0.9.7-beta';
 import version from './version.js?v=0.9.7-beta';
@@ -508,5 +508,5 @@ $('sources').replaceChildren(
     el('li', {}, 'Capacity growth restrictions: ', capacityWords(capacity).join(' ')),
     // 0.9.7-beta: the row "Generation 1 to 2" (reasons.js).
     el('li', {}, 'The Trusted launch upgrade of a Generation 1 VM: the Microsoft page ', link(GUIDANCE.gen1Upgrade, 'Upgrade Gen1 VMs to Trusted launch'),
-        ' and, for Windows Server 2016, the page ', link(GUIDANCE.inPlaceUpgrade, 'In-place upgrade for VMs running Windows Server'), '. This tool read them on 13 November 2026.'),
+        ' and, for Windows Server 2016, the page ', link(GUIDANCE.inPlaceUpgrade, 'In-place upgrade for VMs running Windows Server'), `. This tool read them on ${dateWords(GEN1_PAGES_READ.readUtc)}.`),
 );

@@ -238,7 +238,7 @@ export function imageSupportsNvme(publisher, offer, sku) {
 // supported for VMs created using supported OS images published in Azure Marketplace".
 // The image columns decide, as for NVMe; the OS column only tells Linux from Windows.
 // { code, facts }: the reason code of the Generation 1 to 2 row (reasons.js).
-//   gen1-windows-server-2016  a Windows Server 2016 image, also SQL Server on it (ws2016)
+//   gen1-windows-server-2016  a Windows Server 2016 image, also SQL Server or Visual Studio on it (ws2016)
 //   gen1-os-registration      Debian or Azure Linux (CBL-Mariner is its old name)
 //   gen1-linux-custom-image   Linux with no Azure Marketplace image: "Check:"
 //   gen1-custom-image         no Azure Marketplace image, Windows or no OS: "Check:"
@@ -257,7 +257,11 @@ export function gen1Upgrade(x, os) {
         }
         return { code: 'gen1-image-unknown', facts: {} };
     }
-    if ((p === 'microsoftwindowsserver' && /2016/.test(both)) || (p === 'microsoftsqlserver' && /ws2016/.test(both))) {
+    // Windows Server 2016: the Windows Server publisher with 2016 in the offer or SKU; or, from
+    // any publisher (SQL Server, Visual Studio, a vendor) on Windows or with no OS, ws2016 in
+    // the offer or SKU, or an offer or SKU that starts with 2016- (review, 2026-11-13).
+    const ws2016 = (t) => /ws2016|^2016-/.test(t);
+    if ((p === 'microsoftwindowsserver' && /2016/.test(both)) || (!linux && (ws2016(o) || ws2016(String(x.imageSku ?? '').toLowerCase())))) {
         return { code: 'gen1-windows-server-2016', facts: { image: imageWords(x) } };
     }
     if (p === 'debian' || /^debian/.test(o)) return { code: 'gen1-os-registration', facts: { os: 'Debian', image: imageWords(x), oldName: false } };

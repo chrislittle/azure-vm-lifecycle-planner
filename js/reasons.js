@@ -20,20 +20,23 @@ export const REASONS = {
     // ---- Not in this tool (on purpose) ----
     // The Generation 1 to 2 row, by the OS of the image (0.9.7-beta, extras.js gen1Upgrade).
     // Microsoft Learn, "Upgrade Gen1 VMs to Trusted launch" (GUIDANCE.gen1Upgrade, updated
-    // 2026-09-24), in its terms. Its prerequisites that the list cannot show: Azure Backup
-    // with the Enhanced policy ("can't be enabled for VMs configured with Standard policy
-    // backup protection"), Windows OS volume encryption such as BitLocker off before the
-    // upgrade, Azure Site Recovery off before the upgrade ("can be re-enabled" after it).
-    // The OS must be a "Trusted launch supported operating system (OS) version".
+    // 2026-09-24), in its terms. Some of its prerequisites that the list cannot show, each
+    // "if enabled": Azure Backup with the Enhanced policy ("can't be enabled for VMs
+    // configured with Standard policy backup protection"), Windows OS volume encryption
+    // such as BitLocker off before the upgrade, Azure Site Recovery off before the upgrade.
+    // The page lists more (for example "Trusted launch supported size family"): the words
+    // say so, and do not count them (review, 2026-11-13). The OS must be a "Trusted launch
+    // supported operating system (OS) version".
     'not-built-yet': ({ facts }) => {
         const linux = Boolean(facts?.linux);
         return 'To change a VM from Generation 1 to Generation 2, use the Trusted launch upgrade from Microsoft. You cannot undo this upgrade. This tool does not give the steps. '
             + 'The OS must be a version that Trusted launch supports. '
-            + `The list does not show ${linux ? 'two' : 'three'} other conditions for the upgrade. `
-            + 'Azure Backup must use the Enhanced policy, because the upgrade is not possible with the Standard policy. '
-            + (linux ? '' : 'Before the upgrade, turn off Windows OS volume encryption, for example BitLocker. ')
-            + 'Before the upgrade, turn off Azure Site Recovery. '
-            + `You can turn ${linux ? 'it' : 'them'} on again after the upgrade. See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
+            + 'The list does not give the facts for these conditions. '
+            + 'If Azure Backup is on, it must use the Enhanced policy. '
+            + (linux ? '' : 'If Windows OS volume encryption, for example BitLocker, is on, turn it off before the upgrade. ')
+            + 'If Azure Site Recovery is on, turn it off before the upgrade. '
+            + 'The Microsoft page lists more conditions. For example, the VM size must be in a size family that supports Trusted launch. '
+            + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
     },
     // "For Windows Server 2016 only, workaround is to update the Guest OS to Windows Server 2019 or 2022."
     'gen1-windows-server-2016': ({ facts }) => `${facts?.image ? `The image ${facts.image} is Windows Server 2016. ` : ''}`
@@ -48,7 +51,8 @@ export const REASONS = {
         return `${facts?.image ? `The image ${facts.image} is ${os}. ` : ''}${facts?.oldName ? 'CBL-Mariner is the old name of Azure Linux. ' : ''}`
             + `Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with ${os}. `
             + `Microsoft has a registration for Generation 1 Linux VMs that need this upgrade: ${GUIDANCE.gen1Registration}. `
-            + (facts?.v5 ? `The v5 size ${facts.v5} supports Generation 1 VMs. A move to it does not need the upgrade. ` : '')
+            // A fact of the size table (Azure's resource SKU list, HyperVGenerations), not of the Learn page.
+            + (facts?.v5 ? `Azure lists Generation 1 for the v5 size ${facts.v5}. A move to it does not need the upgrade. ` : '')
             + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
     },
     // Linux: "only supported for VMs created using supported OS images published in Azure Marketplace".

@@ -81,19 +81,21 @@ For each VM:
   Trusted launch upgrade for the OS of the image
   ([Upgrade Gen1 VMs to Trusted launch](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1)).
   The tool reads the image columns:
-  - Windows Server 2016 (also a SQL Server image on Windows Server 2016): not supported.
-    First, update the guest OS to Windows Server 2019 or 2022 with an
+  - Windows Server 2016 (also a SQL Server or Visual Studio image on Windows Server 2016):
+    not supported. First, update the guest OS to Windows Server 2019 or 2022 with an
     [in-place upgrade](https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade).
   - Debian and Azure Linux (CBL-Mariner is the old name of Azure Linux): not supported.
     Microsoft has a registration for these VMs (https://aka.ms/Gen1ToTLUpgrade). When the
-    tool has a v5 size for the VM, it says that this size supports Generation 1 VMs.
+    tool has a v5 size for the VM, it says that Azure lists Generation 1 for this size.
   - Linux with no Azure Marketplace image: "Check:". Microsoft supports the upgrade of a
     Generation 1 Linux VM only from a supported OS image in the Azure Marketplace.
   - No image in the list, or a custom image that is not Linux: "Check:".
-  - Every other image: use the Trusted launch upgrade. The OS must be a version that
-    Trusted launch supports. The list does not show three other conditions: Azure Backup
-    must use the Enhanced policy, and Windows OS volume encryption (for example BitLocker)
-    and Azure Site Recovery must be off during the upgrade.
+  - Every other image: use the Trusted launch upgrade. The tool checks only the OS names
+    that the Microsoft page names. The OS must be a version that Trusted launch supports.
+    The list does not give the facts for some conditions: if Azure Backup is on, it must
+    use the Enhanced policy. If Windows OS volume encryption (for example BitLocker) or
+    Azure Site Recovery is on, turn it off before the upgrade. The Microsoft page lists
+    more conditions, for example a size family that supports Trusted launch.
 
   The tool does not plan the upgrade for any OS, so the row is always "Not in this tool".
   The answers for v5, v6 and v7 do not change.

@@ -1707,16 +1707,19 @@ the OS. A words and reason-code change of that row only.
   https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade, updated
   2026-07-16). Linux: "only supported for VMs created using supported OS images published
   in Azure Marketplace"; for other Linux VMs, "including Azure Linux & Debian", a
-  registration at https://aka.ms/Gen1ToTLUpgrade. Azure Backup with the Standard policy
-  blocks the upgrade (Enhanced policy); Windows OS volume encryption such as BitLocker and
-  Azure Site Recovery are off before the upgrade. Both Learn pages are watched
+  registration at https://aka.ms/Gen1ToTLUpgrade. If enabled, Azure Backup must use the
+  Enhanced policy (the Standard policy blocks the upgrade), and Windows OS volume
+  encryption such as BitLocker and Azure Site Recovery are off before the upgrade. The page
+  lists more prerequisites (for example a Trusted launch supported size family). Both Learn pages are watched
   (`tools/sources.mjs`, now 35 pages) and in the snapshot (only their entries). The short
   link is allowed by the link test.
 - **The rule** (`gen1Upgrade` in `js/extras.js`, read in `toMachine` for a Generation 1
   VM as `vm.gen1Upgrade`; `machineAdvice` puts its code on the row). The image columns
   decide, as for NVMe; the OS column only tells Linux from Windows:
   - `gen1-windows-server-2016`: publisher MicrosoftWindowsServer with 2016 in the offer or
-    SKU, or MicrosoftSQLServer with ws2016 in the offer (for example sql2017-ws2016).
+    SKU; or, from any publisher on Windows or with no OS, ws2016 in the offer or SKU, or an
+    offer or SKU that starts with 2016- (for example sql2017-ws2016, vs-2017-ent-ws2016).
+    The tool checks only the OS names that the Microsoft page names.
   - `gen1-os-registration`: publisher Debian (or an offer that starts with debian), or
     publisher MicrosoftCBLMariner (Azure Linux; cbl-mariner is its old name).
   - `gen1-linux-custom-image`: Linux with no image publisher (an Image ID or a purchase
@@ -1740,8 +1743,9 @@ the OS. A words and reason-code change of that row only.
     Azure Linux." for a cbl-mariner image.) Microsoft does not support the Trusted launch
     upgrade of a Generation 1 VM with {OS}. Microsoft has a registration for Generation 1
     Linux VMs that need this upgrade: https://aka.ms/Gen1ToTLUpgrade." Only when the v5
-    option has a supported size: "The v5 size {size} supports Generation 1 VMs. A move to it
-    does not need the upgrade." Never a new VM or a rebuild (0.9.5-beta).
+    option has a supported size: "Azure lists Generation 1 for the v5 size {size}. A move to
+    it does not need the upgrade." (a fact of the size table, not of the Learn page). Never
+    a new VM or a rebuild (0.9.5-beta).
   - Linux, no Marketplace image: "Check: this tool cannot tell if Microsoft supports the
     Trusted launch upgrade for this VM. The list gives no Azure Marketplace image for this
     Linux VM. (The image ID is {id}.) Microsoft supports the upgrade of a Generation 1
@@ -1756,20 +1760,24 @@ the OS. A words and reason-code change of that row only.
     same sentence of what Microsoft does not support, the Linux rule when the list gives no
     OS, and "For a custom image, the base image must be Trusted launch capable."
   - Every other image: the sentence of 0.9.6-beta, then "The OS must be a version that
-    Trusted launch supports. The list does not show three other conditions for the upgrade.
-    Azure Backup must use the Enhanced policy, because the upgrade is not possible with the
-    Standard policy. Before the upgrade, turn off Windows OS volume encryption, for example
-    BitLocker. Before the upgrade, turn off Azure Site Recovery. You can turn them on again
-    after the upgrade." Linux: "two other conditions", no BitLocker sentence, "turn it on".
+    Trusted launch supports. The list does not give the facts for these conditions. If
+    Azure Backup is on, it must use the Enhanced policy. If Windows OS volume encryption,
+    for example BitLocker, is on, turn it off before the upgrade. If Azure Site Recovery is
+    on, turn it off before the upgrade. The Microsoft page lists more conditions. For
+    example, the VM size must be in a size family that supports Trusted launch." Linux: no
+    BitLocker sentence. No count of conditions: the list is not complete.
   - Each ends "See the Microsoft page: {upgrade page}." "See the Microsoft guidance." (no
     link) is gone. A VM that does not need to move: "No move needed. Check: ..." (no "Note:"
     before "Check:").
 - **Where it shows:** the card "Generation 1 to 2" on the page, "Why" of a VM with no
   supported size (page and report), the column Reason of vm-target-sizes.csv, and a new
-  part "GENERATION 1 TO 2" of the about file. On the page and in the report each https
-  address in a reason or in "Why" is a link (`linkParts` in `js/details.js`); in print the
-  report does not show such an address twice. The list of sources on the page and in the
-  README names the two Learn pages.
+  part "GENERATION 1 TO 2" of the about file. On the page and in the report an address of
+  our own list (`GUIDANCE` in `js/words.js`) in a reason or in "Why" is a link
+  (`linkParts` in `js/details.js`). Any other address stays text: a reason can carry a
+  value from the list, such as an image ID. In print the report does not show such an
+  address twice. The list of sources on the page and in the README names the two Learn
+  pages, with the read date from `GEN1_PAGES_READ` in `js/words.js`; a test ties the
+  date of each page there to `tools/source-snapshot.json`.
 - `samples/contoso-from-azure.csv` gains contoso-lnx01 (Debian 11, Generation 1).
   contoso-web02 (Windows Server 2016) and contoso-old01 (no image) were already there.
 - **Answer changes against 0.9.6-beta (af21ea5)**, for the four samples (before the new
@@ -1784,6 +1792,12 @@ the OS. A words and reason-code change of that row only.
   pages and the sample rows. The STE check reads every new word. 48 mutation checks, all
   caught (three only after new tests: any offer of the Debian publisher, a VM with no
   image facts, and the print rule).
+- Review fixes (2026-11-13): links only to our own addresses (an image ID such as
+  https://evil.example/x stays text on the page and in the report); "if enabled" for the
+  three conditions, no count, and the page lists more; Windows Server 2016 from any
+  publisher (a Visual Studio image); the v5 sentence names the size table; the read date
+  of the page from `js/words.js`. 4 tests changed or added first and failed; mutation
+  checks rerun for the new rules.
 - Not in this change: the Trusted launch supported size families and OS versions are not
   checked (the words say that the OS must be a supported version). The page says that
   Linux VMs from other distributions than Canonical, Red Hat and SUSE can need a change of
@@ -1794,3 +1808,17 @@ the OS. A words and reason-code change of that row only.
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen
   widths (step 6) and the STE check of all customer text.
 - Refresh the size table and Microsoft's lists when the owner asks.
+- Agreed with the owner 2026-11-13, not built. Do step 3 before step 2.
+  - Step 3: disk IOPS and throughput limits. Keep UncachedDiskIOPS and
+    UncachedDiskBytesPerSecond from Azure's resource SKU list in the next size table
+    refresh (the same safer-value rule across regions). Then show where a target size
+    lowers the uncached disk limits of the VM. No query change, no test build.
+  - Step 2: three query fields. A dedicated host (properties.host.id,
+    properties.hostGroup.id): a host runs one size series; also the dedicated host type
+    retirements from Microsoft's retirement page. A capacity reservation group
+    (properties.capacityReservation.capacityReservationGroup.id): a reservation is for
+    one size. A proximity placement group (properties.proximityPlacementGroup.id). This
+    needs one test build; the owner sees the cost first.
+  - Dropped, because they do not change the decision: the MANA driver (Microsoft:
+    without it, the network goes through the virtual switch), the power state,
+    customer-managed keys, Spot and Azure Advisor.

@@ -3,7 +3,7 @@
 import { capacityRestricted } from './planner.js?v=0.9.7-beta';
 import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.7-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
-import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.7-beta';
+import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, GUIDANCE, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.7-beta';
 import { sizeFacts } from './lifecycle.js?v=0.9.7-beta';
 import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.7-beta';
 
@@ -239,14 +239,18 @@ export function sizeCard(m, g, r) {
     return { ...card, how: join(ONE_WAY, featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)) };
 }
 
-// A text with web addresses in it, in parts: a plain text, or { href } for an https
-// address, so that the page and the report show each one as a link (0.9.7-beta: the
-// Generation 1 to 2 reasons give their Microsoft pages). A full stop, comma or bracket
-// after an address is text, not part of it.
+// A text with web addresses in it, in parts: a plain text, or { href } for an address of
+// our own list (GUIDANCE, words.js), so that the page and the report show it as a link
+// (0.9.7-beta: the Generation 1 to 2 reasons give their Microsoft pages). Any other
+// address stays text: a reason can carry a value from the list (an image ID or an image
+// name), and the page never makes a link from what a list gives (review, 2026-11-13).
+// A full stop, comma or bracket after an address is text, not part of it.
+const OWN_LINKS = new Set(Object.values(GUIDANCE));
 export function linkParts(text) {
     const out = [];
     let at = 0;
     for (const m of String(text ?? '').matchAll(/https:\/\/\S*[^\s.,;:)]/g)) {
+        if (!OWN_LINKS.has(m[0])) continue;
         if (m.index > at) out.push(text.slice(at, m.index));
         out.push({ href: m[0] });
         at = m.index + m[0].length;

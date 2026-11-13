@@ -2153,6 +2153,16 @@ test('Generation 1: the image decides if the Trusted launch upgrade is open for 
     assert.equal(code({ imagePublisher: 'MicrosoftSQLServer', imageOffer: 'sql2019-ws2019', imageSku: 'enterprise' }, 'Windows'), 'not-built-yet');
     assert.equal(code({ imagePublisher: 'MicrosoftSQLServer', imageOffer: 'sql2016sp2-ws2019', imageSku: 'enterprise' }, 'Windows'), 'not-built-yet', 'SQL Server 2016 on Windows Server 2019');
     for (const sku of ['2019-Datacenter', '2022-datacenter', '2012-R2-Datacenter']) assert.equal(code(ws(sku), 'Windows'), 'not-built-yet', sku);
+    // Any publisher: ws2016 in the offer or the SKU, or an offer or SKU that starts with 2016-, on Windows or with no OS.
+    const vs = { imagePublisher: 'MicrosoftVisualStudio', imageOffer: 'visualstudio', imageSku: 'vs-2017-ent-ws2016' };
+    assert.equal(code(vs, 'Windows'), 'gen1-windows-server-2016', 'a Visual Studio image on Windows Server 2016');
+    assert.equal(code(vs, ''), 'gen1-windows-server-2016', 'no OS');
+    assert.equal(code({ imagePublisher: 'contosoisv', imageOffer: 'contoso-app-ws2016', imageSku: 'standard' }, 'Windows'), 'gen1-windows-server-2016', 'ws2016 in the offer');
+    assert.equal(code({ imagePublisher: 'contosoisv', imageOffer: 'contoso-app', imageSku: '2016-standard' }, 'Windows'), 'gen1-windows-server-2016', 'a SKU that starts with 2016-');
+    assert.equal(code({ imagePublisher: 'contosoisv', imageOffer: '2016-contoso', imageSku: 'standard' }, ''), 'gen1-windows-server-2016', 'an offer that starts with 2016-');
+    assert.equal(code({ imagePublisher: 'contosoisv', imageOffer: 'contoso-app-ws2016', imageSku: '2016-standard' }, 'Linux'), 'not-built-yet', 'Linux: not Windows Server');
+    assert.equal(code({ imagePublisher: 'contosoisv', imageOffer: 'contoso-app', imageSku: 'v2016-1' }, 'Windows'), 'not-built-yet', '2016 that does not start the SKU');
+    assert.equal(code({ imagePublisher: 'MicrosoftWindowsServer', imageOffer: 'WindowsServer', imageSku: '2016-Datacenter' }, 'Linux'), 'gen1-windows-server-2016', 'the Windows Server publisher decides, whatever the OS column says');
     // 2. Debian and Azure Linux (CBL-Mariner is its old name).
     assert.deepEqual(gen1Upgrade({ imagePublisher: 'Debian', imageOffer: 'debian-11', imageSku: '11' }, 'Linux'), { code: 'gen1-os-registration', facts: { os: 'Debian', image: 'Debian / debian-11 / 11', oldName: false } });
     assert.equal(code({ imagePublisher: 'credativ', imageOffer: 'Debian', imageSku: '9' }, 'Linux'), 'gen1-os-registration', 'a Debian image from another publisher');
@@ -2221,7 +2231,7 @@ test('Generation 1: the words for each OS, from the Microsoft page, with its lin
     assert.equal(why('contoso-g1-deb'), 'The image Debian / debian-11 / 11 is Debian. '
         + 'Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Debian. '
         + `Microsoft has a registration for Generation 1 Linux VMs that need this upgrade: ${GEN1_REGISTRATION}. `
-        + `The v5 size ${v5} supports Generation 1 VMs. A move to it does not need the upgrade. `
+        + `Azure lists Generation 1 for the v5 size ${v5}. A move to it does not need the upgrade. `
         + `See the Microsoft page: ${GEN1_PAGE}.`);
     assert.ok(why('contoso-g1-cbl').startsWith('The image MicrosoftCBLMariner / cbl-mariner / cbl-mariner-2 is Azure Linux. CBL-Mariner is the old name of Azure Linux. Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Azure Linux. '));
     assert.doesNotMatch(why('contoso-g1-azl'), /CBL-Mariner/);
@@ -2249,19 +2259,22 @@ test('Generation 1: the words for each OS, from the Microsoft page, with its lin
     for (const n of ['contoso-g1-lnxc', 'contoso-g1-winc', 'contoso-g1-noos', 'contoso-g1-plan', 'contoso-g1-blank']) assert.doesNotMatch(why(n), /You cannot undo|use the Trusted launch upgrade/, `${n}: not a yes`);
     // 5. Every other image: today's sentence, the OS rule, and what the list cannot show.
     const today = 'To change a VM from Generation 1 to Generation 2, use the Trusted launch upgrade from Microsoft. You cannot undo this upgrade. This tool does not give the steps. The OS must be a version that Trusted launch supports.';
-    assert.equal(why('contoso-g1-ws19'), `${today} The list does not show three other conditions for the upgrade. `
-        + 'Azure Backup must use the Enhanced policy, because the upgrade is not possible with the Standard policy. '
-        + 'Before the upgrade, turn off Windows OS volume encryption, for example BitLocker. Before the upgrade, turn off Azure Site Recovery. '
-        + `You can turn them on again after the upgrade. See the Microsoft page: ${GEN1_PAGE}.`);
-    assert.equal(why('contoso-g1-ubu'), `${today} The list does not show two other conditions for the upgrade. `
-        + 'Azure Backup must use the Enhanced policy, because the upgrade is not possible with the Standard policy. '
-        + 'Before the upgrade, turn off Azure Site Recovery. '
-        + `You can turn it on again after the upgrade. See the Microsoft page: ${GEN1_PAGE}.`);
+    const more = 'The Microsoft page lists more conditions. For example, the VM size must be in a size family that supports Trusted launch.';
+    assert.equal(why('contoso-g1-ws19'), `${today} The list does not give the facts for these conditions. `
+        + 'If Azure Backup is on, it must use the Enhanced policy. '
+        + 'If Windows OS volume encryption, for example BitLocker, is on, turn it off before the upgrade. If Azure Site Recovery is on, turn it off before the upgrade. '
+        + `${more} See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.equal(why('contoso-g1-ubu'), `${today} The list does not give the facts for these conditions. `
+        + 'If Azure Backup is on, it must use the Enhanced policy. '
+        + 'If Azure Site Recovery is on, turn it off before the upgrade. '
+        + `${more} See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.doesNotMatch(why('contoso-g1-ws19') + why('contoso-g1-ubu'), /three|two other/);
     // A VM that does not need to move: the note, with "Check:" as it is.
     assert.ok(why('contoso-g1-v5').startsWith('No move needed. Check: the list does not give the OS image.'), why('contoso-g1-v5'));
 });
 
 test('Generation 1: the words show on the page, in the report and in vm-target-sizes.csv, with links', async () => {
+    const { GUIDANCE: GUIDANCE_PAGES } = await import('../js/words.js');
     const { reportHtml } = await import('../js/report.js');
     const { linkParts, whyLines } = await import('../js/details.js');
     const { optionReason } = await import('../js/reasons.js');
@@ -2281,6 +2294,19 @@ test('Generation 1: the words show on the page, in the report and in vm-target-s
         ['See: ', { href: GEN1_PAGE }, '. Then ', { href: GEN1_REGISTRATION }, ', and (', { href: IN_PLACE_PAGE }, ').']);
     assert.deepEqual(linkParts('No link here.'), ['No link here.']);
     assert.deepEqual(linkParts('http://example.com is not https.'), ['http://example.com is not https.']);
+    // Only the addresses in GUIDANCE: an address from the list (an image ID, an image name) stays text.
+    assert.deepEqual(linkParts('The image ID is https://evil.example/x.'), ['The image ID is https://evil.example/x.']);
+    assert.deepEqual(linkParts(`${GEN1_PAGE}x and ${GEN1_PAGE}/more`), [`${GEN1_PAGE}x and ${GEN1_PAGE}/more`], 'a longer address is not ours');
+    assert.deepEqual(linkParts(`${GUIDANCE_PAGES.endOfLife}.`), [{ href: GUIDANCE_PAGES.endOfLife }, '.'], 'every GUIDANCE address');
+    const evil = run(GEN1_HEAD + 'contoso-g1-evil,Standard_D4s_v3,V1,Linux,,,,https://evil.example/x,,,Yes\n').plan;
+    const em = byName(evil, 'contoso-g1-evil');
+    assert.equal(F.groupOf(em), 'nopath', 'the fixture: the reason shows in "Why"');
+    const line = whyLines(em, 'nopath', table, NOW).find((l) => l.startsWith('Generation 1 to 2:'));
+    assert.ok(line.includes('The image ID is https://evil.example/x.'), 'the value from the list shows, as text');
+    assert.ok(!linkParts(line).some((x) => typeof x !== 'string' && /evil/.test(x.href)), 'the page: no link to it');
+    assert.ok(!linkParts(optionReason(rowOf(em, 'gen1Route'), table, NOW)).some((x) => typeof x !== 'string' && /evil/.test(x.href)), 'the card: no link to it');
+    const evilHtml = reportHtml(evil, table, 'evil', NOW);
+    assert.ok(evilHtml.includes('The image ID is https://evil.example/x.') && !evilHtml.includes('href="https://evil.example'), 'the report: no link to it');
     const html = reportHtml(p, table, 'gen1', NOW);
     assert.ok(html.includes(`<a class="url" href="${GEN1_REGISTRATION}">${GEN1_REGISTRATION}</a>`), 'the report: a link in "Why"');
     assert.ok(html.includes(`<a class="url" href="${GEN1_PAGE}">${GEN1_PAGE}</a>.`));
@@ -2293,6 +2319,15 @@ test('Generation 1: the words show on the page, in the report and in vm-target-s
 });
 
 test('Generation 1: the Microsoft pages behind the words are watched', async () => {
+    const { GEN1_PAGES_READ, dateWords } = await import('../js/words.js');
+    const snapshot = JSON.parse(read('tools/source-snapshot.json'));
+    // A change of a page on Learn changes its date in the snapshot: then read the words again, and change GEN1_PAGES_READ.
+    assert.equal(snapshot['gen1-trusted-launch'].pageUpdatedUtc, GEN1_PAGES_READ.gen1Upgrade);
+    assert.equal(snapshot['windows-in-place-upgrade'].pageUpdatedUtc, GEN1_PAGES_READ.inPlaceUpgrade);
+    for (const id of ['gen1-trusted-launch', 'windows-in-place-upgrade']) assert.ok(snapshot[id].readUtc >= GEN1_PAGES_READ.readUtc, id);
+    assert.match(read('js/page.js'), /This tool read them on \$\{dateWords\(GEN1_PAGES_READ\.readUtc\)\}\./);
+    assert.doesNotMatch(read('js/page.js'), /read them on \d/);
+    assert.ok(read('README.md').replace(/\r?\n\s*/g, ' ').includes(`(https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade), read on ${dateWords(GEN1_PAGES_READ.readUtc)}.`));
     const { SOURCES } = await import('../tools/sources.mjs');
     const urls = SOURCES.map((s) => s.url);
     assert.ok(urls.includes('https://learn.microsoft.com/en-us/azure/virtual-machines/trusted-launch-existing-vm-gen-1'));

@@ -339,3 +339,8 @@ export const GUIDANCE = {
     // Azure Linux & Debian, submit registration at Linux Gen1 to Trusted launch upgrade support".
     gen1Registration: 'https://aka.ms/Gen1ToTLUpgrade',
 };
+
+// When this tool read the two Generation 1 pages for its words (0.9.7-beta), and the date of
+// each page then (its updated_at). A test ties the page dates to tools/source-snapshot.json:
+// when a page changes, read the words again and change these dates.
+export const GEN1_PAGES_READ = { readUtc: '2026-11-13', gen1Upgrade: '2026-09-24', inPlaceUpgrade: '2026-07-16' };
