@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import sizes from '../data/sizes.js';
 import query from '../js/query.js';
 import sample from '../js/sample.js';
-import { SizeTable, lifecycleChange, rankedSizes } from '../js/lifecycle.js';
+import { SizeTable, lifecycleChange, machineAdvice, rankedSizes } from '../js/lifecycle.js';
 import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { caveats, imageSupportsNvme } from '../js/extras.js';
@@ -266,7 +266,8 @@ test('every link points to a real Microsoft Learn or GitHub path', () => {
         for (const [url] of read(f).matchAll(/https:\/\/[^\s'"`)<]+/g)) {
             // The identity note cites the managed identities overview (0.9.3-beta). The query
             // (js/query.js) names the two pages of the Azure VM extension for SAP solutions (0.9.4-beta).
-            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience|sap\/workloads\/vm-extension-for-sap-(new|standard)$)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
+            // The Generation 1 upgrade page names a Microsoft short link for its Linux registration (0.9.7-beta).
+            assert.match(url, /^https:\/\/(learn\.microsoft\.com\/azure\/(virtual-machines|well-architected\/design-guides\/capacity-resilience|sap\/workloads\/vm-extension-for-sap-(new|standard)$)|learn\.microsoft\.com\/entra\/identity\/managed-identities-azure-resources\/overview$|aka\.ms\/Gen1ToTLUpgrade$|github\.com\/chrislittle\/azure-vm-lifecycle-planner$)/, `${f}: ${url}`);
         }
     }
 });
@@ -2110,4 +2111,204 @@ test('review: the README and the about file say where the CSV files have each ki
     const about = F.aboutText(r.plan, r.list, 'sample', NOW);
     assert.ok(about.includes('  In vm-summary.csv, the column "Before the move" has the steps from the facts of the VM.\r\n'));
     assert.ok(about.includes('  The preview feature and the page file are in "How to move" and "Preview feature" of vm-target-sizes.csv.\r\n'));
+});
+
+// ---- 0.9.7-beta: is the Trusted launch upgrade open for the OS of a Generation 1 VM? ----
+// Microsoft Learn, "Upgrade Gen1 VMs to Trusted launch" (updated 2026-09-24).
+
+const GEN1_PAGE = 'https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1';
+const IN_PLACE_PAGE = 'https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade';
+const GEN1_REGISTRATION = 'https://aka.ms/Gen1ToTLUpgrade';
+const GALLERY_ID = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-contoso-images/providers/Microsoft.Compute/galleries/contoso/images/web/versions/1.0.0';
+const GEN1_HEAD = 'VM name,Current size,Generation,OS,Image publisher,Image offer,Image SKU,Image ID,Plan publisher,Plan product,Unmanaged disks\n';
+const gen1Rows = [
+    'contoso-g1-ws16,Standard_D4s_v3,V1,Windows,MicrosoftWindowsServer,WindowsServer,2016-Datacenter,,,,No',
+    'contoso-g1-sql16,Standard_D4s_v3,V1,Windows,MicrosoftSQLServer,sql2017-ws2016,enterprise,,,,No',
+    'contoso-g1-ws19,Standard_D4s_v3,V1,Windows,MicrosoftWindowsServer,WindowsServer,2019-Datacenter,,,,No',
+    'contoso-g1-deb,Standard_D4s_v3,V1,Linux,Debian,debian-11,11,,,,No',
+    'contoso-g1-cbl,Standard_D4s_v3,V1,Linux,MicrosoftCBLMariner,cbl-mariner,cbl-mariner-2,,,,No',
+    'contoso-g1-azl,Standard_D4s_v3,V1,Linux,MicrosoftCBLMariner,azure-linux-3,azure-linux-3,,,,No',
+    `contoso-g1-lnxc,Standard_D4s_v3,V1,Linux,,,,${GALLERY_ID},,,No`,
+    `contoso-g1-winc,Standard_D4s_v3,V1,Windows,,,,${GALLERY_ID},,,No`,
+    `contoso-g1-noos,Standard_D4s_v3,V1,,,,,${GALLERY_ID},,,No`,
+    'contoso-g1-plan,Standard_D4s_v3,V1,Linux,,,,,contosoisv,contoso-app,No',
+    'contoso-g1-blank,Standard_D4s_v3,V1,Windows,,,,,,,No',
+    'contoso-g1-blnx,Standard_D4s_v3,V1,Linux,,,,,,,No',
+    'contoso-g1-ubu,Standard_D4s_v3,V1,Linux,Canonical,0001-com-ubuntu-server-jammy,22_04-lts,,,,No',
+    // No supported size at all (unmanaged disks): the reason shows under "Why".
+    'contoso-g1-debu,Standard_D4s_v3,V1,Linux,Debian,debian-11,11,,,,Yes',
+    // On a v5 size already: no move needed.
+    'contoso-g1-v5,Standard_D4s_v5,V1,Linux,,,,,,,No',
+];
+const gen1Plan = () => run(GEN1_HEAD + gen1Rows.join('\n') + '\n').plan;
+
+test('Generation 1: the image decides if the Trusted launch upgrade is open for the OS', async () => {
+    const { gen1Upgrade } = await import('../js/extras.js');
+    const code = (x, os) => gen1Upgrade(x, os).code;
+    const ws = (sku, offer = 'WindowsServer') => ({ imagePublisher: 'MicrosoftWindowsServer', imageOffer: offer, imageSku: sku });
+    // 1. Windows Server 2016, also a SQL Server image on Windows Server 2016.
+    for (const sku of ['2016-Datacenter', '2016-Datacenter-smalldisk', '2016-datacenter-with-containers']) assert.equal(code(ws(sku), 'Windows'), 'gen1-windows-server-2016', sku);
+    assert.equal(code({ imagePublisher: 'microsoftwindowsserver', imageOffer: 'windowsserver', imageSku: '2016-datacenter' }, ''), 'gen1-windows-server-2016', 'case is ignored, the OS column is not needed');
+    for (const offer of ['sql2017-ws2016', 'SQL2016SP2-WS2016']) assert.equal(code({ imagePublisher: 'MicrosoftSQLServer', imageOffer: offer, imageSku: 'enterprise' }, 'Windows'), 'gen1-windows-server-2016', offer);
+    assert.equal(code({ imagePublisher: 'MicrosoftSQLServer', imageOffer: 'sql2019-ws2019', imageSku: 'enterprise' }, 'Windows'), 'not-built-yet');
+    assert.equal(code({ imagePublisher: 'MicrosoftSQLServer', imageOffer: 'sql2016sp2-ws2019', imageSku: 'enterprise' }, 'Windows'), 'not-built-yet', 'SQL Server 2016 on Windows Server 2019');
+    for (const sku of ['2019-Datacenter', '2022-datacenter', '2012-R2-Datacenter']) assert.equal(code(ws(sku), 'Windows'), 'not-built-yet', sku);
+    // 2. Debian and Azure Linux (CBL-Mariner is its old name).
+    assert.deepEqual(gen1Upgrade({ imagePublisher: 'Debian', imageOffer: 'debian-11', imageSku: '11' }, 'Linux'), { code: 'gen1-os-registration', facts: { os: 'Debian', image: 'Debian / debian-11 / 11', oldName: false } });
+    assert.equal(code({ imagePublisher: 'credativ', imageOffer: 'Debian', imageSku: '9' }, 'Linux'), 'gen1-os-registration', 'a Debian image from another publisher');
+    assert.equal(code({ imagePublisher: 'Debian', imageOffer: 'contoso-offer', imageSku: '12' }, 'Linux'), 'gen1-os-registration', 'any offer of the Debian publisher');
+    assert.deepEqual(gen1Upgrade({ imagePublisher: 'MicrosoftCBLMariner', imageOffer: 'cbl-mariner', imageSku: 'cbl-mariner-2' }, 'Linux').facts, { os: 'Azure Linux', image: 'MicrosoftCBLMariner / cbl-mariner / cbl-mariner-2', oldName: true });
+    assert.deepEqual(gen1Upgrade({ imagePublisher: 'MicrosoftCBLMariner', imageOffer: 'azure-linux-3', imageSku: 'azure-linux-3' }, 'Linux').facts, { os: 'Azure Linux', image: 'MicrosoftCBLMariner / azure-linux-3 / azure-linux-3', oldName: false });
+    // 3. Linux not from an Azure Marketplace image: a gallery image, or a purchase plan only.
+    assert.deepEqual(gen1Upgrade({ imageId: GALLERY_ID }, 'Linux'), { code: 'gen1-linux-custom-image', facts: { imageId: GALLERY_ID } });
+    assert.deepEqual(gen1Upgrade({ planPublisher: 'contosoisv', planProduct: 'contoso-app' }, 'Linux'), { code: 'gen1-linux-custom-image', facts: { imageId: '' } });
+    // 4. A custom image that is not Linux (Windows, or no OS), and no image at all.
+    assert.deepEqual(gen1Upgrade({ imageId: GALLERY_ID }, 'Windows'), { code: 'gen1-custom-image', facts: { imageId: GALLERY_ID, osKnown: true } });
+    assert.deepEqual(gen1Upgrade({ imageId: GALLERY_ID }, ''), { code: 'gen1-custom-image', facts: { imageId: GALLERY_ID, osKnown: false } });
+    for (const os of ['Windows', 'Linux', '']) assert.deepEqual(gen1Upgrade({ imagePublisher: '', imageOffer: '', imageSku: '' }, os), { code: 'gen1-image-unknown', facts: {} }, os);
+    assert.equal(code({}, 'Linux'), 'gen1-image-unknown', 'nothing in the list');
+    // 5. Every other Marketplace image: the upgrade, with what the list cannot show.
+    assert.deepEqual(gen1Upgrade({ imagePublisher: 'Canonical', imageOffer: '0001-com-ubuntu-server-jammy', imageSku: '22_04-lts' }, 'Linux'), { code: 'not-built-yet', facts: { linux: true } });
+    assert.deepEqual(gen1Upgrade(ws('2022-datacenter'), 'Windows'), { code: 'not-built-yet', facts: { linux: false } });
+    assert.deepEqual(gen1Upgrade(ws('2022-datacenter'), ''), { code: 'not-built-yet', facts: { linux: false } }, 'no OS: the Windows words stay');
+});
+
+test('Generation 1: each OS gets its own code on the Generation 1 to 2 row; the v5, v6 and v7 answers do not change', () => {
+    const p = gen1Plan();
+    const codes = Object.fromEntries(p.machines.map((m) => [m.read.name, rowOf(m, 'gen1Route').codes]));
+    assert.deepEqual(codes, {
+        'contoso-g1-ws16': ['gen1-windows-server-2016'], 'contoso-g1-sql16': ['gen1-windows-server-2016'], 'contoso-g1-ws19': ['not-built-yet'],
+        'contoso-g1-deb': ['gen1-os-registration'], 'contoso-g1-cbl': ['gen1-os-registration'], 'contoso-g1-azl': ['gen1-os-registration'],
+        'contoso-g1-lnxc': ['gen1-linux-custom-image'], 'contoso-g1-winc': ['gen1-custom-image'], 'contoso-g1-noos': ['gen1-custom-image'],
+        'contoso-g1-plan': ['gen1-linux-custom-image'], 'contoso-g1-blank': ['gen1-image-unknown'], 'contoso-g1-blnx': ['gen1-image-unknown'],
+        'contoso-g1-ubu': ['not-built-yet'], 'contoso-g1-debu': ['gen1-os-registration'], 'contoso-g1-v5': ['gen1-image-unknown'],
+    });
+    // This tool does not plan the upgrade, for any OS: the row stays "Not in this tool", so
+    // the result of the VM, its group and "Needs review" do not change with the image.
+    for (const m of p.machines) {
+        assert.equal(rowOf(m, 'gen1Route').result, 'Not supported by design', m.read.name);
+        assert.equal(rowOf(m, 'gen1Route').option.supported, false, m.read.name);
+    }
+    const same = gen1Rows.filter((r) => !/debu|v5/.test(r)).map((r) => r.split(',')[0]).map((n) => byName(p, n));
+    for (const m of same) {
+        for (const s of ['v5', 'v6', 'v7']) {
+            assert.deepEqual([rowOf(m, s).result, rowOf(m, s).codes, rowOf(m, s).option.targetSize], [rowOf(same[0], s).result, rowOf(same[0], s).codes, rowOf(same[0], s).option.targetSize], `${m.read.name} ${s}`);
+        }
+        assert.deepEqual([m.outcome, F.groupOf(m), m.needsReview], [same[0].outcome, F.groupOf(same[0]), same[0].needsReview], m.read.name);
+    }
+    assert.equal(p.review.filter((r) => r.series === 'Gen1 to Gen2 route').length, 0, 'no Generation 1 row is in vm-not-checked.csv');
+    // A Generation 2 VM gets no image rule; a Generation 1 VM without one (not from a list): the image is not known.
+    assert.equal(run('VM name,Current size,Generation,OS\ncontoso-g2,Standard_D4s_v3,V2,Linux\n').plan.machines[0].vm.gen1Upgrade, undefined);
+    const vm = { ...byName(p, 'contoso-g1-ws16').vm };
+    delete vm.gen1Upgrade;
+    assert.deepEqual(machineAdvice(vm, table, NOW).options.find((o) => o.option === 'gen1Route').notSupported, ['gen1-image-unknown']);
+});
+
+test('Generation 1: the words for each OS, from the Microsoft page, with its links', async () => {
+    const { optionReason } = await import('../js/reasons.js');
+    const p = gen1Plan();
+    const why = (name) => optionReason(rowOf(byName(p, name), 'gen1Route'), table, NOW);
+    const v5 = rowOf(byName(p, 'contoso-g1-deb'), 'v5').option.targetSize;
+    assert.ok(v5, 'the fixture: a Generation 1 VM on D4s_v3 has a v5 size');
+    // 1. Windows Server 2016: the in-place upgrade first.
+    assert.equal(why('contoso-g1-ws16'), 'The image MicrosoftWindowsServer / WindowsServer / 2016-Datacenter is Windows Server 2016. '
+        + 'Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Windows Server 2016. '
+        + 'First, update the guest OS to Windows Server 2019 or 2022 with an in-place upgrade. '
+        + 'Then use the Trusted launch upgrade to change the VM to Generation 2. You cannot undo this upgrade. This tool does not give the steps. '
+        + `See the Microsoft pages: ${IN_PLACE_PAGE} and ${GEN1_PAGE}.`);
+    assert.ok(why('contoso-g1-sql16').startsWith('The image MicrosoftSQLServer / sql2017-ws2016 / enterprise is Windows Server 2016. '));
+    // 2. Debian and Azure Linux: the registration, and the v5 size when there is one. Never a new VM or a rebuild.
+    assert.equal(why('contoso-g1-deb'), 'The image Debian / debian-11 / 11 is Debian. '
+        + 'Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Debian. '
+        + `Microsoft has a registration for Generation 1 Linux VMs that need this upgrade: ${GEN1_REGISTRATION}. `
+        + `The v5 size ${v5} supports Generation 1 VMs. A move to it does not need the upgrade. `
+        + `See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.ok(why('contoso-g1-cbl').startsWith('The image MicrosoftCBLMariner / cbl-mariner / cbl-mariner-2 is Azure Linux. CBL-Mariner is the old name of Azure Linux. Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Azure Linux. '));
+    assert.doesNotMatch(why('contoso-g1-azl'), /CBL-Mariner/);
+    // No v5 size (unmanaged disks): no v5 sentence.
+    const noV5 = why('contoso-g1-debu');
+    assert.equal(rowOf(byName(p, 'contoso-g1-debu'), 'v5').option.supported, false, 'the fixture');
+    assert.doesNotMatch(noV5, /v5 size/);
+    assert.ok(noV5.includes(GEN1_REGISTRATION));
+    for (const n of ['contoso-g1-deb', 'contoso-g1-cbl', 'contoso-g1-debu']) assert.doesNotMatch(why(n), /rebuild|new VM|deploy/i, n);
+    // 3. Linux from no Azure Marketplace image: "Check:".
+    assert.equal(why('contoso-g1-lnxc'), 'Check: this tool cannot tell if Microsoft supports the Trusted launch upgrade for this VM. '
+        + `The list gives no Azure Marketplace image for this Linux VM. The image ID is ${GALLERY_ID}. `
+        + 'Microsoft supports the upgrade of a Generation 1 Linux VM only when the VM comes from a supported OS image in the Azure Marketplace. '
+        + `For other Generation 1 Linux VMs, Microsoft has a registration: ${GEN1_REGISTRATION}. `
+        + `See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.doesNotMatch(why('contoso-g1-plan'), /image ID/);
+    // 4. No image, or a custom image that is not Linux: "Check:", never a yes or a no.
+    const listed = 'Microsoft does not support the upgrade for Windows Server 2016, Debian, Azure Linux or an OS version that Trusted launch does not support.';
+    assert.equal(why('contoso-g1-blank'), `Check: the list does not give the OS image. This tool cannot tell if Microsoft supports the Trusted launch upgrade for this VM. ${listed} See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.equal(why('contoso-g1-blnx'), why('contoso-g1-blank'));
+    assert.equal(why('contoso-g1-winc'), `Check: the list gives no Azure Marketplace image for this VM. The image ID is ${GALLERY_ID}. `
+        + `This tool cannot tell the OS version. ${listed} For a custom image, the base image must be Trusted launch capable. See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.ok(why('contoso-g1-noos').includes(`${listed} For Linux, Microsoft supports the upgrade only from a supported OS image in the Azure Marketplace. For a custom image,`), 'no OS: the Linux rule too');
+    assert.doesNotMatch(why('contoso-g1-winc'), /For Linux/);
+    for (const n of ['contoso-g1-lnxc', 'contoso-g1-winc', 'contoso-g1-noos', 'contoso-g1-plan', 'contoso-g1-blank']) assert.doesNotMatch(why(n), /You cannot undo|use the Trusted launch upgrade/, `${n}: not a yes`);
+    // 5. Every other image: today's sentence, the OS rule, and what the list cannot show.
+    const today = 'To change a VM from Generation 1 to Generation 2, use the Trusted launch upgrade from Microsoft. You cannot undo this upgrade. This tool does not give the steps. The OS must be a version that Trusted launch supports.';
+    assert.equal(why('contoso-g1-ws19'), `${today} The list does not show three other conditions for the upgrade. `
+        + 'Azure Backup must use the Enhanced policy, because the upgrade is not possible with the Standard policy. '
+        + 'Before the upgrade, turn off Windows OS volume encryption, for example BitLocker. Before the upgrade, turn off Azure Site Recovery. '
+        + `You can turn them on again after the upgrade. See the Microsoft page: ${GEN1_PAGE}.`);
+    assert.equal(why('contoso-g1-ubu'), `${today} The list does not show two other conditions for the upgrade. `
+        + 'Azure Backup must use the Enhanced policy, because the upgrade is not possible with the Standard policy. '
+        + 'Before the upgrade, turn off Azure Site Recovery. '
+        + `You can turn it on again after the upgrade. See the Microsoft page: ${GEN1_PAGE}.`);
+    // A VM that does not need to move: the note, with "Check:" as it is.
+    assert.ok(why('contoso-g1-v5').startsWith('No move needed. Check: the list does not give the OS image.'), why('contoso-g1-v5'));
+});
+
+test('Generation 1: the words show on the page, in the report and in vm-target-sizes.csv, with links', async () => {
+    const { reportHtml } = await import('../js/report.js');
+    const { linkParts, whyLines } = await import('../js/details.js');
+    const { optionReason } = await import('../js/reasons.js');
+    const p = gen1Plan();
+    // vm-target-sizes.csv: the row "Generation 1 to 2" has the reason.
+    const csv = F.targetRows(p, table, NOW).filter((r) => r.Series === 'Generation 1 to 2');
+    assert.equal(csv.length, p.machines.length);
+    const ws16 = csv.find((r) => r['VM name'] === 'contoso-g1-ws16');
+    assert.equal(ws16.Reason, optionReason(rowOf(byName(p, 'contoso-g1-ws16'), 'gen1Route'), table, NOW));
+    assert.deepEqual([ws16['Series result'], ws16.Supported], ['Not in this tool', 'No']);
+    // "Why" of a VM with no supported size has the Generation 1 line (page and report).
+    const debu = byName(p, 'contoso-g1-debu');
+    assert.equal(F.groupOf(debu), 'nopath', 'the fixture');
+    assert.ok(whyLines(debu, 'nopath', table, NOW).some((l) => l.startsWith('Generation 1 to 2: The image Debian / debian-11 / 11 is Debian.')));
+    // The links: each URL in a reason is a link, without the full stop after it.
+    assert.deepEqual(linkParts(`See: ${GEN1_PAGE}. Then ${GEN1_REGISTRATION}, and (${IN_PLACE_PAGE}).`),
+        ['See: ', { href: GEN1_PAGE }, '. Then ', { href: GEN1_REGISTRATION }, ', and (', { href: IN_PLACE_PAGE }, ').']);
+    assert.deepEqual(linkParts('No link here.'), ['No link here.']);
+    assert.deepEqual(linkParts('http://example.com is not https.'), ['http://example.com is not https.']);
+    const html = reportHtml(p, table, 'gen1', NOW);
+    assert.ok(html.includes(`<a class="url" href="${GEN1_REGISTRATION}">${GEN1_REGISTRATION}</a>`), 'the report: a link in "Why"');
+    assert.ok(html.includes(`<a class="url" href="${GEN1_PAGE}">${GEN1_PAGE}</a>.`));
+    // In print, a link whose text is its address does not show the address twice.
+    assert.ok(html.includes('a.url::after { content: none; }'));
+    // The page: the card and "Why" make links of the URLs in a reason.
+    const page = read('js/page.js');
+    assert.match(page, /linked\(optionReason\(r, table, now\)\)/);
+    assert.match(page, /why\.map\(\(w\) => el\('p', \{ class: 'why' \}, linked\(w\)\)\)/);
+});
+
+test('Generation 1: the Microsoft pages behind the words are watched', async () => {
+    const { SOURCES } = await import('../tools/sources.mjs');
+    const urls = SOURCES.map((s) => s.url);
+    assert.ok(urls.includes('https://learn.microsoft.com/en-us/azure/virtual-machines/trusted-launch-existing-vm-gen-1'));
+    assert.ok(urls.includes('https://learn.microsoft.com/en-us/azure/virtual-machines/windows-in-place-upgrade'));
+    const W = await import('../js/words.js');
+    assert.deepEqual([W.GUIDANCE.gen1Upgrade, W.GUIDANCE.inPlaceUpgrade, W.GUIDANCE.gen1Registration], [GEN1_PAGE, IN_PLACE_PAGE, GEN1_REGISTRATION]);
+});
+
+test('Generation 1: the sample list has a Windows Server 2016 VM and a Debian VM on Generation 1', () => {
+    const p = run(sample).plan;
+    assert.deepEqual(rowOf(byName(p, 'contoso-web02'), 'gen1Route').codes, ['gen1-windows-server-2016']);
+    assert.deepEqual(rowOf(byName(p, 'contoso-lnx01'), 'gen1Route').codes, ['gen1-os-registration']);
+    // The about file says what the row means, with the Microsoft page.
+    const r = run(sample);
+    const about = F.aboutText(r.plan, r.list, 'sample', NOW);
+    assert.ok(about.includes('\r\nGENERATION 1 TO 2\r\n'));
+    assert.ok(about.includes('the row is always "Not in this tool"'));
+    assert.ok(about.includes(`  ${GEN1_PAGE}\r\n`));
 });

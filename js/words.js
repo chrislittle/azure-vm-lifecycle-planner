@@ -331,4 +331,11 @@ export const GUIDANCE = {
     diskEncryption: 'https://learn.microsoft.com/azure/virtual-machines/disk-encryption-migrate',
     // Names the preview feature VMTempDiskResizePreview, in a Note about the NVMe conversion script (PREVIEW_LINK above).
     tempDiskPreview: 'https://learn.microsoft.com/azure/virtual-machines/nvme-linux',
+    // The Trusted launch upgrade of a Generation 1 VM, and what it needs (0.9.7-beta, reasons.js).
+    gen1Upgrade: 'https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1',
+    // That page sends Windows Server 2016 to the in-place upgrade to Windows Server 2019 or 2022.
+    inPlaceUpgrade: 'https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade',
+    // That page: "For other Azure Gen1 Linux VMs requiring this upgrade support including
+    // Azure Linux & Debian, submit registration at Linux Gen1 to Trusted launch upgrade support".
+    gen1Registration: 'https://aka.ms/Gen1ToTLUpgrade',
 };

@@ -1691,6 +1691,104 @@ and words change only: no result, group, size, reason code or note changes.
   Azure Disk Encryption." In the box of the pool it shows as it is. No sample and no VM of
   the 4,000-VM list has it.
 
+## 0.9.7-beta (2026-11-13): the Trusted launch upgrade by the OS of a Generation 1 VM
+
+Owner, 2026-11-13: the row "Generation 1 to 2" gave one sentence for every Generation 1
+VM. It now says, from the image columns, if Microsoft's Trusted launch upgrade is open for
+the OS. A words and reason-code change of that row only.
+
+- **The source:** Microsoft Learn, "Upgrade Gen1 VMs to Trusted launch"
+  (https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1,
+  updated 2026-09-24, read 2026-11-13). Prerequisites: "Trusted launch supported operating
+  system (OS) version (excluding Windows Server 2016, Debian, Azure Linux)". Unsupported:
+  "Windows Server 2016, Azure Linux, Debian, and any other operating system not listed";
+  "For Windows Server 2016 only, workaround is to update the Guest OS to Windows Server
+  2019 or 2022" (the in-place upgrade page,
+  https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade, updated
+  2026-07-16). Linux: "only supported for VMs created using supported OS images published
+  in Azure Marketplace"; for other Linux VMs, "including Azure Linux & Debian", a
+  registration at https://aka.ms/Gen1ToTLUpgrade. Azure Backup with the Standard policy
+  blocks the upgrade (Enhanced policy); Windows OS volume encryption such as BitLocker and
+  Azure Site Recovery are off before the upgrade. Both Learn pages are watched
+  (`tools/sources.mjs`, now 35 pages) and in the snapshot (only their entries). The short
+  link is allowed by the link test.
+- **The rule** (`gen1Upgrade` in `js/extras.js`, read in `toMachine` for a Generation 1
+  VM as `vm.gen1Upgrade`; `machineAdvice` puts its code on the row). The image columns
+  decide, as for NVMe; the OS column only tells Linux from Windows:
+  - `gen1-windows-server-2016`: publisher MicrosoftWindowsServer with 2016 in the offer or
+    SKU, or MicrosoftSQLServer with ws2016 in the offer (for example sql2017-ws2016).
+  - `gen1-os-registration`: publisher Debian (or an offer that starts with debian), or
+    publisher MicrosoftCBLMariner (Azure Linux; cbl-mariner is its old name).
+  - `gen1-linux-custom-image`: Linux with no image publisher (an Image ID or a purchase
+    plan only). "Check:".
+  - `gen1-custom-image`: the same, Windows or no OS. "Check:".
+  - `gen1-image-unknown`: no image in the list (also a VM with no image facts). "Check:".
+  - `not-built-yet` (the code stays): every other Marketplace image.
+- **The result does not change.** This tool does not plan the upgrade for any OS, so every
+  code is in `BY_DESIGN` and the row stays "Not in this tool". "Check:" is in the words. A
+  "Needs team review" row would have changed the result group of a VM with no supported
+  size (to "Readiness unknown") and "Needs review" of every Generation 1 VM with no image:
+  not the meaning of this change.
+- **The words** (`js/reasons.js`; STE, read line by line; each with its Learn link):
+  - Windows Server 2016: "The image {image} is Windows Server 2016. Microsoft does not
+    support the Trusted launch upgrade of a Generation 1 VM with Windows Server 2016.
+    First, update the guest OS to Windows Server 2019 or 2022 with an in-place upgrade.
+    Then use the Trusted launch upgrade to change the VM to Generation 2. You cannot undo
+    this upgrade. This tool does not give the steps. See the Microsoft pages: {in-place
+    page} and {upgrade page}."
+  - Debian, Azure Linux: "The image {image} is {OS}. ("CBL-Mariner is the old name of
+    Azure Linux." for a cbl-mariner image.) Microsoft does not support the Trusted launch
+    upgrade of a Generation 1 VM with {OS}. Microsoft has a registration for Generation 1
+    Linux VMs that need this upgrade: https://aka.ms/Gen1ToTLUpgrade." Only when the v5
+    option has a supported size: "The v5 size {size} supports Generation 1 VMs. A move to it
+    does not need the upgrade." Never a new VM or a rebuild (0.9.5-beta).
+  - Linux, no Marketplace image: "Check: this tool cannot tell if Microsoft supports the
+    Trusted launch upgrade for this VM. The list gives no Azure Marketplace image for this
+    Linux VM. (The image ID is {id}.) Microsoft supports the upgrade of a Generation 1
+    Linux VM only when the VM comes from a supported OS image in the Azure Marketplace. For
+    other Generation 1 Linux VMs, Microsoft has a registration: {link}."
+  - No image: "Check: the list does not give the OS image. This tool cannot tell if
+    Microsoft supports the Trusted launch upgrade for this VM. Microsoft does not support
+    the upgrade for Windows Server 2016, Debian, Azure Linux or an OS version that Trusted
+    launch does not support."
+  - A custom image, Windows or no OS: "Check: the list gives no Azure Marketplace image
+    for this VM. (The image ID is {id}.) This tool cannot tell the OS version." Then the
+    same sentence of what Microsoft does not support, the Linux rule when the list gives no
+    OS, and "For a custom image, the base image must be Trusted launch capable."
+  - Every other image: the sentence of 0.9.6-beta, then "The OS must be a version that
+    Trusted launch supports. The list does not show three other conditions for the upgrade.
+    Azure Backup must use the Enhanced policy, because the upgrade is not possible with the
+    Standard policy. Before the upgrade, turn off Windows OS volume encryption, for example
+    BitLocker. Before the upgrade, turn off Azure Site Recovery. You can turn them on again
+    after the upgrade." Linux: "two other conditions", no BitLocker sentence, "turn it on".
+  - Each ends "See the Microsoft page: {upgrade page}." "See the Microsoft guidance." (no
+    link) is gone. A VM that does not need to move: "No move needed. Check: ..." (no "Note:"
+    before "Check:").
+- **Where it shows:** the card "Generation 1 to 2" on the page, "Why" of a VM with no
+  supported size (page and report), the column Reason of vm-target-sizes.csv, and a new
+  part "GENERATION 1 TO 2" of the about file. On the page and in the report each https
+  address in a reason or in "Why" is a link (`linkParts` in `js/details.js`); in print the
+  report does not show such an address twice. The list of sources on the page and in the
+  README names the two Learn pages.
+- `samples/contoso-from-azure.csv` gains contoso-lnx01 (Debian 11, Generation 1).
+  contoso-web02 (Windows Server 2016) and contoso-old01 (no image) were already there.
+- **Answer changes against 0.9.6-beta (af21ea5)**, for the four samples (before the new
+  row) and the made-up list of 4,000 VMs (seed 7): only the column Reason of the rows
+  "Generation 1 to 2" changes (182 rows). No result, group, outcome, "Needs review",
+  size, reason code of another series or other cell changes.
+- Tests: the rule for each image (also case, SQL Server, another Debian publisher, a plan
+  only, no OS); each code through `plan`, with the same v5, v6 and v7 answers, outcome,
+  group and "Needs review" for every image; each sentence in full; the v5 sentence only
+  with a supported v5 size; no "new VM" or "rebuild" for Debian and Azure Linux; the CSV
+  row, "Why", the report links and print rule, the page code, the about file, the watched
+  pages and the sample rows. The STE check reads every new word. 48 mutation checks, all
+  caught (three only after new tests: any offer of the Debian publisher, a VM with no
+  image facts, and the print rule).
+- Not in this change: the Trusted launch supported size families and OS versions are not
+  checked (the words say that the OS must be a supported version). The page says that
+  Linux VMs from other distributions than Canonical, Red Hat and SUSE can need a change of
+  the guest OS volume first; the words do not name it.
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

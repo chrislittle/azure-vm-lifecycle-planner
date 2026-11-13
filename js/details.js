@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.6-beta';
-import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
-import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.6-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.6-beta';
-import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.6-beta';
+import { capacityRestricted } from './planner.js?v=0.9.7-beta';
+import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.7-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
+import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.7-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.7-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.7-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -237,6 +237,22 @@ export function sizeCard(m, g, r) {
         return { ...card, how: join(TWO_WAYS, featureWords(o.previewFeature)), link: tempDiskPreview(m, r) };
     }
     return { ...card, how: join(ONE_WAY, featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)) };
+}
+
+// A text with web addresses in it, in parts: a plain text, or { href } for an https
+// address, so that the page and the report show each one as a link (0.9.7-beta: the
+// Generation 1 to 2 reasons give their Microsoft pages). A full stop, comma or bracket
+// after an address is text, not part of it.
+export function linkParts(text) {
+    const out = [];
+    let at = 0;
+    for (const m of String(text ?? '').matchAll(/https:\/\/\S*[^\s.,;:)]/g)) {
+        if (m.index > at) out.push(text.slice(at, m.index));
+        out.push({ href: m[0] });
+        at = m.index + m[0].length;
+    }
+    if (at < String(text ?? '').length) out.push(String(text).slice(at));
+    return out;
 }
 
 // "Why", as lines: the lifecycle stage; for a VM that cannot be read, the problems;

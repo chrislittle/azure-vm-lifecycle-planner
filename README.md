@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.6-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.7-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -77,6 +77,26 @@ For each VM:
 
 - The supported size on v5, v6 and v7, and the reason when there is no size. For B v1,
   Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2).
+- For a Generation 1 VM, the row "Generation 1 to 2" tells you if Microsoft supports the
+  Trusted launch upgrade for the OS of the image
+  ([Upgrade Gen1 VMs to Trusted launch](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1)).
+  The tool reads the image columns:
+  - Windows Server 2016 (also a SQL Server image on Windows Server 2016): not supported.
+    First, update the guest OS to Windows Server 2019 or 2022 with an
+    [in-place upgrade](https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade).
+  - Debian and Azure Linux (CBL-Mariner is the old name of Azure Linux): not supported.
+    Microsoft has a registration for these VMs (https://aka.ms/Gen1ToTLUpgrade). When the
+    tool has a v5 size for the VM, it says that this size supports Generation 1 VMs.
+  - Linux with no Azure Marketplace image: "Check:". Microsoft supports the upgrade of a
+    Generation 1 Linux VM only from a supported OS image in the Azure Marketplace.
+  - No image in the list, or a custom image that is not Linux: "Check:".
+  - Every other image: use the Trusted launch upgrade. The OS must be a version that
+    Trusted launch supports. The list does not show three other conditions: Azure Backup
+    must use the Enhanced policy, and Windows OS volume encryption (for example BitLocker)
+    and Azure Site Recovery must be off during the upgrade.
+
+  The tool does not plan the upgrade for any OS, so the row is always "Not in this tool".
+  The answers for v5, v6 and v7 do not change.
 - How to move, by series, as Microsoft recommends. On v5, resize the current VM when
   Azure supports it. On v6 and v7, deploy a new VM in parallel and move the workload.
   Microsoft says that a move to v6 or v7 is "not a normal VM resize".
@@ -287,6 +307,11 @@ work in that open tab. (It does not load again while you are offline.)
   [Dsv6](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv6-series).
   The Intel D and E sizes of v5 and every D and E size of v6 require it (the v6 pages
   changed on 27 October 2026). The AMD v5 sizes and the v7 sizes support it.
+- **The Trusted launch upgrade of a Generation 1 VM:** the Microsoft page
+  [Upgrade Gen1 VMs to Trusted launch](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1)
+  and, for Windows Server 2016, the page
+  [In-place upgrade for VMs running Windows Server](https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade),
+  read on 13 November 2026.
 
 Each Monday, a GitHub workflow reads these Microsoft pages, the Azure size list, the
 NVA policy and the Marketplace catalog again, and compares them with the data in this

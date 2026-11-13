@@ -2,20 +2,22 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.6-beta';
-import { capacityRestricted } from './planner.js?v=0.9.6-beta';
-import * as F from './files.js?v=0.9.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
-import { COMPARE_HINT, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.6-beta';
-import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.6-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.6-beta';
-import version from './version.js?v=0.9.6-beta';
+import capacity from '../data/capacity.js?v=0.9.7-beta';
+import { capacityRestricted } from './planner.js?v=0.9.7-beta';
+import * as F from './files.js?v=0.9.7-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
+import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
+import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.7-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.7-beta';
+import version from './version.js?v=0.9.7-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
 export function reportHtml(p, table, sourceName, now = new Date()) {
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const short = (s) => String(s || '').replace(/^Standard_/, '');
+    // A text with each https address in it as a link (details.js, linkParts), as on the page.
+    const linked = (s) => linkParts(s).map((x) => (typeof x === 'string' ? esc(x) : `<a class="url" href="${esc(x.href)}">${esc(x.href)}</a>`)).join('');
 
     const target = (m, g) => { if (!m.vm || ['modern', 'gate', 'nopath', 'unchecked'].includes(g)) return ''; const r = F.likelyRow(m); return r ? `${r.series === 'burstable' ? 'Burstable' : r.series}: ${short(r.option.targetSize)}` : ''; };
     const where = (m) => [m.read.resourceGroup, m.read.region].filter((x) => x).join(' · ');
@@ -104,7 +106,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       <p class="meta">${esc(short(m.read.size || m.read.sizeAsWritten))} · ${esc(where(m))} · ${esc(PATTERNS[m.pattern || ''].name)}</p>
       ${genLine(m)}
       <h4>What to do</h4><div class="todo">${todoHtml}</div>
-      ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${esc(w)}</p>`).join('')}` : ''}
+      ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${linked(w)}</p>`).join('')}` : ''}
       ${workloadHtml(m)}
       ${notes(t.ways.length ? OTHER_STEPS : STEPS, t.otherSteps, 'act')}
       ${notes(GOOD_TO_KNOW, t.attention, 'att')}
@@ -166,7 +168,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     @media (max-width: 900px) { .sums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .sums { grid-template-columns: 1fr; } }
     @media (max-width: 600px) { .ways { grid-template-columns: 1fr; } }
-    @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } @page { margin: 14mm; } }
+    @media print { main { max-width: none; padding: 0; } h2 { break-after: avoid; } h3.grp { break-after: avoid; } a { color: inherit; text-decoration: none; } a[href^="http"]::after { content: " (" attr(href) ")"; overflow-wrap: anywhere; } a.url::after { content: none; } @page { margin: 14mm; } }
     </style></head><body><main>
     <div class="cover">
       <h1>VM Lifecycle Report</h1>
