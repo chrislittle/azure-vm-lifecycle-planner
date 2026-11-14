@@ -1,11 +1,11 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.6-beta';
-import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
-import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.6-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.6-beta';
-import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.6-beta';
+import { capacityRestricted } from './planner.js?v=0.9.7-beta';
+import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.7-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
+import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, LINK_NAMES, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.7-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.7-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.7-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -239,6 +239,28 @@ export function sizeCard(m, g, r) {
     return { ...card, how: join(ONE_WAY, featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)) };
 }
 
+// A text with named links in it, in parts: a plain text, or { href, text } for a link, so that
+// the page and the report show the name as the link and never the address (owner,
+// 2026-11-13). A link is "name (address)", with an address of GUIDANCE and its name from
+// LINK_NAMES (words.js). Anything else stays text: a reason can carry a value from the list
+// (an image ID or an image name), and the page never makes a link from what a list gives
+// (review, 2026-11-13). LINK_NAMES has only addresses of GUIDANCE (a test checks it).
+export function linkParts(text) {
+    const out = [];
+    let at = 0;
+    for (const m of String(text ?? '').matchAll(/([^()]*?) \((https:\/\/[^\s()]+)\)/g)) {
+        const href = m[2];
+        const name = LINK_NAMES[href];
+        if (!name || !m[1].endsWith(name)) continue;
+        const start = m.index + m[1].length - name.length;
+        if (start > at) out.push(text.slice(at, start));
+        out.push({ href, text: name });
+        at = m.index + m[0].length;
+    }
+    if (at < String(text ?? '').length) out.push(String(text).slice(at));
+    return out;
+}
+
 // "Why", as lines: the lifecycle stage; for a VM that cannot be read, the problems;
 // for vendor approval, the reason; for no supported size, each reason once.
 export function whyLines(m, g, table, now = new Date()) {
@@ -263,8 +285,7 @@ export function whyLines(m, g, table, now = new Date()) {
             rest.get(text).push(r.name);
         }
         for (const [text, names] of rest) why.push(`${seriesList(names)}: ${text}`);
-        const gen1 = m.rows.find((r) => r.series === 'gen1Route');
-        if (gen1) why.push(`Generation 1 to 2: ${optionReason(gen1, table, now)}`);
+        // No "Generation 1 to 2" line (owner, 2026-11-13): the v6 and v7 reasons say it.
     }
     return why;
 }

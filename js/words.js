@@ -331,4 +331,19 @@ export const GUIDANCE = {
     diskEncryption: 'https://learn.microsoft.com/azure/virtual-machines/disk-encryption-migrate',
     // Names the preview feature VMTempDiskResizePreview, in a Note about the NVMe conversion script (PREVIEW_LINK above).
     tempDiskPreview: 'https://learn.microsoft.com/azure/virtual-machines/nvme-linux',
+    // The Trusted launch upgrade of a Generation 1 VM, and what it needs (0.9.7-beta, reasons.js).
+    gen1Upgrade: 'https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1',
+    // That page sends Windows Server 2016 to the in-place upgrade to Windows Server 2019 or 2022.
+    inPlaceUpgrade: 'https://learn.microsoft.com/azure/virtual-machines/windows-in-place-upgrade',
 };
+
+// The name of a link on the page and in the report: a text that gives an address of GUIDANCE
+// as "name (address)" shows the name as the link, never the address (details.js, linkParts;
+// owner, 2026-11-13). The CSV files keep the address as text.
+export const LINK_NAMES = { [GUIDANCE.gen1Upgrade]: 'Microsoft: Trusted launch upgrade' };
+export const namedLink = (href) => `${LINK_NAMES[href]} (${href})`;
+
+// When this tool read the two Generation 1 pages for its words (0.9.7-beta), and the date of
+// each page then (its updated_at). The README gives the read date. A test ties the page dates
+// to tools/source-snapshot.json: when a page changes, read the words again and change these dates.
+export const GEN1_PAGES_READ = { readUtc: '2026-11-13', gen1Upgrade: '2026-09-24', inPlaceUpgrade: '2026-07-16' };

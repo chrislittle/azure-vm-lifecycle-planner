@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.6-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.6-beta';
-import nvme from '../data/nvme-images.js?v=0.9.6-beta';
-import { readCount } from './planner.js?v=0.9.6-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.7-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.7-beta';
+import nvme from '../data/nvme-images.js?v=0.9.7-beta';
+import { readCount } from './planner.js?v=0.9.7-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -224,6 +224,49 @@ export function imageSupportsNvme(publisher, offer, sku) {
         default:
             return null;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Is the Trusted launch upgrade open for the OS of a Generation 1 VM? (0.9.7-beta)
+// ---------------------------------------------------------------------------
+
+// Microsoft Learn, "Upgrade Gen1 VMs to Trusted launch"
+// (https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1,
+// updated 2026-09-24): "Trusted launch supported operating system (OS) version
+// (excluding Windows Server 2016, Debian, Azure Linux)". For Windows Server 2016 only,
+// the workaround is to update the guest OS to Windows Server 2019 or 2022. Linux: "only
+// supported for VMs created using supported OS images published in Azure Marketplace".
+// The image columns decide, as for NVMe; the OS column only tells Linux from Windows.
+// { code, facts }: the reason code of the Generation 1 to 2 row (reasons.js).
+//   gen1-windows-server-2016  a Windows Server 2016 image, also SQL Server or Visual Studio on it (ws2016)
+//   gen1-os-not-supported     Debian or Azure Linux (CBL-Mariner is its old name)
+//   gen1-linux-custom-image   Linux with no Azure Marketplace image: "Check:"
+//   gen1-custom-image         no Azure Marketplace image, Windows or no OS: "Check:"
+//   gen1-image-unknown        the list gives no image: "Check:"
+//   not-built-yet             any other Marketplace image: the upgrade, with its conditions
+export function gen1Upgrade(x, os) {
+    const p = String(x.imagePublisher ?? '').toLowerCase();
+    const o = String(x.imageOffer ?? '').toLowerCase();
+    const both = `${o} ${String(x.imageSku ?? '').toLowerCase()}`;
+    const linux = String(os ?? '').toLowerCase() === 'linux';
+    if (!p) {
+        // A gallery or managed image, or a purchase plan with no image: not an Azure Marketplace image.
+        if (x.imageId || x.planPublisher) {
+            const imageId = x.imageId || '';
+            return linux ? { code: 'gen1-linux-custom-image', facts: { imageId } } : { code: 'gen1-custom-image', facts: { imageId, osKnown: Boolean(os) } };
+        }
+        return { code: 'gen1-image-unknown', facts: {} };
+    }
+    // Windows Server 2016: the Windows Server publisher with 2016 in the offer or SKU; or, from
+    // any publisher (SQL Server, Visual Studio, a vendor) on Windows or with no OS, ws2016 in
+    // the offer or SKU, or an offer or SKU that starts with 2016- (review, 2026-11-13).
+    const ws2016 = (t) => /ws2016|^2016-/.test(t);
+    if ((p === 'microsoftwindowsserver' && /2016/.test(both)) || (!linux && (ws2016(o) || ws2016(String(x.imageSku ?? '').toLowerCase())))) {
+        return { code: 'gen1-windows-server-2016', facts: { image: imageWords(x) } };
+    }
+    if (p === 'debian' || /^debian/.test(o)) return { code: 'gen1-os-not-supported', facts: { os: 'Debian', image: imageWords(x), oldName: false } };
+    if (p === 'microsoftcblmariner') return { code: 'gen1-os-not-supported', facts: { os: 'Azure Linux', image: imageWords(x), oldName: /cbl-mariner/.test(both) } };
+    return { code: 'not-built-yet', facts: { linux } };
 }
 
 // ---------------------------------------------------------------------------

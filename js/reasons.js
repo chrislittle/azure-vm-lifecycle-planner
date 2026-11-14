@@ -1,11 +1,14 @@
 // The reason for each answer, in the customer's words. One sentence or two,
 // with the numbers that matter. Shown to the owner as one list (PLAN.md).
 
-import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.6-beta';
-import { dateWords, stageWords } from './words.js?v=0.9.6-beta';
+import { mappingFor, sizeGeneration, sizeRetirement } from './lifecycle.js?v=0.9.7-beta';
+import { GUIDANCE, dateWords, namedLink, stageWords } from './words.js?v=0.9.7-beta';
 
 const SERIES = { v5: 'v5', v6: 'v6', v7: 'v7', gen1Route: 'Generation 2', burstable: 'burstable' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// "Operating system: Windows Server 2016, Azure Linux, Debian, and any other operating
+// system not listed under Trusted launch supported operating system (OS) version."
+const GEN1_NOT_FOR = 'Microsoft does not support the upgrade for Windows Server 2016, Debian, Azure Linux or an OS version that Trusted launch does not support.';
 
 // Each reason: (context) -> sentence. Context: { vm, series, table, now, option }.
 export const REASONS = {
@@ -15,7 +18,55 @@ export const REASONS = {
     'already-on-nvme': ({ vm }) => `Not needed. This VM is on an NVMe size (${sizeGeneration(vm.sourceSize)}) now.`,
 
     // ---- Not in this tool (on purpose) ----
-    'not-built-yet': () => 'To change a VM from Generation 1 to Generation 2, use the Trusted launch upgrade from Microsoft. You cannot undo this upgrade. This tool does not give the steps. See the Microsoft guidance.',
+    // The Generation 1 to 2 row, by the OS of the image (0.9.7-beta, extras.js gen1Upgrade).
+    // Microsoft Learn, "Upgrade Gen1 VMs to Trusted launch" (GUIDANCE.gen1Upgrade, updated
+    // 2026-09-24), in its terms. Some of its prerequisites that the list cannot show, each
+    // "if enabled": Azure Backup with the Enhanced policy ("can't be enabled for VMs
+    // configured with Standard policy backup protection"), Windows OS volume encryption
+    // such as BitLocker off before the upgrade, Azure Site Recovery off before the upgrade.
+    // The page lists more (for example "Trusted launch supported size family"): the words
+    // say so, and do not count them (review, 2026-11-13). The OS must be a "Trusted launch
+    // supported operating system (OS) version".
+    'not-built-yet': ({ facts }) => {
+        const linux = Boolean(facts?.linux);
+        return 'To change a VM from Generation 1 to Generation 2, use the Trusted launch upgrade from Microsoft. You cannot undo this upgrade. This tool does not give the steps. '
+            + 'The OS must be a version that Trusted launch supports. '
+            + 'The list does not give the facts for these conditions. '
+            + 'If Azure Backup is on, it must use the Enhanced policy. '
+            + (linux ? '' : 'If Windows OS volume encryption, for example BitLocker, is on, turn it off before the upgrade. ')
+            + 'If Azure Site Recovery is on, turn it off before the upgrade. '
+            + 'The Microsoft page lists more conditions. For example, the VM size must be in a size family that supports Trusted launch. '
+            + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
+    },
+    // "For Windows Server 2016 only, workaround is to update the Guest OS to Windows Server 2019 or 2022."
+    'gen1-windows-server-2016': ({ facts }) => `${facts?.image ? `The image ${facts.image} is Windows Server 2016. ` : ''}`
+        + 'Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with Windows Server 2016. '
+        + 'First, update the guest OS to Windows Server 2019 or 2022 with an in-place upgrade. '
+        + 'Then use the Trusted launch upgrade to change the VM to Generation 2. You cannot undo this upgrade. This tool does not give the steps. '
+        + `See the Microsoft pages: ${GUIDANCE.inPlaceUpgrade} and ${GUIDANCE.gen1Upgrade}.`,
+    // Debian and Azure Linux: no workaround, and no link to a form (owner, 2026-11-13).
+    // Never a new VM or a rebuild (0.9.5-beta): the v5 size, when this tool
+    // has one, takes Generation 1.
+    'gen1-os-not-supported': ({ facts }) => {
+        const os = facts?.os || 'this OS';
+        return `${facts?.image ? `The image ${facts.image} is ${os}. ` : ''}${facts?.oldName ? 'CBL-Mariner is the old name of Azure Linux. ' : ''}`
+            + `Microsoft does not support the Trusted launch upgrade of a Generation 1 VM with ${os}. `
+            // A fact of the size table (Azure's resource SKU list, HyperVGenerations), not of the Learn page.
+            + (facts?.v5 ? `Azure lists Generation 1 for the v5 size ${facts.v5}. A move to it does not need the upgrade. ` : '')
+            + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`;
+    },
+    // Linux: "only supported for VMs created using supported OS images published in Azure Marketplace".
+    'gen1-linux-custom-image': ({ facts }) => 'Check: this tool cannot tell if Microsoft supports the Trusted launch upgrade for this VM. '
+        + `The list gives no Azure Marketplace image for this Linux VM.${facts?.imageId ? ` The image ID is ${facts.imageId}.` : ''} `
+        + 'Microsoft supports the upgrade of a Generation 1 Linux VM only when the VM comes from a supported OS image in the Azure Marketplace. '
+        + `See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`,
+    // "For custom OS images or disks, the base image should be Trusted launch capable."
+    'gen1-custom-image': ({ facts }) => `Check: the list gives no Azure Marketplace image for this VM.${facts?.imageId ? ` The image ID is ${facts.imageId}.` : ''} `
+        + `This tool cannot tell the OS version. ${GEN1_NOT_FOR} `
+        + (facts?.osKnown ? '' : 'For Linux, Microsoft supports the upgrade only from a supported OS image in the Azure Marketplace. ')
+        + `For a custom image, the base image must be Trusted launch capable. See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`,
+    'gen1-image-unknown': () => 'Check: the list does not give the OS image. This tool cannot tell if Microsoft supports the Trusted launch upgrade for this VM. '
+        + `${GEN1_NOT_FOR} See the Microsoft page: ${GUIDANCE.gen1Upgrade}.`,
     'gen1-requires-redeploy': ({ series }) => `${series} sizes support only Generation 2 VMs. This VM is Generation 1.`,
     'confidential-vm-requires-manual': () => 'This tool gives no target size for confidential VMs. A confidential VM moves to a newer confidential size, for example from DCasv5 to DCasv6.',
     'confidential-family': () => 'This tool gives no target size for the confidential computing sizes (the DC and EC families). See the Microsoft guidance for this family.',
@@ -85,6 +136,22 @@ export const REASONS = {
     'must-move-no-target': ({ stage }) => `${stageWords(stage, null)} No size fits this VM.`,
 };
 
+// The v6 and v7 boxes of a Generation 1 VM (owner, 2026-11-13): after "v6 sizes support only
+// Generation 2 VMs. This VM is Generation 1.", one sentence for the OS of the image
+// (extras.js, gen1Upgrade), then the link to the Microsoft page. The CSV row "Generation 1 to 2"
+// has the full words (REASONS above).
+const GEN1_BOX = {
+    'gen1-windows-server-2016': () => 'To change to Generation 2, first upgrade Windows Server 2016 to 2019 or 2022. Then use the Trusted launch upgrade.',
+    'gen1-os-not-supported': (facts) => `Microsoft does not support the change to Generation 2 for ${facts?.os || 'this OS'}.`,
+    'not-built-yet': () => 'To change to Generation 2, use the Trusted launch upgrade. You cannot undo it.',
+};
+const GEN1_BOX_UNKNOWN = 'This tool cannot see if this VM can change to Generation 2.';
+export function gen1BoxWords(vm) {
+    const g = vm && vm.gen1Upgrade;
+    const f = g && GEN1_BOX[g.code];
+    return `${f ? f(g.facts) : GEN1_BOX_UNKNOWN} ${namedLink(GUIDANCE.gen1Upgrade)}`;
+}
+
 const MAPPING_CODES = ['not-in-region', 'family-not-in-region', 'no-shape-fit', 'too-few-data-disks', 'too-few-nics',
     'smaller-than-source', 'gen1-no-size', 'not-approved', 'processor-not-approved'];
 
@@ -113,8 +180,12 @@ export function optionReason(row, table, now = new Date()) {
         return r;
     }
     const sapSign = row.machine.extra ? row.machine.extra.sapSign : null;
-    const why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined, sapSign })).join(' ');
+    let why = row.codes.map((c) => reasonFor(c, { vm, series, table, now, option: row.option, facts: row.option.facts || undefined, sapSign })).join(' ');
+    // v6 and v7 of a Generation 1 VM (the only series with this code), when Generation 2 is the
+    // only reason: can it change? (0.9.7-beta)
+    if (row.codes.length === 1 && row.codes[0] === 'gen1-requires-redeploy') why += ` ${gen1BoxWords(vm)}`;
     // Not moving: the option is for reference only.
-    if (row.moveRequired === 'No' && !why.startsWith('Not needed')) return `No move needed. Note: ${why}`;
+    // A "Check:" reason keeps its own word.
+    if (row.moveRequired === 'No' && !why.startsWith('Not needed')) return `No move needed. ${why.startsWith('Check:') ? '' : 'Note: '}${why}`;
     return why;
 }

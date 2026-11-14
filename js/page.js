@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.9.6-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
-import capacity from '../data/capacity.js?v=0.9.6-beta';
-import nvme from '../data/nvme-images.js?v=0.9.6-beta';
-import query from './query.js?v=0.9.6-beta';
-import sample from './sample.js?v=0.9.6-beta';
-import { SizeTable } from './lifecycle.js?v=0.9.6-beta';
-import { COLUMNS, readList } from './input.js?v=0.9.6-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
-import { COMPARE_HINT, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.6-beta';
-import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.6-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.9.6-beta';
-import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.6-beta';
-import * as F from './files.js?v=0.9.6-beta';
-import { makeZip } from './zip.js?v=0.9.6-beta';
-import version from './version.js?v=0.9.6-beta';
+import sizes from '../data/sizes.js?v=0.9.7-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
+import capacity from '../data/capacity.js?v=0.9.7-beta';
+import nvme from '../data/nvme-images.js?v=0.9.7-beta';
+import query from './query.js?v=0.9.7-beta';
+import sample from './sample.js?v=0.9.7-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.7-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.7-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.7-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
+import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.7-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.7-beta';
+import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
+import * as F from './files.js?v=0.9.7-beta';
+import { makeZip } from './zip.js?v=0.9.7-beta';
+import version from './version.js?v=0.9.7-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -38,6 +38,9 @@ function el(tag, attrs = {}, ...children) {
     for (const c of children.flat()) if (c !== null && c !== undefined) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
     return e;
 }
+
+// A text with its named links as links (details.js, linkParts).
+const linked = (text) => linkParts(text).map((x) => (typeof x === 'string' ? x : el('a', { href: x.href, target: '_blank', rel: 'noopener noreferrer', text: x.text })));
 
 // The tool runs only in its own tab, never inside another site's page: another
 // site could put its own controls over this page (review, 2026-10-10). A meta
@@ -366,7 +369,7 @@ function details(m) {
     // Why.
     const why = whyLines(m, g, table, now);
     const noSize = g === 'nopath';
-    if (why.length) section('Why', ...why.map((w) => el('p', { class: 'why', text: w })));
+    if (why.length) section('Why', ...why.map((w) => el('p', { class: 'why' }, linked(w))));
     if (m.vm && (g === 'gate' || g === 'nopath')) {
         box.append(el('p', { class: 'hint' }, 'Microsoft guidance: ', el('a', { href: GUIDANCE.endOfLife, target: '_blank', rel: 'noopener noreferrer', text: 'End of Life sizes' }), ', ',
             el('a', { href: GUIDANCE.retirements, target: '_blank', rel: 'noopener noreferrer', text: 'retirements' }), '.'));
@@ -388,6 +391,8 @@ function details(m) {
         let used = false;
         let others = 0;
         for (const r of m.rows) {
+            // No card for the row "Generation 1 to 2" (owner, 2026-11-13): the v6 and v7 cards say it.
+            if (r.series === 'gen1Route') continue;
             const o = r.option;
             const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
             const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
@@ -398,7 +403,7 @@ function details(m) {
             const card = el('div', { class: c.used ? 'used' : null }, el('h4', { class: o.supported ? '' : 'no', text: title }),
                 c.stage ? el('span', { class: 'tag-stage' }, el('span', { class: 'vh', text: 'Lifecycle stage of the series: ' }), c.stage) : null,
                 c.used ? el('p', { class: 'used-note', text: SIZE_USED }) : null);
-            if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no', text: optionReason(r, table, now) }));
+            if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no' }, linked(optionReason(r, table, now))));
             // A v6 or v7 resize that needs the preview feature VMTempDiskResizePreview: the link to the Microsoft page that names it.
             if (c.how) card.append(el('p', { class: 'hint' }, c.how, c.link ? ' ' : null, c.link ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
             if (o.supported) {

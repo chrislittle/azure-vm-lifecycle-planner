@@ -9,16 +9,16 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
-import capacity from '../data/capacity.js?v=0.9.6-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
+import capacity from '../data/capacity.js?v=0.9.7-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.6-beta';
-import { caveats, extraBlockers, readExtras } from './extras.js?v=0.9.6-beta';
-import { patternOf } from './patterns.js?v=0.9.6-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.6-beta';
+} from './lifecycle.js?v=0.9.7-beta';
+import { caveats, extraBlockers, gen1Upgrade, readExtras } from './extras.js?v=0.9.7-beta';
+import { patternOf } from './patterns.js?v=0.9.7-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.7-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -256,6 +256,8 @@ export function toMachine(row, map, rowNumber, table, now = new Date()) {
     if (disks.value !== null) vm.dataDiskCount = disks.value;
     if (extra.acceleratedNicCount !== null) vm.acceleratedNicCount = extra.acceleratedNicCount;
     if (extra.primaryNicAccelerated !== null) vm.primaryNicAccelerated = extra.primaryNicAccelerated;
+    // Generation 1: is the Trusted launch upgrade open for the OS of the image? (0.9.7-beta)
+    if (gen === 'V1') vm.gen1Upgrade = gen1Upgrade(extra, os);
     return { vm, read, extra, pattern, problems: [], notes, source };
 }
 
@@ -337,6 +339,10 @@ export const BY_DESIGN = [
     // 0.9.5-beta: Windows, Azure Disk Encryption, and a resize that needs the preview feature
     // VMTempDiskResizePreview: lab tests did not use the feature with the encryption.
     'disk-encryption-preview',
+    // 0.9.7-beta: the Generation 1 to 2 row, by the OS of the image. This tool does not plan
+    // the Trusted launch upgrade for any OS, so the row stays "Not in this tool". The words
+    // say "Check:" when the image does not tell (reasons.js).
+    'gen1-windows-server-2016', 'gen1-os-not-supported', 'gen1-linux-custom-image', 'gen1-custom-image', 'gen1-image-unknown',
 ];
 // The logic could not judge these: a person must.
 // not-in-region: no size with the same name. Another size of the series can fit

@@ -8,8 +8,8 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.9.6-beta';
-import seriesRules from '../data/series-rules.js?v=0.9.6-beta';
+import families from '../data/families.js?v=0.9.7-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.7-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -1049,8 +1049,14 @@ export function machineAdvice(vm, table, now = new Date()) {
         options.push(b);
     }
     if (eqI(vm.gen, 'V1') && !outOfScope) {
+        // Is the Trusted launch upgrade open for the OS of the image (extras.js, gen1Upgrade;
+        // 0.9.7-beta)? A VM with no image facts: the list does not give the image. The v5
+        // size, when it is supported, takes Generation 1: the words for an OS with no upgrade name it.
+        const g = vm.gen1Upgrade || { code: 'gen1-image-unknown', facts: {} };
+        const v5 = options[0];
         options.push({
-            option: 'gen1Route', supported: false, notSupported: ['not-built-yet'],
+            option: 'gen1Route', supported: false, notSupported: [g.code],
+            facts: { ...g.facts, v5: v5.supported && v5.targetSize ? v5.targetSize : null },
             targetSize: null, sizeUnverified: false, path: null, blockers: [], prep: [],
             move: 'gen1-route', previewFeature: null, featureFallback: null, tempDisksFrom: null, tempDisksTo: null,
             targetStage: null, stageChange: 'unknown',

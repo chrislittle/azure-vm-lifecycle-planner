@@ -5,16 +5,16 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.6-beta';
-import families from '../data/families.js?v=0.9.6-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.6-beta';
-import capacity from '../data/capacity.js?v=0.9.6-beta';
-import nvme from '../data/nvme-images.js?v=0.9.6-beta';
-import { capacityRestricted } from './planner.js?v=0.9.6-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.6-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.6-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.6-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.6-beta';
+import sizes from '../data/sizes.js?v=0.9.7-beta';
+import families from '../data/families.js?v=0.9.7-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
+import capacity from '../data/capacity.js?v=0.9.7-beta';
+import nvme from '../data/nvme-images.js?v=0.9.7-beta';
+import { capacityRestricted } from './planner.js?v=0.9.7-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.7-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.7-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.7-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -325,6 +325,17 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '             It is blank when there is no size, and for a VM in a pool or a service.',
         '             Microsoft names the feature in a note about its NVMe conversion script:',
         `             ${GUIDANCE.tempDiskPreview}`,
+        '',
+        // 0.9.7-beta: the Generation 1 to 2 row, by the OS of the image (extras.js, gen1Upgrade).
+        'GENERATION 1 TO 2',
+        '  For a Generation 1 VM, the row "Generation 1 to 2" of vm-target-sizes.csv is about the Trusted launch upgrade.',
+        '  This tool does not plan the upgrade, so the row is always "Not in this tool". The reason depends on the image.',
+        '  On the page and in the report, the v6 and v7 boxes of a Generation 1 VM give one sentence about it.',
+        '  Windows Server 2016: not supported. First, update the guest OS to Windows Server 2019 or 2022.',
+        '  Debian and Azure Linux: not supported.',
+        '  Linux with no Azure Marketplace image, a custom image, or no image in the list: "Check:".',
+        '  Every other image: use the Trusted launch upgrade. The reason gives the conditions that the list does not show.',
+        `  ${GUIDANCE.gen1Upgrade}`,
         '',
         'RANKED SIZES',
         '  For each supported series, up to five sizes, best first. Each one passes the same checks.',

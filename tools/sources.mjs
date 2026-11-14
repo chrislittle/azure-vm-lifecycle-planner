@@ -56,6 +56,11 @@ export const SOURCES = [
     ['dasv6', 'Dasv6 series', `${VM}/sizes/general-purpose/dasv6-series`],
     ['esv6', 'Esv6 series', `${VM}/sizes/memory-optimized/esv6-series`],
     ['easv6', 'Easv6 series', `${VM}/sizes/memory-optimized/easv6-series`],
+    // The Generation 1 to 2 row (0.9.7-beta): the operating systems that the Trusted launch
+    // upgrade of a Generation 1 VM excludes, and what it needs. Windows Server 2016 goes to
+    // the in-place upgrade first.
+    ['gen1-trusted-launch', 'Upgrade Gen1 VMs to Trusted launch', `${VM}/trusted-launch-existing-vm-gen-1`],
+    ['windows-in-place-upgrade', 'In-place upgrade for VMs running Windows Server in Azure', `${VM}/windows-in-place-upgrade`],
 ].map(([id, name, url]) => ({ id, name, url }));
 
 const point = (n) => { try { return String.fromCodePoint(n); } catch { return ' '; } };
