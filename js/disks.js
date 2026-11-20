@@ -151,7 +151,10 @@ function nextKeeping(target, t, cur, table, columns) {
 // The note "Disk limits" for one option of one VM: { state, text }. state: 'attention' (a fact
 // to know: the new size lowers the ceiling), 'check' (the list does not give a value that this
 // tool needs, or this tool cannot tell the limit), or '' (nothing to say).
-export function diskNote(vm, x, option, table, columns = null) {
+// blankByDesign: the query leaves the disk values blank for this row by design (a scale set): no
+// "Check:" for blank values, as the list can never give them (review, 2026-11-20). A hand-made
+// list with blank values for a VM still gets the "Check:".
+export function diskNote(vm, x, option, table, columns = null, blankByDesign = false) {
     // Only a size that this tool shows: a blocked option shows no size.
     if (!option || !option.supported || !option.targetSize || option.option === 'gen1Route') return none();
     const t = diskTotals(x);
@@ -180,7 +183,7 @@ export function diskNote(vm, x, option, table, columns = null) {
             const n = limitFor(neu, g, k, t.ultraOnly);
             if (T === null) {
                 // No value from the list: a "Check:" only where the new size allows less.
-                if (c.value !== null && n.value !== null && n.value < c.value) blank[g].push({ k, c, n });
+                if (!blankByDesign && c.value !== null && n.value !== null && n.value < c.value) blank[g].push({ k, c, n });
                 continue;
             }
             if (c.value === null || n.value === null) {

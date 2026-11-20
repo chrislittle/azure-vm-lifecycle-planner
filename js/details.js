@@ -42,11 +42,15 @@ export function sizeComparison(m, table) {
     const t = diskTotals(m.extra);
     const vmDisk = (v) => (v === null ? undefined : `${t.upTo ? 'up to ' : ''}${diskWords(v)}`);
     // The disk limit of a size that applies to this VM: the column for Premium SSD v2 and Ultra Disk
-    // when every uncached disk is one, else the limit of the size table.
+    // when every uncached disk is one, else the limit of the size table. For a mix, Microsoft does
+    // not say which limit applies: the higher one, so that a mark shows only when every limit that
+    // may apply is lower (review, 2026-11-20).
     const diskLimitOf = (f, group, k) => {
         if (group === 'cached') return k === 'iops' ? f.cachedIops : f.cachedMbps;
         const u = k === 'iops' ? f.ultraIops : f.ultraMbps;
-        return t.ultraOnly && u !== null ? u : k === 'iops' ? f.uncachedIops : f.uncachedMbps;
+        const single = k === 'iops' ? f.uncachedIops : f.uncachedMbps;
+        if (t.mix && u !== null && single !== null) return Math.max(single, u);
+        return t.ultraOnly && u !== null ? u : single;
     };
     // A note where the limit of a new size is lower than the ceiling of the VM now: the lower of
     // the disk total of the VM and the limit of the current size (the limit alone with no total).

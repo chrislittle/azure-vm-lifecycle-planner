@@ -1856,7 +1856,14 @@ pages.
   UncachedDiskBytesPerSecond, CombinedTempDiskAndCachedIOPS,
   CombinedTempDiskAndCachedReadBytesPerSecond and CombinedTempDiskAndCachedWriteBytesPerSecond.
   Azure gives bytes per second: 145000000 is 145 MBps (an MBps is 10^6 bytes per second, as
-  the size pages say). Every size has the five values; no region disagrees. The cached MBps
+  the size pages say). Every size has the two uncached values. 23 HPC, GPU and FPGA sizes
+  (Standard_HB*, Standard_HC44rs, Standard_HX*, Standard_NC24rs_v3 and NC24s_v3, Standard_ND*,
+  Standard_NP40s, Standard_NV24s_v2 and NV48s_v3) have none of the three cached values: the tool
+  reads no cached limit for them (unknown, never a guess; none of them is a target). No region
+  disagrees: the tool lists such sizes in `differsByRegion` of data/sizes.js, and the list is
+  empty. The tool is the one that the weekly check uses, `tools/azure-sources.mjs` (run
+  `az login`, then `node tools/azure-sources.mjs --update`; read-only calls); this change only
+  added the five capabilities to its list, and kept the NVA file as it was. The cached MBps
   is the lower of the read and the write limit. Other changes against the table of
   2026-10-16: 1,604 sizes (was 1,498). 106 new sizes: Dpsv7, Dpdsv7, Dplsv7, Dpldsv7, Epsv7,
   Epdsv7, Lpsv5, Mpsv4, Mpdsv4 (10 each; Arm64 or out of scope, never a target) and Ebsv6,
@@ -1867,7 +1874,13 @@ pages.
     move) now shows Standard_E16bs_v6 or Standard_E16bds_v6 for v6 "for reference", where it
     said "Not checked: the new size is not in the size table" (contoso-every-series.csv 2
     rows, the 4,000-VM list 32 rows; their rows in vm-not-checked.csv go). The F16 v6 NIC
-    limits change no answer. Nothing else.
+    limits change no answer. Nothing else changes in these lists.
+  - **For every size of the table** (each size as Generation 1 and 2, with Windows, Linux and
+    no OS; review, 2026-11-20), also: the 60 new sizes Standard_L*ps_v5, Standard_M*ps_v4 and
+    Standard_M*pds_v4 (20 each) were not in the table, so a VM on one was "Not checked"; now its
+    stage is "Current or Extended" and it is "No move needed" (v5, v6 and v7 "Not needed"). A VM
+    already on Ebsv6 or Ebdsv6 now says "Not needed - already on NVMe" for v6 (was "Not
+    needed"). No other answer changes.
 - **The separate limit for Premium SSD v2 and Ultra Disk.** Azure's size list gives only the
   Premium SSD column. The v6 and v7 size pages give a second column, "Uncached Ultra Disk and
   Premium SSD v2 IOPS / Throughput (MBps)" (Standard_D2s_v6: 3,750 IOPS for Premium SSD,
@@ -1900,6 +1913,12 @@ pages.
   model has no disk values); 0 means no disk of that kind. A value is never filled from a
   tier table. The saved test data shows the values on Premium SSD (P4: 120 IOPS, 25 MBps;
   P10: 500 IOPS, 100 MBps). `template.csv` has the columns, blank.
+  - **After the test build** (review, 2026-11-20): the host caching and the LUN of a disk now
+    come from an entry for each VM (`make_bag_if` by the VM's key, read after the second
+    mv-expand), so that each VM on a shared disk gets its own values, the same on every run.
+    Before, `anyif` took the values of any one VM on the disk. For a disk on one VM (the path that
+    the test build proved) the values are the same, but this version of the query was not run on
+    Azure again. No join was added.
   - **Query proven 2026-11-20** in a test build (Central US, one Standard_D2s_v6 VM with one
     disk of each type; the resource group was deleted the same day). Every value was right,
     and every disk type gives diskIOPSReadWrite and diskMBpsReadWrite, Standard HDD and
@@ -1915,7 +1934,14 @@ pages.
   the column of the size page; a size without it gets "Check:", never a "lower" note on a
   guess. A list with totals but no disk types: "Check:", unless the column is lower too. A
   blank total: no "lower" note, only "Check:" where the new size limit is lower than the
-  current size limit (so that it is not noise).
+  current size limit (so that it is not noise). Not for a scale set row (an AKS node pool is one): the
+  query leaves its values blank by design, so the customer cannot correct the list (review,
+  2026-11-20). A VM with unmanaged disks has no supported size, so no note. A VM in a pool (for
+  example a pooled AVD host) is a VM: the query gives its disks, and blank values still give
+  the "Check:", as on a hand-made list. vm-summary.csv: when the size of "What to do" has no disk
+  note but the page shows one, "To check" (or "Good to know") says `Disk limits: see
+  vm-target-sizes.csv.` In the size table, a mix gets a mark under a value only when every
+  limit that may apply is lower (the higher limit of each size counts).
   - **Owner, 2026-11-20 (after the first build): a disk "Check:" never changes the
     readiness.** It is a note only, in "To check" (`groupOf` in `js/files.js` leaves out the
     topic "Disk limits"). A VM that was "Ready" stays "Ready". Every other "Check:" still
@@ -2007,6 +2033,10 @@ pages.
   the next size up for a mix).
   Third round (short notes): the tests changed first; 19 mutation checks, 18 caught; the one left
   was a check that could never change an answer (a total of 0), and it was removed.
+  Review fixes (2026-11-20): the tests changed first; 15 mutation checks, all caught (five only
+  after new tests: a scale set in a list without the workload columns, no pointer when the note
+  is there, and the query text of the caching for each VM; a pool and unmanaged disks were
+  first in the rule, but a pool VM is a VM with disks, and unmanaged disks give no size: removed).
 
 ## Next
 

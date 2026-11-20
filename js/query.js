@@ -103,19 +103,23 @@ Resources
     diskShared = max(toint(t == 'microsoft.compute/disks' and toint(properties.maxShares) > 1)),
     diskVms = make_set_if(tolower(id), isVm),
     // The managed disk of a disk's group: its type, size and tier, and the IOPS and MBps that
-    // it can do, from the disk record; its host caching and LUN from the entry of the VM.
+    // it can do, from the disk record. Its host caching and LUN are set on each VM that has it
+    // (a shared disk is on more than one VM): one entry for each VM, by the VM's key, so that
+    // each VM gets its own after the second mv-expand.
     diskOfVm = max(toint(isVm and tolower(id) != key)),
     diskType = anyif(tostring(sku.name), t == 'microsoft.compute/disks'),
     diskSizeGb = anyif(toint(properties.diskSizeGB), t == 'microsoft.compute/disks'),
     diskTier = anyif(tostring(properties.tier), t == 'microsoft.compute/disks'),
     diskIops = anyif(tolong(properties.diskIOPSReadWrite), t == 'microsoft.compute/disks'),
     diskMbps = anyif(tolong(properties.diskMBpsReadWrite), t == 'microsoft.compute/disks'),
-    diskCaching = anyif(tostring(k.caching), isVm and tolower(id) != key),
-    diskLun = anyif(tostring(k.lun), isVm and tolower(id) != key)
+    diskOnVm = make_bag_if(pack(tolower(id), pack('caching', tostring(k.caching), 'lun', tostring(k.lun))), isVm and tolower(id) != key)
     by key
 // Second pass: each VM gets its own fields, and from the group of each disk that it is
 // on: the disk, and "shared disk" when the disk is shared.
 | extend key2s = case(self == 1, pack_array(key), diskOfVm == 1 or diskShared == 1, diskVms, dynamic([]))
+| mv-expand key2 = key2s to typeof(string)
+// The host caching and the LUN that this VM (key2) sets for the disk.
+| extend diskCaching = tostring(diskOnVm[key2].caching), diskLun = tostring(diskOnVm[key2].lun)
 // Uncached: host caching None. Premium SSD v2 and Ultra Disk never use host caching.
 // Cached: ReadOnly or ReadWrite. A disk with no caching setting makes the totals blank.
 | extend dUltra = diskType in~ ('PremiumV2_LRS', 'UltraSSD_LRS')
@@ -128,7 +132,6 @@ Resources
             iff(isnull(diskIops), 'no IOPS value', strcat(tostring(diskIops), ' IOPS')), ', ',
             iff(isnull(diskMbps), 'no MBps value', strcat(tostring(diskMbps), ' MBps')))),
         ', caching ', iff(isempty(diskCaching), 'not given', diskCaching))
-| mv-expand key2 = key2s to typeof(string)
 | summarize
     isVmss = take_anyif(isVmss, self == 1),
     name = take_anyif(name, self == 1),

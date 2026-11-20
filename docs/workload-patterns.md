@@ -232,7 +232,7 @@ query (`query.kql`) reads all of them.
 | Hibernation | `properties.additionalCapabilities.hibernationEnabled` | Tested, "No" only |
 | Unmanaged disks | `osDisk.vhd.uri`, or a `vhd` on a data disk | Tested, "No" only |
 | Ephemeral OS disk | `osDisk.diffDiskSettings.option` = `Local` | Tested, "No" only |
-| Disk types and disk values (0.9.8-beta) | On each managed disk: `sku.name`, `properties.diskSizeGB`, `properties.tier`, `properties.diskIOPSReadWrite`, `properties.diskMBpsReadWrite`. On the VM: `caching` of `osDisk` and of each data disk (`None` is uncached). Premium SSD v2 and Ultra Disk are always uncached. An ephemeral OS disk is not a managed disk. | Saved test data shows the values on Premium SSD (P4: 120 IOPS, 25 MBps; P10: 500 IOPS, 100 MBps). Not yet tested: Standard HDD and Standard SSD, Premium SSD v2, Ultra Disk |
+| Disk types and disk values (0.9.8-beta) | On each managed disk: `sku.name`, `properties.diskSizeGB`, `properties.tier`, `properties.diskIOPSReadWrite`, `properties.diskMBpsReadWrite`. On the VM: `caching` of `osDisk` and of each data disk (`None` is uncached). Premium SSD v2 and Ultra Disk are always uncached. An ephemeral OS disk is not a managed disk. | Tested 2026-11-20 (one VM with one disk of each type; each type gives both values): Standard HDD S4 500 IOPS, 60 MBps; Standard SSD E4 500, 100; Premium SSD P4 120, 25; Premium SSD v2 3,000, 125; Ultra Disk 1,200, 50. Not yet tested on Azure: an ephemeral OS disk, a shared disk (the per-VM caching of 0.9.8-beta) |
 | Availability set | `properties.availabilitySet.id` | Tested, "No" only |
 | Zone | `zones` | Tested, "No zone" only |
 | Flexible scale set membership | `properties.virtualMachineScaleSet.id` | Tested, "No" only |

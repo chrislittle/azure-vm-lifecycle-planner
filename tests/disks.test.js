@@ -60,11 +60,19 @@ test('disk limits: the size facts give the uncached and cached limits, in IOPS a
     assert.deepEqual([bare.uncachedIops, bare.uncachedMbps, bare.cachedIops, bare.cachedMbps], [null, null, null, null]);
 });
 
-test('disk limits: every size in the size table has the five disk capabilities', () => {
-    const keys = ['UncachedDiskIOPS', 'UncachedDiskBytesPerSecond', 'CombinedTempDiskAndCachedIOPS', 'CombinedTempDiskAndCachedReadBytesPerSecond', 'CombinedTempDiskAndCachedWriteBytesPerSecond'];
-    const missing = Object.entries(sizes.sizes).filter(([, s]) => !('UncachedDiskIOPS' in s.capabilities)).map(([n]) => n);
-    assert.deepEqual(missing, [], 'Azure gives the uncached limit for every size');
-    assert.ok(Object.values(sizes.sizes).some((s) => keys.every((k) => k in s.capabilities)));
+test('disk limits: every size has the two uncached limits; 23 HPC, GPU and FPGA sizes have no cached limits, which is no value', () => {
+    const cachedKeys = ['CombinedTempDiskAndCachedIOPS', 'CombinedTempDiskAndCachedReadBytesPerSecond', 'CombinedTempDiskAndCachedWriteBytesPerSecond'];
+    const noUncached = Object.entries(sizes.sizes).filter(([, s]) => !('UncachedDiskIOPS' in s.capabilities) || !('UncachedDiskBytesPerSecond' in s.capabilities)).map(([n]) => n);
+    assert.deepEqual(noUncached, [], 'Azure gives the uncached limits for every size');
+    const noCached = Object.entries(sizes.sizes).filter(([, s]) => cachedKeys.some((k) => !(k in s.capabilities))).map(([n]) => n);
+    assert.deepEqual(noCached, ['Standard_HB120rs_v2', 'Standard_HB176-144rs_v4', 'Standard_HB176-24rs_v4', 'Standard_HB176-48rs_v4', 'Standard_HB176-96rs_v4', 'Standard_HB176rs_v4',
+        'Standard_HC44rs', 'Standard_HX176-144rs', 'Standard_HX176-24rs', 'Standard_HX176-48rs', 'Standard_HX176-96rs', 'Standard_HX176rs', 'Standard_NC24rs_v3', 'Standard_NC24s_v3',
+        'Standard_ND40rs_v2', 'Standard_ND96asr_v4', 'Standard_ND96is_MI300X_v5', 'Standard_ND96isr_H100_v5', 'Standard_ND96isr_H200_v5', 'Standard_ND96isr_MI300X_v5', 'Standard_NP40s',
+        'Standard_NV24s_v2', 'Standard_NV48s_v3']);
+    // They have none of the three: the code reads no cached limit (unknown, never a guess).
+    for (const n of noCached) assert.ok(cachedKeys.every((k) => !(k in sizes.sizes[n].capabilities)), n);
+    const f = sizeFacts(table.get('Standard_HC44rs'));
+    assert.deepEqual([f.cachedIops, f.cachedMbps, f.uncachedIops > 0], [null, null, true]);
     assert.match(sizes.how, /lower limit/);
 });
 
@@ -403,12 +411,64 @@ test('disk limits: the real row of the test build as a Standard_DS2_v2 VM: one s
     const n = F.allNotes(m);
     assert.deepEqual(n.checks.filter((x) => x.topic === 'Disk limits'), [{ topic: 'Disk limits', text: 'Check: this VM has more than one kind of disk. Microsoft does not say which disk limit applies. Compare the disk rows in the size table.', series: [] }]);
     const rows = Object.fromEntries(sizeComparison(m, table).rows.map((r) => [r.label, r.cells]));
+    // A mix: a mark only when every limit that may apply is lower (v7: 5,000 is more than 4,700).
     assert.deepEqual(rows['Max disk IOPS (uncached)'].map((x) => [x.text, x.less]), [['6,400 (this VM: up to 4,700)', ''], ['3,750', 'Less than the 4,700 IOPS of this VM.'],
-        ['3,750 (4,167 for Premium SSD v2 and Ultra Disk)', 'Less than the 4,700 IOPS of this VM.'], ['4,000 (5,000 for Premium SSD v2 and Ultra Disk)', 'Less than the 4,700 IOPS of this VM.']]);
+        ['3,750 (4,167 for Premium SSD v2 and Ultra Disk)', 'Less than the 4,700 IOPS of this VM.'], ['4,000 (5,000 for Premium SSD v2 and Ultra Disk)', '']]);
     assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => [x.text, x.less]), [['96 (this VM: up to 235)', ''], ['85', 'Less than the current size (96).'],
         ['106 (124 for Premium SSD v2 and Ultra Disk)', ''], ['118 (135 for Premium SSD v2 and Ultra Disk)', '']]);
     assert.deepEqual(rows['Max disk IOPS (cached)'].map((x) => x.text), ['8,000 (this VM: up to 620)', '9,000', '9,000', '9,000']);
     assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['65.5 (this VM: up to 125)', '125', '125', '125']);
+});
+
+test('disk limits: the size table marks for a mix compare every limit that may apply, of both sizes', () => {
+    const x = { 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'Premium_LRS, PremiumV2_LRS' };
+    const less = (row) => Object.fromEntries(sizeComparison(one({ ...DISKS, ...x, ...row }), table).rows.map((r) => [r.label, r.cells.map((c) => c.less)]));
+    // 20,000 IOPS on Standard_DS3_v2 (12,800, no column): the current size is the ceiling. D4ds_v6 (6,400 and 8,333) and
+    // D4ds_v7 (8,000 and 10,000) are lower with every limit: marked.
+    assert.deepEqual(less({})['Max disk IOPS (uncached)'], ['', 'Less than the current size (12,800).', 'Less than the current size (12,800).', 'Less than the current size (12,800).']);
+    // 9,000 IOPS: v6 (8,333 at most) is lower; v7 (10,000) may not be.
+    assert.deepEqual(less({ 'Disk IOPS (uncached disks)': '9000' })['Max disk IOPS (uncached)'], ['', 'Less than the 9,000 IOPS of this VM.', 'Less than the 9,000 IOPS of this VM.', '']);
+    // The same disks, but only Premium SSD (no mix): v7 (8,000) is lower.
+    const plain = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk IOPS (uncached disks)': '9000' }), table).rows.map((r) => [r.label, r.cells.map((c) => c.less)]));
+    assert.deepEqual(plain['Max disk IOPS (uncached)'], ['', 'Less than the 9,000 IOPS of this VM.', 'Less than the 9,000 IOPS of this VM.', 'Less than the 9,000 IOPS of this VM.']);
+});
+
+test('disk limits: the query leaves the disk values blank by design for a scale set: no "Check:" there', () => {
+    const blankNote = (row) => one({ ...row }).rows.map((r) => r.caveats && r.caveats['Disk limits'] && r.caveats['Disk limits'].state).filter((x) => x);
+    // A standalone VM with blank values: "Check:".
+    assert.ok(blankNote({}).includes('check'));
+    // A scale set row, an AKS node pool: nothing to fix in the list, so no note.
+    assert.deepEqual(blankNote({ 'Resource type': 'Scale set', 'Scale set': 'Yes', 'Generation': 'V2' }), []);
+    assert.deepEqual(blankNote({ 'Resource type': 'Scale set', 'Scale set': 'Yes', 'Managed by': 'AKS', 'Generation': '' }), []);
+    // A scale set in a list without the workload columns: the same.
+    const bare = run('VM name,Current size,Generation,OS,NIC count,Data-disk count,Resource type\ncontoso-ss1,Standard_DS3_v2,V2,Linux,1,2,Scale set\n').machines[0];
+    assert.deepEqual(bare.rows.map((r) => r.caveats && r.caveats['Disk limits'] && r.caveats['Disk limits'].state).filter((x) => x), []);
+    // A VM in a pool (a pooled AVD host is a VM: the query gives its disks): blank values still give "Check:".
+    assert.ok(blankNote({ 'Azure Virtual Desktop': 'Yes', 'AVD host pool type': 'Pooled' }).includes('check'));
+    // Unmanaged disks: no supported size, so no note at all.
+    assert.deepEqual(blankNote({ 'Unmanaged disks': 'Yes' }), []);
+    // With values, a scale set still gets a note that the values give.
+    assert.ok(blankNote({ ...DISKS, 'Resource type': 'Scale set', 'Scale set': 'Yes' }).includes('attention'));
+});
+
+test('vm-summary.csv points to vm-target-sizes.csv when only another size has a disk note', () => {
+    // 7,500 IOPS on Standard_DS3_v2: the likely size (v6) lowers the ceiling.
+    const p = run(list([{ 'VM name': 'contoso-db04', ...DISKS, 'Disk IOPS (uncached disks)': '7500', 'Current size': 'Standard_DS3_v2' }]));
+    const m = p.machines[0];
+    const likely = F.likelyRow(m);
+    assert.equal(likely.series, 'v6');
+    const row = F.summaryRows(p)[0];
+    // v6 (the likely size) lowers it: the note itself.
+    assert.match(row['Good to know'], /Disk limits: The disks of this VM can do more than the new size allows\./);
+    assert.ok(!row['Good to know'].includes(F.DISK_POINTER) && !row['To check'].includes(F.DISK_POINTER), 'no pointer when the note is there');
+    // A VM whose likely size has no note: a short pointer.
+    const q = run(list([{ 'VM name': 'contoso-db05', ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'PremiumV2_LRS', 'Disk IOPS (uncached disks)': '8000' }]));
+    const r = F.summaryRows(q)[0];
+    assert.equal(F.likelyRow(q.machines[0]).caveats['Disk limits'].state, '');
+    assert.match(r['To check'], /(^|, )Disk limits: see vm-target-sizes\.csv\.$/);
+    assert.doesNotMatch(r['Good to know'], /Disk limits/);
+    // With no disk note at all: no pointer.
+    assert.doesNotMatch(F.summaryRows(run(list([{ 'VM name': 'contoso-db06', ...DISKS, 'Disk IOPS (uncached disks)': '5000' }])))[0]['To check'], /Disk limits/);
 });
 
 test('disk limits: one short note for the VM: each kind of sentence once, the sizes named when not every size lowers it', () => {
@@ -447,6 +507,7 @@ test('disk limits: the about file says how the tool compares the disk limits, wi
         'An ephemeral OS disk is not a managed disk. The query leaves it out.',
         'The recommended size does not change.',
         'A note "Disk limits" never changes the readiness of the VM, also when it is in "To check".',
+        'For a scale set, a blank value gives no "Check:". The query cannot give these values.',
         'This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
         'Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
         'For such a VM, the note is "Check:". It shows only where a limit of the new size can lower the ceiling.',
@@ -471,6 +532,9 @@ test('the query reads the disks of each VM in the disk pass it already has: no n
     assert.ok((code.match(/\| mv-expand /g) || []).length <= 3);
     // An ephemeral OS disk is not a managed disk: it is not a key of the VM.
     assert.match(code, /diffDiskSettings\.option\) =~ 'Local', dynamic\(\[\]\), pack_array\(properties\.storageProfile\.osDisk\)\)/);
+    // The caching and the LUN of each VM on the disk, read for that VM after the second mv-expand.
+    assert.ok(code.includes("diskOnVm = make_bag_if(pack(tolower(id), pack('caching', tostring(k.caching), 'lun', tostring(k.lun))), isVm and tolower(id) != key)"));
+    assert.ok(code.includes('| mv-expand key2 = key2s to typeof(string)\n| extend diskCaching = tostring(diskOnVm[key2].caching), diskLun = tostring(diskOnVm[key2].lun)'));
     // Blank for a scale set, unmanaged disks, a disk with no value or no caching setting.
     assert.match(code, /isVmss == 1 or unmanaged or unknownDisks > 0/);
     // The page shows the same query; the template has the columns, blank.

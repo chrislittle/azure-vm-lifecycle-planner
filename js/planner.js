@@ -450,7 +450,10 @@ export function plan(machines, table, now = new Date()) {
                 caveats: caveats(vm, m.extra, o, POOL_PATTERNS.includes(m.pattern)),
             };
             // The disk limits (0.9.8-beta): a note when the new size lowers the disk ceiling of the VM.
-            if (series !== 'gen1Route') row.caveats['Disk limits'] = diskNote(vm, m.extra, o, table);
+            // The query leaves the values blank by design for a scale set row (its model has no disk values;
+            // AKS node pools are scale sets). A VM with unmanaged disks has no supported size, so no note.
+            const blankByDesign = m.extra.resourceType === 'Scale set';
+            if (series !== 'gen1Route') row.caveats['Disk limits'] = diskNote(vm, m.extra, o, table, null, blankByDesign);
             results.push(row);
             rows.push(row);
             if (result === 'Needs team review') {

@@ -177,6 +177,15 @@ export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resourc
     // Added in 0.9.4-beta at the end: the sign that the query found for SAP, as the list gives it.
     'SAP sign'];
 
+// The page shows a note "Disk limits" for the VM, but the size of "What to do" has none: a short
+// pointer to the other sizes, in the list of the note (review, 2026-11-20).
+export const DISK_POINTER = 'Disk limits: see vm-target-sizes.csv.';
+function diskPointer(m, list) {
+    const s = signals(m);
+    if ([...s.actions, ...s.attention, ...s.checks].some((x) => x.topic === 'Disk limits')) return [];
+    return allNotes(m)[list].some((x) => x.topic === 'Disk limits') ? [DISK_POINTER] : [];
+}
+
 export function summaryRows(p) {
     return p.machines.map((m) => ({
         ...base(m),
@@ -188,8 +197,8 @@ export function summaryRows(p) {
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
         'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
         'Before the move': warnings(m).join('; '),
-        'Good to know': signals(m).attention.map((a) => `${a.topic}: ${a.text}`).join('; '),
-        'To check': signals(m).checks.map((c) => c.topic).join(', '),
+        'Good to know': [...signals(m).attention.map((a) => `${a.topic}: ${a.text}`), ...diskPointer(m, 'attention')].join('; '),
+        'To check': [...signals(m).checks.map((c) => c.topic), ...diskPointer(m, 'checks')].join(', '),
         'Needs review': m.needsReview ? 'Yes' : 'No',
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
         ...vendorAndEvidence(m),
@@ -411,6 +420,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  A note "Disk limits" never changes the readiness of the VM, also when it is in "To check".',
         '  The values come from the query: the columns "Disk IOPS" and "Disk MBps", for the uncached disks and the cached disks.',
         '  The query leaves a value blank when a disk gives no value, for unmanaged disks, and for a scale set.',
+        '  For a scale set, a blank value gives no "Check:". The query cannot give these values.',
+        '  A VM with unmanaged disks has no supported size, so it has no note. For other VMs, a blank value gives "Check:".',
         '  An ephemeral OS disk is not a managed disk. The query leaves it out.',
         '  The size table gives one uncached limit for each size, for Premium SSD.',
         `  The Microsoft pages of ${ultra.pages.length} v6 and v7 series give a separate limit for Premium SSD v2 and Ultra Disk.`,
