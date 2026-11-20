@@ -1941,7 +1941,8 @@ pages.
   the "Check:", as on a hand-made list. vm-summary.csv: when the size of "What to do" has no disk
   note but the page shows one, "To check" (or "Good to know") says `Disk limits: see
   vm-target-sizes.csv.` In the size table, a mix gets a mark under a value only when every
-  limit that may apply is lower (the higher limit of each size counts).
+  limit that may apply is lower: the highest limit of the new size against the lowest limit of
+  the current size (a current 6,400 and 8,333 against a new 7,000: no mark).
   - **Owner, 2026-11-20 (after the first build): a disk "Check:" never changes the
     readiness.** It is a note only, in "To check" (`groupOf` in `js/files.js` leaves out the
     topic "Disk limits"). A VM that was "Ready" stays "Ready". Every other "Check:" still

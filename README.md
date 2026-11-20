@@ -196,8 +196,8 @@ For each VM:
   - The disk values come from the query. If the list does not give them, "To check" says
     so, but only where the new size allows less than the current size. The query cannot give
     them for a scale set (an AKS node pool is a scale set): there, a blank value gives no
-    "Check:". The note "Disk
-    limits" never changes the readiness of a VM: a VM that is "Ready" stays "Ready".
+    "Check:". The note "Disk limits" never changes the readiness of a VM: a VM that is
+    "Ready" stays "Ready".
   - When every uncached disk is Premium SSD v2 or Ultra Disk, the tool uses the separate
     limit on the Microsoft size pages of v6 and v7. For a size with no such limit, the note
     is "Check:".

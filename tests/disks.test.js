@@ -421,6 +421,15 @@ test('disk limits: the real row of the test build as a Standard_DS2_v2 VM: one s
 });
 
 test('disk limits: the size table marks for a mix compare every limit that may apply, of both sizes', () => {
+    // The current size: its lowest limit that may apply. Standard_D4ds_v6 allows 6,400 for Premium SSD and
+    // 8,333 for Premium SSD v2 and Ultra Disk; a new size of 7,000 is not lower than every limit now (blank total).
+    const mixVm = one({ ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'Premium_LRS, PremiumV2_LRS', 'Disk IOPS (uncached disks)': '', 'Disk MBps (uncached disks)': '' });
+    const xCaps = (iops) => ({ family: 'x', capabilities: { vCPUs: '4', vCPUsAvailable: '4', MemoryGB: '16', UncachedDiskIOPS: String(iops), UncachedDiskBytesPerSecond: '300000000' } });
+    const t6 = new SizeTable({ Standard_D4ds_v6: sizes.sizes.Standard_D4ds_v6, Standard_X4_v9: xCaps(7000), Standard_X6_v9: xCaps(6000) });
+    const markOf = (target) => sizeComparison({ ...mixVm, vm: { ...mixVm.vm, sourceSize: 'Standard_D4ds_v6' }, rows: [{ series: 'v7', option: { supported: true, targetSize: target } }] }, t6)
+        .rows.find((r) => r.label === 'Max disk IOPS (uncached)').cells[1].less;
+    assert.equal(markOf('Standard_X4_v9'), '');
+    assert.equal(markOf('Standard_X6_v9'), 'Less than the current size (6,400).');
     const x = { 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'Premium_LRS, PremiumV2_LRS' };
     const less = (row) => Object.fromEntries(sizeComparison(one({ ...DISKS, ...x, ...row }), table).rows.map((r) => [r.label, r.cells.map((c) => c.less)]));
     // 20,000 IOPS on Standard_DS3_v2 (12,800, no column): the current size is the ceiling. D4ds_v6 (6,400 and 8,333) and
