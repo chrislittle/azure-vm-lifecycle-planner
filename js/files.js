@@ -391,6 +391,12 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '                         To make a PDF, print it and select "Save as PDF".',
         '  vm-summary.csv         One row for each VM, to sort and filter in Excel.',
         '                         It shows if you must move the VM, and the answer for each series.',
+        // 0.9.9-beta: one recommendation, and the Suggested columns by lifecycle stage (suggestions).
+        '                         The column "What to do uses" gives the size that "What to do" uses, as on the page and in the report.',
+        '                         "Before the move", "Good to know" and "To check" give the notes of that size.',
+        '                         "Suggested - Current stage" gives a v6 or v7 size. "Suggested - Extended stage" gives a v5 size.',
+        '                         With no size of that stage, they say why, for example "No supported Current size".',
+        '                         They can also say "Not needed", "Vendor approval first", "No supported size" or "Not checked".',
         '  vm-target-sizes.csv    One row for each VM and series. It gives the reasons and the notes.',
         '  vm-not-checked.csv     The items that this tool cannot check.',
         '  about-these-results.txt  This file.',

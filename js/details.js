@@ -96,7 +96,7 @@ export function sizeComparison(m, table) {
             (f) => (gen && f.generations && !f.generations.some((g) => g.toUpperCase() === gen.toUpperCase()) ? `Does not take Generation ${gen.replace(/^V/i, '')}, the generation of this VM.` : '')],
     ];
     // The current size: its own values, and the NICs and data disks of this VM.
-    const own = { 'Max NICs': count(nics), 'Max data disks': count(disks),'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps),
+    const own = { 'Max NICs': count(nics), 'Max data disks': count(disks), 'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps),
         'Max disk IOPS (cached)': vmDisk(t.cached.iops), 'Max disk MBps (cached)': vmDisk(t.cached.mbps) };
     const columns = [{ label: 'Current size', size: m.vm.sourceSize, facts: cur },
         ...shown.map((r) => ({ label: r.series === 'burstable' ? 'Burstable' : r.series, size: r.option.targetSize, facts: facts(r.option.targetSize) }))];

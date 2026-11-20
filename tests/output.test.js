@@ -310,6 +310,16 @@ test('item 7: vm-summary.csv names the size that "What to do" uses, and its note
     assert.deepEqual(t.map((r) => [r.Series, r.Suggested]), [['v5', 'Extended stage'], ['v6', 'Current stage'], ['v7', ''], ['Burstable (Bsv2, Basv2)', 'What to do']]);
 });
 
+test('items 7, 10: the about file says what "What to do uses" and the two Suggested columns hold', () => {
+    for (const line of [
+        '                         The column "What to do uses" gives the size that "What to do" uses, as on the page and in the report.',
+        '                         "Before the move", "Good to know" and "To check" give the notes of that size.',
+        '                         "Suggested - Current stage" gives a v6 or v7 size. "Suggested - Extended stage" gives a v5 size.',
+        '                         With no size of that stage, they say why, for example "No supported Current size".',
+        '                         They can also say "Not needed", "Vendor approval first", "No supported size" or "Not checked".',
+    ]) assert.ok(about.includes(`${line}\r\n`), line);
+});
+
 test('item 10: the stage columns of vm-summary.csv hold only sizes of that stage', () => {
     for (const m of S.machines) {
         const s = sumOf(m);
