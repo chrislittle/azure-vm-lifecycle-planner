@@ -651,14 +651,21 @@ test('the size table is rebuilt in its own layout, with the safer value where re
     const head = read('data/sizes.js').split('export default')[0];
     const lf = (t) => t.replace(/\r\n/g, '\n');
     assert.equal(lf(head + sizesText(sizes.readUtc, sizes.how, sizes)), lf(read('data/sizes.js')));
-    const a = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '4', HyperVGenerations: 'V1,V2', PremiumIO: 'True' } } };
-    const b = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '2', HyperVGenerations: 'V2', PremiumIO: 'False' } } };
+    const a = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '4', HyperVGenerations: 'V1,V2', PremiumIO: 'True', UncachedDiskIOPS: '6400', UncachedDiskBytesPerSecond: '145000000', CombinedTempDiskAndCachedIOPS: '19000' } } };
+    const b = { Standard_X2_v9: { family: 'x', capabilities: { vCPUs: '2', MaxNetworkInterfaces: '2', HyperVGenerations: 'V2', PremiumIO: 'False', UncachedDiskIOPS: '3200', UncachedDiskBytesPerSecond: '150000000', CombinedTempDiskAndCachedReadBytesPerSecond: '120000000', CombinedTempDiskAndCachedWriteBytesPerSecond: '60000000' } } };
     const m = mergeRegions([a, b]);
-    assert.deepEqual(m.sizes.Standard_X2_v9.capabilities, { vCPUs: '2', PremiumIO: 'False', HyperVGenerations: 'V2', MaxNetworkInterfaces: '2' });
+    // The disk limits (0.9.8-beta): the lower limit where regions disagree, as for every number.
+    assert.deepEqual(m.sizes.Standard_X2_v9.capabilities, { vCPUs: '2', PremiumIO: 'False', HyperVGenerations: 'V2', MaxNetworkInterfaces: '2',
+        UncachedDiskIOPS: '3200', UncachedDiskBytesPerSecond: '145000000', CombinedTempDiskAndCachedIOPS: '19000',
+        CombinedTempDiskAndCachedReadBytesPerSecond: '120000000', CombinedTempDiskAndCachedWriteBytesPerSecond: '60000000' });
     assert.deepEqual(m.differsByRegion, ['Standard_X2_v9']);
     assert.deepEqual(diffSizes(a, { ...b, Standard_Y1: b.Standard_X2_v9 }), [
-        'Added: Standard_Y1', 'Changed: Standard_X2_v9 HyperVGenerations V1,V2 -> V2',
-        'Changed: Standard_X2_v9 MaxNetworkInterfaces 4 -> 2', 'Changed: Standard_X2_v9 PremiumIO True -> False']);
+        'Added: Standard_Y1', 'Changed: Standard_X2_v9 CombinedTempDiskAndCachedIOPS 19000 -> (none)',
+        'Changed: Standard_X2_v9 CombinedTempDiskAndCachedReadBytesPerSecond (none) -> 120000000',
+        'Changed: Standard_X2_v9 CombinedTempDiskAndCachedWriteBytesPerSecond (none) -> 60000000',
+        'Changed: Standard_X2_v9 HyperVGenerations V1,V2 -> V2',
+        'Changed: Standard_X2_v9 MaxNetworkInterfaces 4 -> 2', 'Changed: Standard_X2_v9 PremiumIO True -> False',
+        'Changed: Standard_X2_v9 UncachedDiskBytesPerSecond 145000000 -> 150000000', 'Changed: Standard_X2_v9 UncachedDiskIOPS 6400 -> 3200']);
 });
 
 test('the Marketplace check reports new offers and possible new vendors, but not reviewed ones', async () => {
@@ -1202,7 +1209,8 @@ test('no rebuild anywhere: no customer text recommends one, and the Rebuild colu
         assert.deepEqual(about, ['  Rebuild:   This tool never tells you to rebuild a VM (to make a new VM with the same disks).', '             In vm-target-sizes.csv, Rebuild is No for every size.']);
     }
     assert.ok(rows > 100, `${rows} rows with a size`);
-    assert.deepEqual(F.TARGET_COLUMNS.slice(-2), ['SAP sign', 'Preview feature'], 'the new column at the end');
+    // 0.9.8-beta adds "Disk limits" after it, at the end.
+    assert.deepEqual(F.TARGET_COLUMNS.slice(-3, -1), ['SAP sign', 'Preview feature'], 'the new column at the end');
     assert.ok(F.TARGET_COLUMNS.includes('Rebuild'), 'the column stays');
     // The page.
     assert.doesNotMatch(read('index.html').replace(/<head>[\s\S]*?<\/head>/, ''), /rebuild/i);

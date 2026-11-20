@@ -47,7 +47,9 @@ const notesOf = (m) => { const n = F.allNotes(m); return Object.fromEntries([...
 
 test('size facts: from the size table, with the temporary disk in GiB (SCSI or NVMe) and "None"', () => {
     assert.deepEqual(sizeFacts(table.get('Standard_D4s_v3')), { name: 'Standard_D4s_v3', vcpus: 4, vcpusActive: 4, memoryGiB: 16, tempGiB: 32, tempKind: 'SCSI', tempDisks: 1,
-        maxNics: 2, maxDataDisks: 8, premium: true, generations: ['V1', 'V2'] });
+        maxNics: 2, maxDataDisks: 8, premium: true, generations: ['V1', 'V2'],
+        // The disk limits (0.9.8-beta): IOPS, and MBps from Azure's bytes per second.
+        uncachedIops: 6400, uncachedMbps: 96, cachedIops: 8000, cachedMbps: 65.536, ultraIops: null, ultraMbps: null });
     const v6 = sizeFacts(table.get('Standard_D4ds_v6'));
     assert.deepEqual([v6.tempGiB, v6.tempKind, v6.tempDisks, v6.generations], [220, 'NVMe', 1, ['V2']]);
     assert.deepEqual([sizeFacts(table.get('Standard_D4s_v5')).tempGiB, sizeFacts(table.get('Standard_D4s_v5')).tempKind], [0, null]);
@@ -63,7 +65,10 @@ test('size comparison: the current size and each size shown for the VM, with the
     const rows = Object.fromEntries(c.rows.map((r) => [r.label, r.cells.map((x) => x.text)]));
     assert.deepEqual(rows, {
         'vCPUs': ['4', '4', '4', '4'], 'Memory (GiB)': ['16', '16', '16', '16'], 'Temporary disk (GiB)': ['32', '150', '220 (NVMe)', '220 (NVMe)'],
-        'Max NICs': ['2 (this VM: 1)', '2', '2', '4'], 'Max data disks': ['8 (this VM: 1)', '8', '12', '12'], 'Premium SSD': ['Yes', 'Yes', 'Yes', 'Yes'], 'Generations': ['1, 2', '1, 2', '2', '2'],
+        'Max NICs': ['2 (this VM: 1)', '2', '2', '4'], 'Max data disks': ['8 (this VM: 1)', '8', '12', '12'],
+        'Max disk IOPS (uncached)': ['6,400', '6,400', '6,400 (8,333 for Premium SSD v2 and Ultra Disk)', '8,000 (10,000 for Premium SSD v2 and Ultra Disk)'],
+        'Max disk MBps (uncached)': ['96', '145', '212 (248 for Premium SSD v2 and Ultra Disk)', '236 (270 for Premium SSD v2 and Ultra Disk)'],
+        'Premium SSD': ['Yes', 'Yes', 'Yes', 'Yes'], 'Generations': ['1, 2', '1, 2', '2', '2'],
     });
     assert.ok(c.rows.every((r) => r.cells.every((x) => x.less === '')), 'no new size has less here');
 });
@@ -93,7 +98,8 @@ test('size comparison: each limit that is less than the current size or this VM 
     const less = (size) => Object.fromEntries(sizeComparison(at(size), table).rows.map((r) => [r.label, r.cells[1].less]));
     assert.deepEqual(less('Standard_D2s_v5'), {
         'vCPUs': 'Less than the current size (4).', 'Memory (GiB)': 'Less than the current size (16).', 'Temporary disk (GiB)': 'Less than the current size (32).',
-        'Max NICs': 'Less than the 3 NICs of this VM.', 'Max data disks': 'Less than the 9 data disks of this VM.', 'Premium SSD': '', 'Generations': '',
+        'Max NICs': 'Less than the 3 NICs of this VM.', 'Max data disks': 'Less than the 9 data disks of this VM.',
+        'Max disk IOPS (uncached)': 'Less than the current size (6,400).', 'Max disk MBps (uncached)': 'Less than the current size (96).', 'Premium SSD': '', 'Generations': '',
     });
     assert.equal(less('Standard_A4_v2')['Premium SSD'], 'Less than the current size (Yes).');
     assert.equal(less('Standard_D4s_v6')['Generations'], 'Does not take Generation 1, the generation of this VM.');
@@ -255,7 +261,8 @@ test('query: the managed application columns are the last three; Resource Graph 
     const project = /\| project\n([\s\S]*?)\n\| order by/.exec(q)[1];
     const names = [...project.matchAll(/^\s{4}(?:\['([^']+)'\]|([A-Za-z]+)) =/gm)].map((x) => x[1] || x[2]);
     assert.deepEqual(names, COLUMNS.map((c) => c.name), 'the query writes the columns in the order of the template');
-    assert.deepEqual(names.slice(-3), ['Managed application', 'Application plan publisher', 'Application plan product']);
+    // 0.9.8-beta adds the six disk columns after them, at the end.
+    assert.deepEqual(names.slice(-9, -6), ['Managed application', 'Application plan publisher', 'Application plan product']);
     const code = q.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
     assert.ok((code.match(/\|\s*(join|union)\b/g) || []).length <= 3, 'at most three join or union');
     assert.ok((code.match(/\|\s*mv-expand\b/g) || []).length <= 3, 'at most three mv-expand');

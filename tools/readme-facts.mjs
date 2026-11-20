@@ -10,6 +10,7 @@
 // tools/watch-sources.mjs --update and tools/set-version.mjs run it. The weekly
 // source check lists the facts that come from a source that changed.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { PAGE_IDS as ULTRA_PAGES } from './premium-v2-ultra.mjs';
 
 const root = new URL('../', import.meta.url);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -66,6 +67,11 @@ export const FACTS = [
         text: (d) => dates([d.nvme.readUtc]),
     },
     {
+        // The separate limit for Premium SSD v2 and Ultra Disk of the v6 and v7 sizes (0.9.8-beta).
+        id: 'disk-limits-read', files: ['data/premium-v2-ultra-limits.js'], sources: ULTRA_PAGES, where: 'Sources: disk limits',
+        text: (d) => `${d.ultra.pages.length} Microsoft size pages of v6 and v7 series, read on ${dates(d.ultra.pages.map((p) => p.readUtc))}`,
+    },
+    {
         id: 'storage-vendors', files: ['data/storage-appliance-images.js'], sources: ['azure-catalog'], where: 'What the tool shows: storage and backup appliances',
         before: `${NAMED_VENDORS.join(', ')}, and `,
         text: (d) => {
@@ -91,6 +97,7 @@ export async function loadData() {
         capacity: await load('data/capacity.js'),
         nvme: await load('data/nvme-images.js'),
         storage: await load('data/storage-appliance-images.js'),
+        ultra: await load('data/premium-v2-ultra-limits.js'),
     };
 }
 

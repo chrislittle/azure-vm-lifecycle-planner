@@ -21,9 +21,12 @@ import { factsFrom, factText, readmeSection, writeReadme } from './readme-facts.
 const root = new URL('../', import.meta.url);
 const today = new Date().toISOString().slice(0, 10);
 
-// The capabilities that the tool reads, in the order of data/sizes.js.
+// The capabilities that the tool reads, in the order of data/sizes.js. The disk limits
+// (0.9.8-beta): Azure gives throughput in bytes per second (145000000 = 145 MBps).
 export const CAPABILITIES = ['vCPUs', 'vCPUsAvailable', 'MemoryGB', 'MaxResourceVolumeMB', 'PremiumIO', 'HyperVGenerations',
-    'MaxNetworkInterfaces', 'MaxDataDiskCount', 'NvmeDiskSizeInMiB', 'NvmeSizePerDiskInMiB'];
+    'MaxNetworkInterfaces', 'MaxDataDiskCount', 'NvmeDiskSizeInMiB', 'NvmeSizePerDiskInMiB',
+    'UncachedDiskIOPS', 'UncachedDiskBytesPerSecond', 'CombinedTempDiskAndCachedIOPS',
+    'CombinedTempDiskAndCachedReadBytesPerSecond', 'CombinedTempDiskAndCachedWriteBytesPerSecond'];
 export const NVA_POLICY = 'e87a87f5-e6dd-4919-be21-abb0a4ea4630';
 // Regions for the Marketplace catalog: offers can differ by region.
 const CATALOG_REGIONS = ['eastus', 'westeurope'];

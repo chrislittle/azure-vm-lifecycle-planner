@@ -57,6 +57,10 @@ them. It takes one format, with these columns:
 | System-assigned identity | no | Yes / No. |
 | Availability set | no | Yes / No. |
 | Zone | no | 1, 2, 3 or None. |
+| Disk types | no | Azure's names of the managed disk types, for example Premium_LRS (0.9.8-beta). |
+| Disk IOPS (uncached disks), Disk MBps (uncached disks) | no | What the disks with host caching None can do in total (0.9.8-beta). |
+| Disk IOPS (cached disks), Disk MBps (cached disks) | no | The same for the disks with ReadOnly or ReadWrite caching (0.9.8-beta). |
+| Disks | no | Each managed disk in words, as the query gives it (0.9.8-beta). |
 
 The extra columns (Image publisher onward) come from the query (`query.kql`); on a
 hand-made list (`template.csv`) they may be blank, and a blank is "Check:", never a
@@ -258,6 +262,7 @@ js/input.js         reading a paste or CSV, checking the columns
 js/lifecycle.js     the size and lifecycle logic (port)
 js/planner.js       machines, stage, outcome, results, what is not checked
 js/extras.js        the query's extra columns: reasons and caveats
+js/disks.js         the disk limits: the note when a new size lowers the disk ceiling (0.9.8-beta)
 js/reasons.js       the reason sentences
 js/words.js         the customer's words
 js/files.js         the four download files
@@ -266,7 +271,7 @@ js/query.js         the query, as shown on the page (= query.kql)
 js/sample.js        the sample, for "Try the sample" (= samples/contoso-from-azure.csv)
 query.kql           the Azure Resource Graph query
 template.csv        the hand-made list template
-data/*.js           the size table, lifecycle data, NVMe list
+data/*.js           the size table, lifecycle data, NVMe list, the limits for Premium SSD v2 and Ultra Disk
 samples/            made-up contoso lists
 tests/              node --test
 ```
@@ -1826,16 +1831,147 @@ anything"): no text names it.
   Linux VMs from other distributions than Canonical, Red Hat and SUSE can need a change of
   the guest OS volume first; the words do not name it.
 
+## 0.9.8-beta (2026-11-20): the disk limits
+
+Owner, 2026-11-13 (step 3 of the peer sweep) and 2026-11-20: a new size is a problem only
+when it **lowers the disk ceiling** of the VM. The ceiling is the lower of what the disks of
+the VM can do in total and the disk limit of the size. **A note, not a different
+recommendation:** the suggested size and every answer stay as they are. The owner chose to
+read the disks in the query (a query change and a test build, which step 3 had left out)
+and to read the separate limit for Premium SSD v2 and Ultra Disk from the v6 and v7 size
+pages.
+
+- **The sources.** Microsoft, "Virtual machine and disk performance"
+  (https://learn.microsoft.com/azure/virtual-machines/disks-performance, updated
+  2026-09-16): managed disks "have their own IOPS and throughput limits", the VM size caps
+  them, and "A virtual machine's cached limits are separate from its uncached limits".
+  "Managed disk bursting" (https://learn.microsoft.com/azure/virtual-machines/disk-bursting):
+  credit-based bursting "operates on a best effort basis and isn't guaranteed", so the tool
+  does not count bursting (the size list has no burst values either). "Azure managed disk
+  types" (https://learn.microsoft.com/azure/virtual-machines/disks-types): Standard HDD and
+  Standard SSD give "up to" values, so the words say "up to" when the VM has one. All three
+  pages are watched and in the snapshot (only their entries, read 2026-11-20).
+- **The size table, refreshed 2026-11-20** (`node tools/azure-sources.mjs --update`, the same
+  safer-value rule, 65 physical regions): it now keeps UncachedDiskIOPS,
+  UncachedDiskBytesPerSecond, CombinedTempDiskAndCachedIOPS,
+  CombinedTempDiskAndCachedReadBytesPerSecond and CombinedTempDiskAndCachedWriteBytesPerSecond.
+  Azure gives bytes per second: 145000000 is 145 MBps (an MBps is 10^6 bytes per second, as
+  the size pages say). Every size has the five values; no region disagrees. The cached MBps
+  is the lower of the read and the write limit. Other changes against the table of
+  2026-10-16: 1,604 sizes (was 1,498). 106 new sizes: Dpsv7, Dpdsv7, Dplsv7, Dpldsv7, Epsv7,
+  Epdsv7, Lpsv5, Mpsv4, Mpdsv4 (10 each; Arm64 or out of scope, never a target) and Ebsv6,
+  Ebdsv6 (8 each). Standard_F16als_v6, F16ams_v6 and F16as_v6 allow 8 NICs (was 4). None
+  removed. The NVA policy read the same (1.4.0); its file is not changed.
+  - **Answer changes from the refresh**, against 0.9.7-beta (e3bc06b), for the four samples
+    and the made-up list of 4,000 VMs (seed 7): an Ebsv5 or Ebdsv5 VM (a modern size, no
+    move) now shows Standard_E16bs_v6 or Standard_E16bds_v6 for v6 "for reference", where it
+    said "Not checked: the new size is not in the size table" (contoso-every-series.csv 2
+    rows, the 4,000-VM list 32 rows; their rows in vm-not-checked.csv go). The F16 v6 NIC
+    limits change no answer. Nothing else.
+- **The separate limit for Premium SSD v2 and Ultra Disk.** Azure's size list gives only the
+  Premium SSD column. The v6 and v7 size pages give a second column, "Uncached Ultra Disk and
+  Premium SSD v2 IOPS / Throughput (MBps)" (Standard_D2s_v6: 3,750 IOPS for Premium SSD,
+  4,167 IOPS for Premium SSD v2 and Ultra Disk). The v5 pages have none. The tool reads it
+  from the page of each v6 and v7 series that it suggests: 29 pages (Dsv6, Ddsv6, Dlsv6,
+  Dldsv6, Dasv6, Dadsv6, Dalsv6, Daldsv6, Esv6, Edsv6, Easv6, Eadsv6, Ebsv6, Ebdsv6, Falsv6
+  and the 14 v7 series; Ebsv6 and Ebdsv6 because of the refresh), on learn.microsoft.com,
+  not GitHub. `data/premium-v2-ultra-limits.js` keeps each page's address, its date on
+  Learn ("updated_at") and the read date; `tools/premium-v2-ultra.mjs` makes it from the
+  pages in `tools/source-snapshot.json`, so a test checks that the data is exactly what the
+  snapshot says (the values and the dates). All 29 pages are watched (`tools/sources.mjs`,
+  now 64 pages). A size with constrained vCPUs keeps "the memory, storage, and I/O bandwidth
+  specifications" of its base size (Microsoft, "Constrained vCPU sizes", watched): it takes
+  the column of its base size (Standard_E16-4s_v6 of Standard_E16s_v6). A test checks that
+  every v6 and v7 size that the tool suggests or ranks, for every size of the table, has the
+  column.
+- **The query** (`query.kql`; still three joins and two mv-expand). The first pass already
+  read the disks for "shared disk": a VM now also gives the key of its OS disk (not an
+  ephemeral OS disk, which is not a managed disk). The group of each disk has the disk
+  record (`sku.name`, `properties.diskSizeGB`, `properties.tier`,
+  `properties.diskIOPSReadWrite`, `properties.diskMBpsReadWrite`) and the entry of the VM
+  (`caching`, `lun`). The second pass sends each disk group to every VM on the disk (before,
+  only a shared disk), and adds up the values. Six new last columns: "Disk types" (Azure's
+  names, for example "Premium_LRS, PremiumV2_LRS"), "Disk IOPS (uncached disks)", "Disk MBps
+  (uncached disks)", "Disk IOPS (cached disks)", "Disk MBps (cached disks)" and "Disks" (each
+  disk in words, for "Facts from your list"). Uncached: host caching None; Premium SSD v2
+  and Ultra Disk are always uncached. A total is blank when a disk of that group gives no
+  value, when a disk has no caching setting, for unmanaged disks and for a scale set (its
+  model has no disk values); 0 means no disk of that kind. A value is never filled from a
+  tier table. The saved test data shows the values on Premium SSD (P4: 120 IOPS, 25 MBps;
+  P10: 500 IOPS, 100 MBps). **Not proven yet:** the query has not run on Azure; whether
+  Standard HDD and Standard SSD give the values; Premium SSD v2 and Ultra Disk. The owner
+  runs a test build. `template.csv` has the columns, blank.
+- **The rule** (`diskNote` in `js/disks.js`, the note "Disk limits", after "Data disks"): for
+  each supported size, for IOPS and MBps, for the uncached and the cached disks apart:
+  current ceiling = min(disk total, current size limit); new ceiling = min(disk total, new
+  size limit). A note only when the new ceiling is lower (a fact to know, "Good to know": it
+  does not change "Ready"). It names the next size up in the same series (the family of the
+  size table; not a size with fewer active vCPUs) that keeps every ceiling, when the table
+  has one. For a VM with Premium SSD v2 or Ultra Disk, the uncached limit is the column of
+  the size page; a size without it gets "Check:", never a "lower" note on a guess. A list
+  with totals but no disk types: "Check:", unless the column is lower too. A blank total: no
+  "lower" note, only "Check:" where the new size limit is lower than the current size limit
+  (so that it is not noise). "Check:" makes a VM "Ready with conditions", as every "Check:".
+- **The words** (STE, read line by line):
+  - `The uncached disks of this VM can do 7,500 IOPS and 250 MBps in total. The current size
+    allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.
+    Standard_D8ds_v5 keeps the current limits.` ("cached disks" for the other group; "can do
+    up to" with Standard HDD or SSD; "limit" for one value.) With the column: `For the new
+    size, this tool uses the limit for Premium SSD v2 and Ultra Disk.`
+  - `Check: the list does not give the IOPS and MBps of the uncached disks. The current size
+    allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.`
+  - `Check: this VM uses Premium SSD v2 or Ultra Disk. The uncached disks of this VM can do
+    8,000 IOPS in total. The current size allows 12,800 IOPS. For the new size, this tool has
+    no separate limit for Premium SSD v2 and Ultra Disk. The size table gives 6,400 IOPS.`
+  - `Check: the list does not give the disk types. ... The new size allows 6,400 IOPS for
+    Premium SSD and 8,333 IOPS for Premium SSD v2 and Ultra Disk.` (or `... for Premium SSD.
+    This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`)
+  - `Check: the size table does not give the disk limits of {size}.` (only when the list
+    gives disk values).
+  - Numbers with a comma for each thousand, with no locale; MBps with one decimal at most.
+- **Where.** The page and the report (the notes), vm-target-sizes.csv (a new last column
+  "Disk limits", so that the other columns keep their place), vm-summary.csv ("Good to know"
+  and "To check"), and a part "DISK LIMITS" of the about file (with the three Learn
+  addresses). The table "The current size and each new size" has two new rows after "Max
+  data disks": "Max disk IOPS (uncached)" and "Max disk MBps (uncached)", with the column for
+  Premium SSD v2 and Ultra Disk where the tool has it ("6,400 (8,333 for Premium SSD v2 and
+  Ultra Disk)"), the values of this VM in the current size column ("12,800 (this VM:
+  20,000)"), and "Less than the current size" where a new size allows less. "Facts from your
+  list" shows the six columns. The README says the same; a README fact gives the number and
+  read dates of the size pages.
+- `samples/contoso-from-azure.csv`: made-up disk values for each VM (a P10 OS disk with
+  ReadWrite caching and P10 data disks with caching None; a Standard SSD VM; blank for the
+  scale sets and the unmanaged VM). contoso-web02 (Standard_DS3_v2 to Standard_D4ds_v5) has a
+  P40 data disk: the "lower" note above. contoso-web01 (two P20 data disks) gives values
+  and no note.
+- **Answer changes against 0.9.7-beta (e3bc06b)**, besides the refresh above: no result,
+  workload type, size, suggested size, reason code or ranked size changes. New: the column
+  "Disk limits", the note in "Good to know" or "To check", and the size table rows. The old
+  sample lists, with no disk columns, get only "Check:" notes: contoso-from-azure.csv 13 rows
+  of vm-target-sizes.csv, contoso-by-hand.csv 4, contoso-every-series.csv 51, the 4,000-VM
+  list 1,031. Where the row of "What to do" has one, "To check" changes and the result group
+  goes from "Ready" to "Ready with conditions": contoso-every-series.csv 5 VMs, the 4,000-VM
+  list 74 VMs (Standard_D11_v2, DS11_v2, DS11-1_v2 and F16s, whose v5, v6 or v7 size allows
+  fewer uncached IOPS or MBps). The new sample with disk values: only the note of
+  contoso-web02 changes.
+- Tests: `tests/disks.test.js` (the size facts and the bytes; every size has the values; the
+  data file is what the snapshot gives, page by page; the column covers every suggested v6
+  and v7 size; the columns read; lower, not lower, equal, one more; uncached and cached
+  apart; blank totals and "Check:" only where the new limit is lower; the column of the
+  size page, no column, no disk types; the next size up, not in another series, not a
+  constrained size, none; a blocked option; the words of the numbers; the page, the report
+  and the CSV files; the size table rows; the about file; the query text and its limits; the
+  sample and the same sizes with no disk columns), and the merge and diff of the size
+  tool. The STE check reads every kind of note (a new made-up list). 43 mutation checks, all
+  caught (two only after new tests: the column for Premium SSD v2 and Ultra Disk is for the
+  uncached disks only, and the next size up must have the column too).
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen
   widths (step 6) and the STE check of all customer text.
 - Refresh the size table and Microsoft's lists when the owner asks.
-- Agreed with the owner 2026-11-13, not built. Do step 3 before step 2.
-  - Step 3: disk IOPS and throughput limits. Keep UncachedDiskIOPS and
-    UncachedDiskBytesPerSecond from Azure's resource SKU list in the next size table
-    refresh (the same safer-value rule across regions). Then show where a target size
-    lowers the uncached disk limits of the VM. No query change, no test build.
+- Agreed with the owner 2026-11-13, not built. (Step 3, the disk limits, is in 0.9.8-beta.)
   - Step 2: three query fields. A dedicated host (properties.host.id,
     properties.hostGroup.id): a host runs one size series; also the dedicated host type
     retirements from Microsoft's retirement page. A capacity reservation group

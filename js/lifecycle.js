@@ -8,8 +8,9 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.9.7-beta';
-import seriesRules from '../data/series-rules.js?v=0.9.7-beta';
+import families from '../data/families.js?v=0.9.8-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.8-beta';
+import ultraLimits from '../data/premium-v2-ultra-limits.js?v=0.9.8-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -362,12 +363,22 @@ function skuShape(entry) {
     return { vcpus, memoryGB: read('MemoryGB') };
 }
 
+// The uncached limits for Ultra Disk and Premium SSD v2 of the v6 and v7 sizes, from the
+// Microsoft size pages (0.9.8-beta): size name in lower case -> { iops, mbps }.
+const ULTRA = new Map(ultraLimits.pages.flatMap((p) => Object.entries(p.sizes).map(([n, v]) => [lower(n), v])));
+
 // The facts of one size that the page and the report show, from the size table, or
 // null when the size is not in the table: { name, vcpus, vcpusActive, memoryGiB,
-// tempGiB, tempKind, tempDisks, maxNics, maxDataDisks, premium, generations }. Each
+// tempGiB, tempKind, tempDisks, maxNics, maxDataDisks, premium, generations,
+// uncachedIops, uncachedMbps, cachedIops, cachedMbps, ultraIops, ultraMbps }. Each
 // is null when the table does not give it. tempGiB: 0 for no temporary disk; the
 // table gives MiB (MaxResourceVolumeMB is MiB, as Azure reports it). tempKind:
 // 'SCSI' or 'NVMe'. generations: ['V1', 'V2'].
+// The disk limits (0.9.8-beta): Azure gives throughput in bytes per second, and an MBps is
+// 10^6 bytes per second (Microsoft's size pages), so 145000000 is 145 MBps. cachedMbps: the
+// lower of the cached read and write limits (the safer value). ultraIops, ultraMbps: the
+// separate column for Ultra Disk and Premium SSD v2 of the Microsoft size page, for a v6 or
+// v7 size that this tool suggests; null for every other size.
 export function sizeFacts(entry) {
     if (!entry) return null;
     const num = (name) => { const v = cap(entry, name); return v === null ? null : parseFloatStrict(v); };
@@ -382,6 +393,23 @@ export function sizeFacts(entry) {
         name: entry.name, vcpus: num('vCPUs'), vcpusActive: num('vCPUsAvailable'), memoryGiB: num('MemoryGB'),
         tempGiB, tempKind, tempDisks, maxNics: skuMaxNics(entry), maxDataDisks: skuMaxDataDisks(entry),
         premium: diskPremiumCapable(entry), generations: skuHyperVGenerations(entry),
+        ...diskLimits(entry, num),
+    };
+}
+
+function diskLimits(entry, num) {
+    const mbps = (name) => { const v = num(name); return v === null ? null : v / 1e6; };
+    const read = mbps('CombinedTempDiskAndCachedReadBytesPerSecond');
+    const write = mbps('CombinedTempDiskAndCachedWriteBytesPerSecond');
+    // A size with constrained vCPUs keeps "the memory, storage, and I/O bandwidth specifications"
+    // of its base size (Microsoft, https://learn.microsoft.com/azure/virtual-machines/constrained-vcpu):
+    // Standard_E16-4s_v6 takes the column of Standard_E16s_v6.
+    const u = ULTRA.get(lower(entry.name)) || ULTRA.get(lower(String(entry.name ?? '').replace(/^(Standard_[A-Za-z]+\d+)-\d+/, '$1')));
+    return {
+        uncachedIops: num('UncachedDiskIOPS'), uncachedMbps: mbps('UncachedDiskBytesPerSecond'),
+        cachedIops: num('CombinedTempDiskAndCachedIOPS'),
+        cachedMbps: read === null ? write : write === null ? read : Math.min(read, write),
+        ultraIops: u && u.iops !== null ? u.iops : null, ultraMbps: u && u.mbps !== null ? u.mbps : null,
     };
 }
 

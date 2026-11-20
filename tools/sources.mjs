@@ -56,6 +56,45 @@ export const SOURCES = [
     ['dasv6', 'Dasv6 series', `${VM}/sizes/general-purpose/dasv6-series`],
     ['esv6', 'Esv6 series', `${VM}/sizes/memory-optimized/esv6-series`],
     ['easv6', 'Easv6 series', `${VM}/sizes/memory-optimized/easv6-series`],
+    // The uncached limits for Ultra Disk and Premium SSD v2 (0.9.8-beta): a separate column
+    // on each v6 and v7 size page, which Azure's resource SKU list does not give. One page for
+    // each v6 and v7 series that this tool suggests (the four pages above too).
+    // data/premium-v2-ultra-limits.js is made from these pages in the snapshot
+    // (tools/premium-v2-ultra.mjs).
+    ['ddsv6', 'Ddsv6 series', `${VM}/sizes/general-purpose/ddsv6-series`],
+    ['dlsv6', 'Dlsv6 series', `${VM}/sizes/general-purpose/dlsv6-series`],
+    ['dldsv6', 'Dldsv6 series', `${VM}/sizes/general-purpose/dldsv6-series`],
+    ['dadsv6', 'Dadsv6 series', `${VM}/sizes/general-purpose/dadsv6-series`],
+    ['dalsv6', 'Dalsv6 series', `${VM}/sizes/general-purpose/dalsv6-series`],
+    ['daldsv6', 'Daldsv6 series', `${VM}/sizes/general-purpose/daldsv6-series`],
+    ['edsv6', 'Edsv6 series', `${VM}/sizes/memory-optimized/edsv6-series`],
+    ['eadsv6', 'Eadsv6 series', `${VM}/sizes/memory-optimized/eadsv6-series`],
+    ['ebsv6', 'Ebsv6 series', `${VM}/sizes/memory-optimized/ebsv6-series`],
+    ['ebdsv6', 'Ebdsv6 series', `${VM}/sizes/memory-optimized/ebdsv6-series`],
+    ['falsv6', 'Falsv6 series', `${VM}/sizes/compute-optimized/falsv6-series`],
+    ['dsv7', 'Dsv7 series', `${VM}/sizes/general-purpose/dsv7-series`],
+    ['ddsv7', 'Ddsv7 series', `${VM}/sizes/general-purpose/ddsv7-series`],
+    ['dlsv7', 'Dlsv7 series', `${VM}/sizes/general-purpose/dlsv7-series`],
+    ['dldsv7', 'Dldsv7 series', `${VM}/sizes/general-purpose/dldsv7-series`],
+    ['dasv7', 'Dasv7 series', `${VM}/sizes/general-purpose/dasv7-series`],
+    ['dadsv7', 'Dadsv7 series', `${VM}/sizes/general-purpose/dadsv7-series`],
+    ['dalsv7', 'Dalsv7 series', `${VM}/sizes/general-purpose/dalsv7-series`],
+    ['daldsv7', 'Daldsv7 series', `${VM}/sizes/general-purpose/daldsv7-series`],
+    ['esv7', 'Esv7 series', `${VM}/sizes/memory-optimized/esv7-series`],
+    ['edsv7', 'Edsv7 series', `${VM}/sizes/memory-optimized/edsv7-series`],
+    ['easv7', 'Easv7 series', `${VM}/sizes/memory-optimized/easv7-series`],
+    ['eadsv7', 'Eadsv7 series', `${VM}/sizes/memory-optimized/eadsv7-series`],
+    ['falsv7', 'Falsv7 series', `${VM}/sizes/compute-optimized/falsv7-series`],
+    ['faldsv7', 'Faldsv7 series', `${VM}/sizes/compute-optimized/faldsv7-series`],
+    // A size with constrained vCPUs (Standard_E16-4s_v6) keeps "the memory, storage, and I/O
+    // bandwidth specifications" of its base size (Standard_E16s_v6): it takes its column.
+    ['constrained-vcpu', 'Constrained vCPU sizes', `${VM}/constrained-vcpu`],
+    // The disk limits (0.9.8-beta): a VM size caps the performance of its disks, and the
+    // cached limits are separate from the uncached limits. Credit-based bursting is best
+    // effort, so this tool does not count it. Standard HDD and Standard SSD give "up to" values.
+    ['disks-performance', 'Virtual machine and disk performance', `${VM}/disks-performance`],
+    ['disk-bursting', 'Managed disk bursting', `${VM}/disk-bursting`],
+    ['disk-types', 'Azure managed disk types', `${VM}/disks-types`],
     // The Generation 1 to 2 row (0.9.7-beta): the operating systems that the Trusted launch
     // upgrade of a Generation 1 VM excludes, and what it needs. Windows Server 2016 goes to
     // the in-place upgrade first.

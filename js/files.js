@@ -5,16 +5,17 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.7-beta';
-import families from '../data/families.js?v=0.9.7-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
-import capacity from '../data/capacity.js?v=0.9.7-beta';
-import nvme from '../data/nvme-images.js?v=0.9.7-beta';
-import { capacityRestricted } from './planner.js?v=0.9.7-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.7-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.7-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.7-beta';
+import sizes from '../data/sizes.js?v=0.9.8-beta';
+import families from '../data/families.js?v=0.9.8-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
+import capacity from '../data/capacity.js?v=0.9.8-beta';
+import nvme from '../data/nvme-images.js?v=0.9.8-beta';
+import ultra from '../data/premium-v2-ultra-limits.js?v=0.9.8-beta';
+import { capacityRestricted } from './planner.js?v=0.9.8-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
+import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.8-beta';
+import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.8-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.8-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -67,8 +68,13 @@ function base(m) {
     };
 }
 
-export const CAVEAT_TOPICS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
+// The note columns of vm-target-sizes.csv up to 0.9.7-beta, in their place.
+const NOTE_COLUMNS = ['NVMe', 'Disk encryption', 'Temporary disk', 'Accelerated networking', 'NICs', 'Data disks', 'Hibernation',
     'Scale set / AKS / AVD', 'SAP', 'Unmanaged disks', 'Ephemeral OS disk', 'Identity', 'Availability set', 'Network virtual appliance', 'Storage or backup appliance', 'Zone'];
+// Each topic of the notes, in the order that the page and the report show them. "Disk limits"
+// (0.9.8-beta, disks.js) comes after the data disks; its column is the last of
+// vm-target-sizes.csv, so that the other columns keep their place.
+export const CAVEAT_TOPICS = [...NOTE_COLUMNS.slice(0, 6), 'Disk limits', ...NOTE_COLUMNS.slice(6)];
 
 // The option a VM would most likely take: a burstable size for a burstable VM
 // (Microsoft recommends Bsv2 and Basv2 as the replacement, and it is a resize),
@@ -183,11 +189,13 @@ export function summaryRows(p) {
 
 export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
     'Workload type', 'Series', 'Target size', 'Series result', 'Supported', 'Reason', 'How to move', 'Ranked sizes', 'Target stage', 'Lifecycle change', 'Suggested', 'Rebuild',
-    'Premium SSD on target', 'Burstable ends', 'Region availability', ...CAVEAT_TOPICS, 'Notes', 'Resource ID',
+    'Premium SSD on target', 'Burstable ends', 'Region availability', ...NOTE_COLUMNS, 'Notes', 'Resource ID',
     // Added in 0.9.4-beta at the end, so that the other columns keep their place.
     'SAP sign',
     // Added in 0.9.5-beta at the end: does the resize need the preview feature VMTempDiskResizePreview?
-    'Preview feature'];
+    'Preview feature',
+    // Added in 0.9.8-beta at the end: the note when the new size lowers the disk ceiling of the VM.
+    'Disk limits'];
 
 export function targetRows(p, table, now = new Date()) {
     const out = [];
@@ -375,6 +383,33 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  If a VM does not run SAP, set "SAP" to No in your list. Then load the list again.',
         '  A blank SAP value, or a value that this tool cannot read, gives no SAP note, as for the appliances.',
         '  If your list does not give SAP, a VM that is in no other workload type shows "Type not checked".',
+        '',
+        // 0.9.8-beta: the disk limits (disks.js).
+        'DISK LIMITS',
+        '  A new size is a problem only when it lowers the disk ceiling of the VM.',
+        '  The ceiling is the lower of two values: what the disks of the VM can do in total, and the disk limit of the size.',
+        '  This tool compares the IOPS and the MBps, for the uncached disks and for the cached disks.',
+        '  Uncached disks: host caching is None. Premium SSD v2 and Ultra Disk are always uncached.',
+        '  Cached disks: host caching is ReadOnly or ReadWrite. The cached limit of the size applies to them.',
+        '  Microsoft: the cached limits of a VM are separate from its uncached limits.',
+        '  When a new size lowers the ceiling, the note "Disk limits" in "Good to know" says so.',
+        '  It names the next size up in the same series that keeps the current limit, if the size table has one.',
+        '  The recommended size does not change.',
+        '  If the list does not give the disk values, "To check" says so, but only where the new size allows less.',
+        '  The values come from the query: the columns "Disk IOPS" and "Disk MBps", for the uncached disks and the cached disks.',
+        '  The query leaves a value blank when a disk gives no value, for unmanaged disks, and for a scale set.',
+        '  An ephemeral OS disk is not a managed disk. The query leaves it out.',
+        '  The size table gives one uncached limit for each size, for Premium SSD.',
+        `  The Microsoft pages of ${ultra.pages.length} v6 and v7 series give a separate limit for Premium SSD v2 and Ultra Disk. This tool uses it.`,
+        `  This tool read these pages on ${[...new Set(ultra.pages.map((x) => x.readUtc))].sort().map(dateWords).join(' and ')}.`,
+        '  A VM with Premium SSD v2 or Ultra Disk gets "Check:" for a size with no separate limit.',
+        '  It does not get a note that the limit is lower.',
+        '  The cached MBps of a size is the lower of its cached read limit and its cached write limit.',
+        '  This tool does not count disk bursting. Microsoft says that credit-based bursting is best effort and not guaranteed.',
+        '  Standard HDD and Standard SSD give "up to" values.',
+        '  https://learn.microsoft.com/azure/virtual-machines/disks-performance',
+        '  https://learn.microsoft.com/azure/virtual-machines/disk-bursting',
+        '  https://learn.microsoft.com/azure/virtual-machines/disks-types',
         '',
         'CAPACITY GROWTH RESTRICTIONS',
         ...capacityWords(capacity, now).map((l) => `  ${l}`),

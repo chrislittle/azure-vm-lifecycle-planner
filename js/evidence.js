@@ -2,8 +2,8 @@
 // an appliance, the facts behind a workload type, and every fact as the list gives
 // it. One source for the page, the files and the report.
 
-import { patternFound } from './patterns.js?v=0.9.7-beta';
-import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.9.7-beta';
+import { patternFound } from './patterns.js?v=0.9.8-beta';
+import { APPLIANCE_KINDS, PATTERNS } from './words.js?v=0.9.8-beta';
 
 // The workload type of a VM and why: { pattern, name, kind, vendor, lead, evidence }.
 // kind: the kind of appliance in words, or ''. vendor: the vendor of a storage or
@@ -83,7 +83,10 @@ export function generationShown(m) {
 // tool takes the disk controller from the size, not from the list.
 export const FACT_GROUPS = [
     ['Size and OS', ['Current size', 'Generation', 'OS', 'Hibernation']],
-    ['Disks and network', ['Data-disk count', 'Unmanaged disks', 'Ephemeral OS disk', 'Shared disk', 'NIC count', 'Accelerated NICs', 'Primary NIC accelerated']],
+    ['Disks and network', ['Data-disk count', 'Unmanaged disks', 'Ephemeral OS disk', 'Shared disk',
+        // The managed disks (0.9.8-beta): the values behind the note "Disk limits".
+        'Disk types', 'Disk IOPS (uncached disks)', 'Disk MBps (uncached disks)', 'Disk IOPS (cached disks)', 'Disk MBps (cached disks)', 'Disks',
+        'NIC count', 'Accelerated NICs', 'Primary NIC accelerated']],
     ['Security', ['Security type', 'Azure Disk Encryption', 'System-assigned identity']],
     ['Workload', ['Resource type', 'Instances', 'Scale set', 'Managed by', 'Azure Virtual Desktop', 'AVD host pool type', 'SQL Server', 'SQL availability group', 'SAP', 'SAP sign']],
     ['Image and Marketplace', ['Image publisher', 'Image offer', 'Image SKU', 'Image ID', 'Plan publisher', 'Plan product', 'Managed application', 'Application plan publisher', 'Application plan product']],

@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.9.7-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
-import capacity from '../data/capacity.js?v=0.9.7-beta';
-import nvme from '../data/nvme-images.js?v=0.9.7-beta';
-import query from './query.js?v=0.9.7-beta';
-import sample from './sample.js?v=0.9.7-beta';
-import { SizeTable } from './lifecycle.js?v=0.9.7-beta';
-import { COLUMNS, readList } from './input.js?v=0.9.7-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.7-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
-import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
-import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.7-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.9.7-beta';
-import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.7-beta';
-import * as F from './files.js?v=0.9.7-beta';
-import { makeZip } from './zip.js?v=0.9.7-beta';
-import version from './version.js?v=0.9.7-beta';
+import sizes from '../data/sizes.js?v=0.9.8-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
+import capacity from '../data/capacity.js?v=0.9.8-beta';
+import nvme from '../data/nvme-images.js?v=0.9.8-beta';
+import query from './query.js?v=0.9.8-beta';
+import sample from './sample.js?v=0.9.8-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.8-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.8-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.8-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
+import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.8-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.8-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.8-beta';
+import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.8-beta';
+import * as F from './files.js?v=0.9.8-beta';
+import { makeZip } from './zip.js?v=0.9.8-beta';
+import version from './version.js?v=0.9.8-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;

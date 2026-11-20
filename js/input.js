@@ -53,6 +53,15 @@ export const COLUMNS = [
     { name: 'Managed application' },
     { name: 'Application plan publisher' },
     { name: 'Application plan product' },
+    // The managed disks of the VM (query 0.9.8-beta and later). Optional. The types (Azure's
+    // names, for example Premium_LRS), the IOPS and MBps that the disks can do in total, for
+    // the disks with host caching None (uncached) and the others (cached), and each disk.
+    { name: 'Disk types' },
+    { name: 'Disk IOPS (uncached disks)' },
+    { name: 'Disk MBps (uncached disks)' },
+    { name: 'Disk IOPS (cached disks)' },
+    { name: 'Disk MBps (cached disks)' },
+    { name: 'Disks' },
 ];
 
 // A header as it is compared: case, spaces, dashes, underscores and dots ignored.

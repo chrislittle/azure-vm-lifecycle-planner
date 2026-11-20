@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.7-beta';
-import { capacityRestricted } from './planner.js?v=0.9.7-beta';
-import * as F from './files.js?v=0.9.7-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.7-beta';
-import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.7-beta';
-import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.7-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.7-beta';
-import version from './version.js?v=0.9.7-beta';
+import capacity from '../data/capacity.js?v=0.9.8-beta';
+import { capacityRestricted } from './planner.js?v=0.9.8-beta';
+import * as F from './files.js?v=0.9.8-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
+import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.8-beta';
+import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.8-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.8-beta';
+import version from './version.js?v=0.9.8-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 

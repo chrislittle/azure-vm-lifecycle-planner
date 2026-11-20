@@ -142,7 +142,7 @@ resources
 ```
 
 `query.kql` does the same without a join: in its first pass a VM gives a key for
-each of its data disks, so the group of a shared disk holds every VM on it.
+its OS disk and each of its data disks, so the group of a shared disk holds every VM on it.
 
 ### Compute that is not in the customer's subscription
 
@@ -232,6 +232,7 @@ query (`query.kql`) reads all of them.
 | Hibernation | `properties.additionalCapabilities.hibernationEnabled` | Tested, "No" only |
 | Unmanaged disks | `osDisk.vhd.uri`, or a `vhd` on a data disk | Tested, "No" only |
 | Ephemeral OS disk | `osDisk.diffDiskSettings.option` = `Local` | Tested, "No" only |
+| Disk types and disk values (0.9.8-beta) | On each managed disk: `sku.name`, `properties.diskSizeGB`, `properties.tier`, `properties.diskIOPSReadWrite`, `properties.diskMBpsReadWrite`. On the VM: `caching` of `osDisk` and of each data disk (`None` is uncached). Premium SSD v2 and Ultra Disk are always uncached. An ephemeral OS disk is not a managed disk. | Saved test data shows the values on Premium SSD (P4: 120 IOPS, 25 MBps; P10: 500 IOPS, 100 MBps). Not yet tested: Standard HDD and Standard SSD, Premium SSD v2, Ultra Disk |
 | Availability set | `properties.availabilitySet.id` | Tested, "No" only |
 | Zone | `zones` | Tested, "No zone" only |
 | Flexible scale set membership | `properties.virtualMachineScaleSet.id` | Tested, "No" only |
@@ -246,7 +247,11 @@ fits in these limits:
 1. One pass over the `resources` table reads VMs, scale sets, NICs, extensions, SQL IaaS
    Agent records and disks. Each record gives the key of the VM it belongs to
    (`mv-expand`). A `summarize` by the key puts each VM's records together.
-2. A second `summarize` gives "shared disk" to every VM on a shared disk.
+2. A second `summarize` gives each VM its disks (the group of each disk goes to every VM
+   on it): "shared disk" for a shared disk, and the disk types and totals (0.9.8-beta).
+   The IOPS and MBps of the disks are added up for the uncached disks and for the cached
+   disks. A total is blank when a disk gives no value or no caching setting, for unmanaged
+   disks, and for a scale set. No join and no `mv-expand` were added.
 3. Three joins: the AVD session hosts (`desktopvirtualizationresources`), the resource
    groups (`resourcecontainers`, for "managed by"), and one join to `resources` that
    reads both the AVD host pools and the managed applications
