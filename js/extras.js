@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.7-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.7-beta';
-import nvme from '../data/nvme-images.js?v=0.9.7-beta';
-import { readCount } from './planner.js?v=0.9.7-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.8-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.8-beta';
+import nvme from '../data/nvme-images.js?v=0.9.8-beta';
+import { readCount } from './planner.js?v=0.9.8-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -55,6 +55,14 @@ export function readExtras(cell) {
         appName: cell('Managed application') || null,
         appPlanPublisher: cell('Application plan publisher') || null,
         appPlanProduct: cell('Application plan product') || null,
+        // The managed disks (0.9.8-beta), as the list gives them: disks.js reads the values.
+        diskTypes: cell('Disk types') || null,
+        diskTypesUncached: cell('Disk types (uncached disks)') || null,
+        diskIopsUncached: cell('Disk IOPS (uncached disks)') || null,
+        diskMbpsUncached: cell('Disk MBps (uncached disks)') || null,
+        diskIopsCached: cell('Disk IOPS (cached disks)') || null,
+        diskMbpsCached: cell('Disk MBps (cached disks)') || null,
+        disks: cell('Disks') || null,
     };
 }
 

@@ -50,6 +50,18 @@ const EXTRA_LISTS = [
     + 'contoso-sap-x1,Standard_D4s_v3,V2,Windows,Yes,Azure VM extension for SAP solutions (MonitorX64Windows)\n'
     + 'contoso-sap-x2,Standard_E16s_v3,V2,Linux,Yes,Licence type SLES_SAP\n'
     + 'contoso-sap-x3,Standard_E16s_v3,V2,Linux,Yes,\n',
+    // Each kind of disk limits note (0.9.8-beta): lower with the column for Premium SSD v2 and
+    // Ultra Disk, no column, no disk types, cached and "up to", a blank value with a lower value,
+    // both groups lower, a size that the size table does not have.
+    'VM name,Current size,Generation,OS,NIC count,Data-disk count,Disk types,Disk types (uncached disks),Disk IOPS (uncached disks),Disk MBps (uncached disks),Disk IOPS (cached disks),Disk MBps (cached disks)\n'
+    + 'contoso-dk1,Standard_DS3_v2,V2,Linux,1,2,"Premium_LRS, PremiumV2_LRS",PremiumV2_LRS,8000,100,500,100\n'
+    + 'contoso-dk2,Standard_DS3_v2,V2,Linux,1,2,,,8000,180,500,100\n'
+    + 'contoso-dk3,Standard_DS3_v2,V2,Linux,1,2,"Premium_LRS, PremiumV2_LRS",PremiumV2_LRS,12000,300,500,100\n'
+    + 'contoso-dk4,Standard_D4_v4,V2,Linux,1,0,StandardSSD_LRS,,0,0,30000,100\n'
+    + 'contoso-dk5,Standard_DS3_v2,V2,Linux,1,2,Premium_LRS,Premium_LRS,20000,,,\n'
+    + 'contoso-dk6,Standard_D4_v4,V2,Linux,1,2,Premium_LRS,Premium_LRS,20000,180,30000,240\n'
+    + 'contoso-dk7,Standard_Q4z_v9,V2,Linux,1,2,Premium_LRS,Premium_LRS,20000,180,500,100\n'
+    + 'contoso-dk8,Standard_DS3_v2,V2,Linux,1,2,"Premium_LRS, PremiumV2_LRS","Premium_LRS, PremiumV2_LRS",12000,300,500,100\n',
     '',
 ];
 

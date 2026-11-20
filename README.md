@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.7-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.8-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -174,9 +174,42 @@ For each VM:
   A fact that is fine has no note. A VM that a service manages (AKS, Azure Red Hat
   OpenShift, Azure Databricks) has no notes: the service manages its image and disks.
 - A table with the current size beside each new size: vCPUs, memory, temporary disk,
-  the maximum NICs and data disks, Premium SSD and the generations, from the size table.
+  the maximum NICs and data disks, the maximum disk IOPS and MBps of the uncached disks,
+  Premium SSD and the generations, from the size table.
   Where a new size has less than the current size or the VM (for example fewer NICs than
   the VM has), a note under the value says so.
+- The disk limits. A new size is a problem only when it lowers the disk ceiling of the
+  VM. The ceiling is the lower of two values: what the disks of the VM can do in total,
+  and the disk limit of the size. The tool compares the IOPS and the MBps, for the
+  uncached disks (host caching None) and the cached disks. Microsoft: the cached limits of
+  a VM are separate from its uncached limits
+  ([Virtual machine and disk performance](https://learn.microsoft.com/azure/virtual-machines/disks-performance)).
+  When a new size lowers the ceiling, the note "Disk limits" (Good to know) says so in
+  short words, once for the VM: "The disks of this VM can do more than the new size
+  allows. Compare the disk rows in the size table." It also names the next size up in the
+  same series that keeps the current limits, if the size table has one, for example
+  "Standard_D8ds_v5 keeps the current limits." The recommended size does not change.
+  The size table of the VM gives the numbers: the rows "Max disk IOPS (uncached)" and
+  "Max disk MBps (uncached)" (and the cached rows when the VM has cached disks), with the
+  values of this VM in the current size column, for example "12,800 (this VM: 7,500)".
+  vm-target-sizes.csv and vm-summary.csv give the numbers in words.
+  - The disk values come from the query. If the list does not give them, "To check" says
+    so, but only where the new size allows less than the current size. The query cannot give
+    them for a scale set (an AKS node pool is a scale set): there, a blank value gives no
+    "Check:". The note "Disk limits" never changes the readiness of a VM: a VM that is
+    "Ready" stays "Ready".
+  - When every uncached disk is Premium SSD v2 or Ultra Disk, the tool uses the separate
+    limit on the Microsoft size pages of v6 and v7. For a size with no such limit, the note
+    is "Check:".
+  - Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft
+    does not say which limit applies to this mix. The note is then "Check: this VM has
+    more than one kind of disk.", only where a limit of the new size can lower the ceiling. The
+    query column "Disk types (uncached disks)" gives the types of the uncached disks.
+  - The tool does not count disk bursting: Microsoft says that credit-based bursting is
+    best effort and not guaranteed
+    ([Managed disk bursting](https://learn.microsoft.com/azure/virtual-machines/disk-bursting)).
+    Standard HDD and Standard SSD give "up to" values
+    ([Azure managed disk types](https://learn.microsoft.com/azure/virtual-machines/disks-types)).
 - Network virtual appliances (NVAs). The tool finds them by their marketplace image.
   It uses the Microsoft list in the Azure Policy "Configure Marketplace Network Virtual
   Appliances (NVAs) to add a MANA support tag". Ask the
@@ -249,7 +282,7 @@ in Excel:
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
 | vm-summary.csv | One row for each VM, to sort and filter in Excel. Near the end are the columns Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. The last column is SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. |
-| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. Near the end is the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. The last column is Preview feature: Needed, Not needed or Not checked, for the preview feature VMTempDiskResizePreview. The column Rebuild is No for every size. |
+| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. Near the end is the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. Then the column Preview feature: Needed, Not needed or Not checked, for the preview feature VMTempDiskResizePreview. The last column is Disk limits: the note when the new size lowers the disk ceiling of the VM, or "Check:". The column Rebuild is No for every size. |
 | vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 
@@ -282,6 +315,8 @@ work in that open tab. (It does not load again while you are offline.)
 
 - If a size is available in your region. The tool uses one table for all regions.
 - If a VM is ready to move. For example, the tool does not look inside the VM.
+- Disk bursting, and the disk values of a scale set (the query leaves them blank). The
+  disk values are what Azure gives for each disk, not what the workload uses.
 - The VMs in a scale set or an AKS node pool, one by one. The query gives each scale set
   as one row. Azure Resource Graph does not give the generation of a scale set. For an
   AKS or Azure Red Hat OpenShift node pool, or a VM that a service manages, the tool does
@@ -291,7 +326,7 @@ work in that open tab. (It does not load again while you are offline.)
 
 ## Sources
 
-- **Size facts:** a table of <!-- fact:sizes -->1,498 Azure VM sizes, read from Azure on 16 October 2026<!-- /fact -->
+- **Size facts:** a table of <!-- fact:sizes -->1,604 Azure VM sizes, read from Azure on 20 November 2026<!-- /fact -->
   ([data/sizes.js](data/sizes.js)). The page does not connect to Azure.
 - **Lifecycle stages and retirement dates:** the Microsoft
   [lifecycle overview](https://learn.microsoft.com/azure/virtual-machines/sizes/lifecycle/lifecycle-overview),
@@ -314,6 +349,17 @@ work in that open tab. (It does not load again while you are offline.)
   [Dsv6](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv6-series).
   The Intel D and E sizes of v5 and every D and E size of v6 require it (the v6 pages
   changed on 27 October 2026). The AMD v5 sizes and the v7 sizes support it.
+- **Disk limits:** the uncached and cached disk limits of each size come from the size
+  table (Azure gives the throughput in bytes per second). The separate limit for Premium
+  SSD v2 and Ultra Disk comes from <!-- fact:disk-limits-read -->29 Microsoft size pages of v6 and v7 series, read on 6 and 20 November 2026<!-- /fact -->
+  ([data/premium-v2-ultra-limits.js](data/premium-v2-ultra-limits.js)), for example
+  [Dsv6](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dsv6-series).
+  A size with constrained vCPUs keeps the disk limits of its base size
+  ([Constrained vCPU sizes](https://learn.microsoft.com/azure/virtual-machines/constrained-vcpu)).
+  How the limits work: the Microsoft pages
+  [Virtual machine and disk performance](https://learn.microsoft.com/azure/virtual-machines/disks-performance),
+  [Managed disk bursting](https://learn.microsoft.com/azure/virtual-machines/disk-bursting) and
+  [Azure managed disk types](https://learn.microsoft.com/azure/virtual-machines/disks-types).
 - **The Trusted launch upgrade of a Generation 1 VM:** the Microsoft page
   [Upgrade Gen1 VMs to Trusted launch](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-existing-vm-gen-1)
   and, for Windows Server 2016, the page
@@ -355,7 +401,10 @@ generation only, for example "Standard_D4s_v3, Generation 2".
   removed, or comments on the open issue when the difference is new. When the page and
   the snapshot agree again, it closes the issue. It does not change the data. After you
   update the data files, run `node tools/watch-sources.mjs --update` in the same pull
-  request. The same workflow then reads Azure (`tools/azure-sources.mjs`): the VM size
+  request. The limits for Premium SSD v2 and Ultra Disk
+  (`data/premium-v2-ultra-limits.js`) come from the v6 and v7 size pages in the snapshot:
+  after the snapshot changes, run `node tools/premium-v2-ultra.mjs --update`. A test
+  checks that the file is what the snapshot gives. The same workflow then reads Azure (`tools/azure-sources.mjs`): the VM size
   list (`data/sizes.js`), the NVA policy (`data/nva-images.js`) and the Marketplace
   catalog for the storage and backup appliances (`data/storage-appliance-images.js`,
   including possible new vendors). It signs in as a read-only identity with no stored
@@ -367,8 +416,8 @@ generation only, for example "Standard_D4s_v3, Generation 2".
   not say that this resets the 60 days. If GitHub still turns the workflow off, it sends
   an email: turn the workflow on again in the Actions tab.
 - README facts: some facts in this README come from the data files. These are the
-  version, the size count and its read date, the read dates of the Microsoft pages,
-  and the number of storage and backup vendors. Each fact is between two HTML comment
+  version, the size count and its read date, the read dates of the Microsoft pages
+  (also the number of v6 and v7 size pages for the disk limits), and the number of storage and backup vendors. Each fact is between two HTML comment
   marks that GitHub does not show. `node tools/readme-facts.mjs` writes
   the facts from the data files. With `--check`, it only compares them. A test fails
   when the README and the data do not agree. `node tools/azure-sources.mjs --update`,

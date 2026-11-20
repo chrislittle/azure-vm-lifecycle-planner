@@ -3,7 +3,7 @@
 // the file into the planner page. Reads only; changes nothing.
 //
 // One pass over the Resources table gives each VM and scale set, and the records
-// that point to it: NICs, extensions, the SQL IaaS Agent record, shared disks.
+// that point to it: NICs, extensions, the SQL IaaS Agent record, its managed disks.
 // Joins add the AVD session host, the resource group "managed by" a service, and the
 // AVD host pool or the managed application. (Resource Graph allows three joins, with
 // one other table besides the resource groups: here AVD.)
@@ -29,11 +29,14 @@ Resources
     extPublisher =~ 'Microsoft.OSTCExtensions' and extType =~ 'AzureEnhancedMonitorForLinux', 1,
     0)
 // The key of the VM or scale set that each record belongs to. A VM also gives
-// the ID of each of its data disks, and a disk gives its own ID: so a disk's group
-// knows the disk and every VM on it. (Resource Graph does not have the disk's list
-// of VMs, managedByExtended.)
+// the ID of its OS disk and of each of its data disks, and a disk gives its own ID: so
+// a disk's group knows the disk and every VM on it. (Resource Graph does not have the
+// disk's list of VMs, managedByExtended.) An ephemeral OS disk is not a managed disk:
+// it is not a key.
 | extend keys = case(
-    isVm, array_concat(pack_array(tolower(id)), properties.storageProfile.dataDisks),
+    isVm, array_concat(pack_array(tolower(id)),
+        iff(tostring(properties.storageProfile.osDisk.diffDiskSettings.option) =~ 'Local', dynamic([]), pack_array(properties.storageProfile.osDisk)),
+        properties.storageProfile.dataDisks),
     isVmss, pack_array(tolower(id)),
     t == 'microsoft.network/networkinterfaces', pack_array(tolower(tostring(properties.virtualMachine.id))),
     t == 'microsoft.compute/virtualmachines/extensions', pack_array(tolower(tostring(split(id, '/extensions/')[0]))),
@@ -41,7 +44,7 @@ Resources
     t == 'microsoft.compute/disks', pack_array(tolower(id)),
     dynamic([]))
 | mv-expand k = keys
-// A data-disk entry is an object: its key is the disk ID.
+// A disk entry of a VM is an object: its key is the disk ID.
 | extend key = tolower(iff(isnotempty(k.managedDisk.id), tostring(k.managedDisk.id), tostring(k)))
 | where isnotempty(key)
 // A VM and a scale set describe their machine in different places.
@@ -96,12 +99,37 @@ Resources
     sqlEdition = anyif(tostring(properties.sqlImageSku), t == 'microsoft.sqlvirtualmachine/sqlvirtualmachines'),
     sqlGroup = anyif(tostring(properties.sqlVirtualMachineGroupResourceId), t == 'microsoft.sqlvirtualmachine/sqlvirtualmachines'),
     diskShared = max(toint(t == 'microsoft.compute/disks' and toint(properties.maxShares) > 1)),
-    diskVms = make_set_if(tolower(id), isVm)
+    diskVms = make_set_if(tolower(id), isVm),
+    // The managed disk of a disk's group: its type, size and tier, and the IOPS and MBps that
+    // it can do, from the disk record. Its host caching and LUN are set on each VM that has it
+    // (a shared disk is on more than one VM): one entry for each VM, by the VM's key, so that
+    // each VM gets its own after the second mv-expand.
+    diskOfVm = max(toint(isVm and tolower(id) != key)),
+    diskType = anyif(tostring(sku.name), t == 'microsoft.compute/disks'),
+    diskSizeGb = anyif(toint(properties.diskSizeGB), t == 'microsoft.compute/disks'),
+    diskTier = anyif(tostring(properties.tier), t == 'microsoft.compute/disks'),
+    diskIops = anyif(tolong(properties.diskIOPSReadWrite), t == 'microsoft.compute/disks'),
+    diskMbps = anyif(tolong(properties.diskMBpsReadWrite), t == 'microsoft.compute/disks'),
+    diskOnVm = make_bag_if(pack(tolower(id), pack('caching', tostring(k.caching), 'lun', tostring(k.lun))), isVm and tolower(id) != key)
     by key
-// Second pass: each VM gets its own fields, and "shared disk" from the group of
-// any shared disk that it is on.
-| extend key2s = case(self == 1, pack_array(key), diskShared == 1, diskVms, dynamic([]))
+// Second pass: each VM gets its own fields, and from the group of each disk that it is
+// on: the disk, and "shared disk" when the disk is shared.
+| extend key2s = case(self == 1, pack_array(key), diskOfVm == 1 or diskShared == 1, diskVms, dynamic([]))
 | mv-expand key2 = key2s to typeof(string)
+// The host caching and the LUN that this VM (key2) sets for the disk.
+| extend diskCaching = tostring(diskOnVm[key2].caching), diskLun = tostring(diskOnVm[key2].lun)
+// Uncached: host caching None. Premium SSD v2 and Ultra Disk never use host caching.
+// Cached: ReadOnly or ReadWrite. A disk with no caching setting makes the totals blank.
+| extend dUltra = diskType in~ ('PremiumV2_LRS', 'UltraSSD_LRS')
+| extend dUncached = self == 0 and diskOfVm == 1 and (dUltra or diskCaching =~ 'None'),
+    dCached = self == 0 and diskOfVm == 1 and not(dUltra) and diskCaching in~ ('ReadOnly', 'ReadWrite')
+| extend dUnknown = self == 0 and diskOfVm == 1 and not(dUncached) and not(dCached),
+    diskWords = strcat(iff(isempty(diskLun), 'OS disk', strcat('Data disk LUN ', diskLun)), ': ',
+        iff(isempty(diskType), 'no managed disk record', strcat(diskType, iff(isempty(diskTier), '', strcat(' ', diskTier)), ', ',
+            iff(isnull(diskSizeGb), 'no size', strcat(tostring(diskSizeGb), ' GiB')), ', ',
+            iff(isnull(diskIops), 'no IOPS value', strcat(tostring(diskIops), ' IOPS')), ', ',
+            iff(isnull(diskMbps), 'no MBps value', strcat(tostring(diskMbps), ' MBps')))),
+        ', caching ', iff(isempty(diskCaching), 'not given', diskCaching))
 | summarize
     isVmss = take_anyif(isVmss, self == 1),
     name = take_anyif(name, self == 1),
@@ -142,10 +170,20 @@ Resources
     zones = take_anyif(zones, self == 1),
     sqlEdition = take_anyif(sqlEdition, self == 1),
     sqlGroup = take_anyif(sqlGroup, self == 1),
-    sharedDisk = max(toint(self == 0)),
+    sharedDisk = max(toint(self == 0 and diskShared == 1)),
+    // The disks of the VM: how many in each group, how many of them give a value, the totals.
+    uDisks = countif(dUncached), uIopsN = countif(dUncached and isnotnull(diskIops)), uMbpsN = countif(dUncached and isnotnull(diskMbps)),
+    uIops = sumif(diskIops, dUncached), uMbps = sumif(diskMbps, dUncached),
+    cDisks = countif(dCached), cIopsN = countif(dCached and isnotnull(diskIops)), cMbpsN = countif(dCached and isnotnull(diskMbps)),
+    cIops = sumif(diskIops, dCached), cMbps = sumif(diskMbps, dCached),
+    unknownDisks = countif(dUnknown),
+    diskTypes = make_set_if(diskType, self == 0 and diskOfVm == 1 and isnotempty(diskType)),
+    uncachedTypes = make_set_if(diskType, dUncached and isnotempty(diskType)),
+    diskList = make_set_if(diskWords, self == 0 and diskOfVm == 1),
     hasSelf = max(self)
     by key = key2
 | where hasSelf == 1
+| extend unmanaged = isnotempty(osDiskVhd) or dataDisks contains '"vhd"'
 // SAP: the extension for SAP solutions (a VM's extension records, or a scale set's model),
 // a licence type that puts the machine on SAP repositories, or an SAP marketplace image
 // (Microsoft's Azure Hybrid Benefit page). In a scale set's model the order of the fields
@@ -216,7 +254,7 @@ Resources
     // SAP: Yes when the query found a sign (above); "SAP sign" says which.
     SAP = iff(isnotempty(sapSign), 'Yes', 'No'),
     ['SAP sign'] = sapSign,
-    ['Unmanaged disks'] = iff(isnotempty(osDiskVhd) or dataDisks contains '"vhd"', 'Yes', 'No'),
+    ['Unmanaged disks'] = iff(unmanaged, 'Yes', 'No'),
     ['Ephemeral OS disk'] = iff(osDiskOption =~ 'Local', 'Yes', 'No'),
     ['System-assigned identity'] = iff(identityType contains 'SystemAssigned', 'Yes', 'No'),
     ['Availability set'] = iff(isempty(availabilitySet), 'No', 'Yes'),
@@ -244,5 +282,16 @@ Resources
     // (blank for an application that is not from the Marketplace).
     ['Managed application'] = appName,
     ['Application plan publisher'] = appPlanPublisher,
-    ['Application plan product'] = appPlanProduct
+    ['Application plan product'] = appPlanProduct,
+    // The managed disks (planner 0.9.8-beta): the disk types (all, and of the uncached disks), the IOPS and MBps that the
+    // uncached and the cached disks can do in total, and each disk. A total is blank when a
+    // disk of the VM gives no value or no caching setting, for unmanaged disks, and for a
+    // scale set (its model has no disk values). 0 means no disk of that kind.
+    ['Disk types'] = iff(isVmss == 1, '', strcat_array(array_sort_asc(diskTypes), ', ')),
+    ['Disk types (uncached disks)'] = iff(isVmss == 1, '', strcat_array(array_sort_asc(uncachedTypes), ', ')),
+    ['Disk IOPS (uncached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or uIopsN < uDisks, '', tostring(uIops)),
+    ['Disk MBps (uncached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or uMbpsN < uDisks, '', tostring(uMbps)),
+    ['Disk IOPS (cached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or cIopsN < cDisks, '', tostring(cIops)),
+    ['Disk MBps (cached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or cMbpsN < cDisks, '', tostring(cMbps)),
+    ['Disks'] = iff(isVmss == 1, '', strcat_array(array_sort_asc(diskList), '; '))
 | order by ['VM name'] asc

@@ -9,16 +9,17 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.7-beta';
-import capacity from '../data/capacity.js?v=0.9.7-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
+import capacity from '../data/capacity.js?v=0.9.8-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.7-beta';
-import { caveats, extraBlockers, gen1Upgrade, readExtras } from './extras.js?v=0.9.7-beta';
-import { patternOf } from './patterns.js?v=0.9.7-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.7-beta';
+} from './lifecycle.js?v=0.9.8-beta';
+import { caveats, extraBlockers, gen1Upgrade, readExtras } from './extras.js?v=0.9.8-beta';
+import { diskNote } from './disks.js?v=0.9.8-beta';
+import { patternOf } from './patterns.js?v=0.9.8-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.8-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -448,6 +449,11 @@ export function plan(machines, table, now = new Date()) {
                 // A pool or a service makes new nodes: only the new-VM notes (0.9.4-beta).
                 caveats: caveats(vm, m.extra, o, POOL_PATTERNS.includes(m.pattern)),
             };
+            // The disk limits (0.9.8-beta): a note when the new size lowers the disk ceiling of the VM.
+            // The query leaves the values blank by design for a scale set row (its model has no disk values;
+            // AKS node pools are scale sets). A VM with unmanaged disks has no supported size, so no note.
+            const blankByDesign = m.extra.resourceType === 'Scale set';
+            if (series !== 'gen1Route') row.caveats['Disk limits'] = diskNote(vm, m.extra, o, table, null, blankByDesign);
             results.push(row);
             rows.push(row);
             if (result === 'Needs team review') {
