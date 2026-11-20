@@ -1916,9 +1916,21 @@ pages.
   - **After the test build** (review, 2026-11-20): the host caching and the LUN of a disk now
     come from an entry for each VM (`make_bag_if` by the VM's key, read after the second
     mv-expand), so that each VM on a shared disk gets its own values, the same on every run.
-    Before, `anyif` took the values of any one VM on the disk. For a disk on one VM (the path that
-    the test build proved) the values are the same, but this version of the query was not run on
-    Azure again. No join was added.
+    Before, `anyif` took the values of any one VM on the disk. No join was added.
+  - **Second test build, 2026-11-20** (Central US, zone 1; the resource group was deleted the same
+    day and confirmed gone; the raw data is kept locally, not in the repo). This version of the
+    query ran on it. Two Standard_D2s_v6 VMs and one shared Premium SSD P15 (256 GiB, maxShares
+    2: 1,100 IOPS, 125 MBps), at LUN 0 on VM 1 and LUN 5 on VM 2, with caching None on both VMs.
+    - VM 1: OS disk Standard SSD E4 with ReadWrite caching (500 IOPS, 100 MBps), Standard HDD S4
+      with ReadOnly caching (500, 60), Premium SSD v2 (3,000, 125), the shared disk. The query
+      gave uncached 4,100 IOPS and 250 MBps (types Premium SSD v2 and Premium SSD), cached 1,000
+      and 160, "Shared disk" Yes, and the shared disk at LUN 0.
+    - VM 2: OS disk Premium SSD P4 with ReadWrite caching (120, 25), Ultra Disk (1,200, 50), the
+      shared disk. The query gave uncached 2,300 IOPS and 175 MBps (types Premium SSD and Ultra
+      Disk), cached 120 and 25, "Shared disk" Yes, and the shared disk at LUN 5.
+    - Three runs gave the same result. Each VM got its own LUN for the shared disk. A shared disk
+      with a different caching on each VM was not tested: both VMs had None. An ephemeral OS
+      disk is still not tested on Azure.
   - **Query proven 2026-11-20** in a test build (Central US, one Standard_D2s_v6 VM with one
     disk of each type; the resource group was deleted the same day). Every value was right,
     and every disk type gives diskIOPSReadWrite and diskMBpsReadWrite, Standard HDD and
