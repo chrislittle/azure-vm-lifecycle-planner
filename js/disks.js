@@ -202,24 +202,19 @@ export function diskNote(vm, x, option, table, columns = null) {
     }
     const vals = (list, pick) => list.map((e) => `${diskWords(pick(e))} ${UNIT[e.k]}`).join(' and ');
     const upTo = t.upTo ? 'up to ' : '';
+    // The text of this row (vm-target-sizes.csv, vm-summary.csv): the short sentences of the note
+    // (vmDiskNote), then the numbers in words. kinds: the short sentences that apply.
     const checks = [];
-    for (const g of GROUPS) {
-        const b = blank[g];
-        if (b.length) checks.push(`The list does not give the ${b.map((e) => UNIT[e.k]).join(' and ')} of the ${GROUP_WORDS[g]}. The current size allows ${vals(b, (e) => e.c.value)}. The new size allows ${vals(b, (e) => e.n.value)}.`);
+    const kinds = [];
+    const blanks = GROUPS.filter((g) => blank[g].length);
+    if (blanks.length) {
+        kinds.push('blank');
+        const units = VALUES.filter((k) => blanks.some((g) => blank[g].some((e) => e.k === k))).map((k) => UNIT[k]).join(' and ');
+        checks.push([`The list does not give the disk ${units}.`, ...blanks.map((g) => `For the ${GROUP_WORDS[g]}, the current size allows ${vals(blank[g], (e) => e.c.value)}. The new size allows ${vals(blank[g], (e) => e.n.value)}.`)].join(' '));
     }
     const did = (list) => `The uncached disks of this VM can do ${upTo}${vals(list, (e) => e.T)} in total. The current size allows ${vals(list, (e) => e.c.value)}.`;
-    if (guess.length) {
-        checks.push(`This VM uses Premium SSD v2 or Ultra Disk. ${did(guess)} For the new size, this tool has no separate limit for Premium SSD v2 and Ultra Disk. The size table gives ${vals(guess, (e) => e.n.value)}.`);
-    }
-    if (noTypes.length) {
-        const withColumn = noTypes.filter((e) => e.u !== null);
-        const without = noTypes.filter((e) => e.u === null);
-        const parts = [];
-        if (withColumn.length) parts.push(`The new size allows ${vals(withColumn, (e) => e.n.value)} for Premium SSD and ${vals(withColumn, (e) => e.u)} for Premium SSD v2 and Ultra Disk.`);
-        if (without.length) parts.push(`The new size allows ${vals(without, (e) => e.n.value)} for Premium SSD. This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`);
-        checks.push(`The list does not give the disk types. ${did(noTypes)} ${parts.join(' ')}`);
-    }
     if (mixed.length) {
+        kinds.push('mix');
         // The limits of one size for a mix: the Premium SSD limit, and the column when the size has it.
         const allows = (label, single, column) => {
             const withColumn = mixed.filter((e) => e[column] !== null);
@@ -229,13 +224,26 @@ export function diskNote(vm, x, option, table, columns = null) {
             if (without.length) parts.push(`The ${label} allows ${vals(without, (e) => e[single])} for Premium SSD. This tool has no separate limit of the ${label} for Premium SSD v2 and Ultra Disk.`);
             return parts.join(' ');
         };
-        checks.push(`This VM has Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix. `
-            + `The uncached disks of this VM can do ${upTo}${vals(mixed, (e) => e.T)} in total. ${allows('current size', 'cs', 'cu')} ${allows('new size', 'ns', 'nu')}`);
+        checks.push(`${MIX_WORDS} The uncached disks of this VM can do ${upTo}${vals(mixed, (e) => e.T)} in total. ${allows('current size', 'cs', 'cu')} ${allows('new size', 'ns', 'nu')}`);
     }
-    if (unknown.length) checks.push(`The size table does not give the disk limits of ${unknown.join(' and ')}.`);
+    if (guess.length) {
+        kinds.push('guess');
+        checks.push(`${guessWords([option.targetSize])} ${did(guess)} The size table gives ${vals(guess, (e) => e.n.value)} for Premium SSD.`);
+    }
+    if (noTypes.length) {
+        kinds.push('types');
+        const withColumn = noTypes.filter((e) => e.u !== null);
+        const without = noTypes.filter((e) => e.u === null);
+        const parts = [];
+        if (withColumn.length) parts.push(`The new size allows ${vals(withColumn, (e) => e.n.value)} for Premium SSD and ${vals(withColumn, (e) => e.u)} for Premium SSD v2 and Ultra Disk.`);
+        if (without.length) parts.push(`The new size allows ${vals(without, (e) => e.n.value)} for Premium SSD. This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`);
+        checks.push(`${TYPES_WORDS} ${did(noTypes)} ${parts.join(' ')}`);
+    }
+    if (unknown.length) { kinds.push('unknown'); checks.push(unknownWords(unknown)); }
 
     const lowers = [];
     let count = 0;
+    let next = null;
     for (const g of GROUPS) {
         const l = lower[g];
         if (!l.length) continue;
@@ -246,11 +254,47 @@ export function diskNote(vm, x, option, table, columns = null) {
         if (onCur || onNew) lowers.push(`For ${onCur && onNew ? 'both sizes' : onNew ? 'the new size' : 'the current size'}, this tool uses the limit for Premium SSD v2 and Ultra Disk.`);
     }
     if (lowers.length) {
-        const next = nextKeeping(option.targetSize, t, cur, table, columns);
-        if (next) lowers.push(`${next} keeps the current limit${count > 1 ? 's' : ''}.`);
+        lowers.unshift(lowerWords(null));
+        next = nextKeeping(option.targetSize, t, cur, table, columns);
+        if (next) lowers.push(keepsWords(next, count));
     }
     if (!checks.length && !lowers.length) return none();
-    if (!checks.length) return { state: 'attention', text: lowers.join(' ') };
-    const all = checks.join(' ');
-    return { state: 'check', text: [`Check: ${all[0].toLowerCase()}${all.slice(1)}`, ...lowers].join(' ') };
+    const parts = { kinds, unknown, size: option.targetSize, lower: lowers.length > 0, next, count };
+    if (!checks.length) return { state: 'attention', text: lowers.join(' '), parts };
+    return { state: 'check', text: [checkLead(checks.join(' ')), ...lowers].join(' '), parts };
+}
+
+// The short sentences (owner, 2026-11-20: short notes, the numbers in the size table).
+const MIX_WORDS = 'This VM has more than one kind of disk. Microsoft does not say which disk limit applies.';
+const TYPES_WORDS = 'The list does not give the disk types.';
+const BLANK_WORDS = 'The list does not give the disk IOPS and MBps.';
+export const COMPARE_WORDS = 'Compare the disk rows in the size table.';
+const guessWords = (sizes) => `This tool has no limit for Premium SSD v2 and Ultra Disk for ${sizes.join(' and ')}.`;
+const unknownWords = (sizes) => `The size table does not give the disk limits of ${sizes.join(' and ')}.`;
+// null: "the new size"; else the sizes that allow less.
+const lowerWords = (sizes) => (sizes ? `The disks of this VM can do more than ${sizes.join(' and ')} ${sizes.length > 1 ? 'allow' : 'allows'}.` : 'The disks of this VM can do more than the new size allows.');
+const keepsWords = (size, count) => `${size} keeps the current limit${count > 1 ? 's' : ''}.`;
+const checkLead = (text) => `Check: ${text[0].toLowerCase()}${text.slice(1)}`;
+
+// The one note "Disk limits" of a VM, for the page and the report (owner, 2026-11-20): one note
+// for all its sizes, in short sentences, which points to the size table for the numbers. rows:
+// the rows with a supported size, each with its row note (diskNote). { state, text }.
+export function vmDiskNote(rows) {
+    const notes = rows.map((r) => ({ size: r.option.targetSize, n: r.caveats && r.caveats['Disk limits'] })).filter((x) => x.n && x.n.parts);
+    if (!notes.length) return none();
+    const has = (kind) => notes.some((x) => x.n.parts.kinds.includes(kind));
+    const sizesOf = (test) => [...new Set(notes.filter((x) => test(x.n.parts)).map((x) => x.size))];
+    const checks = [];
+    if (has('blank')) checks.push(BLANK_WORDS);
+    if (has('mix')) checks.push(MIX_WORDS);
+    if (has('guess')) checks.push(guessWords(sizesOf((p) => p.kinds.includes('guess'))));
+    if (has('types')) checks.push(TYPES_WORDS);
+    if (has('unknown')) checks.push(unknownWords([...new Set(notes.flatMap((x) => x.n.parts.unknown))]));
+    const out = [];
+    if (checks.length) out.push(checkLead(checks.join(' ')));
+    const lower = notes.filter((x) => x.n.parts.lower);
+    if (lower.length) out.push(lowerWords(lower.length === rows.length ? null : [...new Set(lower.map((x) => x.size))]));
+    if (lower.length || ['blank', 'mix', 'guess', 'types'].some(has)) out.push(COMPARE_WORDS);
+    for (const x of lower) if (x.n.parts.next) out.push(keepsWords(x.n.parts.next, x.n.parts.count));
+    return { state: checks.length ? 'check' : 'attention', text: [...new Set(out)].join(' ') };
 }

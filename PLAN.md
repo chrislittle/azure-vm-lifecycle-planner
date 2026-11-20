@@ -1899,9 +1899,12 @@ pages.
   value, when a disk has no caching setting, for unmanaged disks and for a scale set (its
   model has no disk values); 0 means no disk of that kind. A value is never filled from a
   tier table. The saved test data shows the values on Premium SSD (P4: 120 IOPS, 25 MBps;
-  P10: 500 IOPS, 100 MBps). **Not proven yet:** the query has not run on Azure; whether
-  Standard HDD and Standard SSD give the values; Premium SSD v2 and Ultra Disk. The owner
-  runs a test build. `template.csv` has the columns, blank.
+  P10: 500 IOPS, 100 MBps). `template.csv` has the columns, blank.
+  - **Query proven 2026-11-20** in a test build (Central US, one Standard_D2s_v6 VM with one
+    disk of each type; the resource group was deleted the same day). Every value was right,
+    and every disk type gives diskIOPSReadWrite and diskMBpsReadWrite, Standard HDD and
+    Standard SSD too (S4: 500 IOPS, 60 MBps; E4: 500, 100; P4: 120, 25; Premium SSD v2: 3,000,
+    125; Ultra Disk: 1,200, 50). The raw data is kept locally, not in the repo.
 - **The rule** (`diskNote` in `js/disks.js`, the note "Disk limits", after "Data disks"): for
   each supported size, for IOPS and MBps, for the uncached and the cached disks apart:
   current ceiling = min(disk total, current size limit); new ceiling = min(disk total, new
@@ -1926,29 +1929,38 @@ pages.
     current size. The query column "Disk types (uncached disks)" tells a mix from Premium SSD
     v2 or Ultra Disk only. A list without that column: a VM whose disk types are only Premium
     SSD v2 or Ultra Disk has no mix; any other VM with such a disk counts as a mix.
-- **The words** (STE, read line by line):
-  - `The uncached disks of this VM can do 7,500 IOPS and 250 MBps in total. The current size
-    allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.
-    Standard_D8ds_v5 keeps the current limits.` ("cached disks" for the other group; "can do
-    up to" with Standard HDD or SSD; "limit" for one value.) With the column: `For the new
-    size, this tool uses the limit for Premium SSD v2 and Ultra Disk.`
-  - `Check: the list does not give the IOPS and MBps of the uncached disks. The current size
-    allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.`
-  - `Check: this VM uses Premium SSD v2 or Ultra Disk. The uncached disks of this VM can do
-    8,000 IOPS in total. The current size allows 12,800 IOPS. For the new size, this tool has
-    no separate limit for Premium SSD v2 and Ultra Disk. The size table gives 6,400 IOPS.`
-  - `Check: the list does not give the disk types. ... The new size allows 6,400 IOPS for
-    Premium SSD and 8,333 IOPS for Premium SSD v2 and Ultra Disk.` (or `... for Premium SSD.
-    This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`)
-  - `Check: the size table does not give the disk limits of {size}.` (only when the list
-    gives disk values).
-  - A mix: `Check: this VM has Premium SSD v2 or Ultra Disk disks and other uncached disks.
-    Microsoft does not say which limit applies to this mix. The uncached disks of this VM can
-    do 12,000 IOPS in total. The current size allows 12,800 IOPS for Premium SSD. This tool has
-    no separate limit of the current size for Premium SSD v2 and Ultra Disk. The new size
-    allows 6,400 IOPS for Premium SSD and 8,333 IOPS for Premium SSD v2 and Ultra Disk.` (A
-    size with the column: `The current size allows ... for Premium SSD and ... for Premium SSD
-    v2 and Ultra Disk.` MBps the same way.)
+- **Owner, 2026-11-20 (third round): short notes, the numbers in the size table.** The page and
+  the report show **one note "Disk limits" for the VM**, for all its sizes (`vmDiskNote` in
+  `js/disks.js`; no "(v5 only)" copies), in one or two short sentences that point to the
+  size table. When each note shows does not change (only where a ceiling can be lower; a
+  "Check:" never changes the readiness).
+- **The words** (STE, read line by line). The note of the VM:
+  - Lower: `The disks of this VM can do more than the new size allows. Compare the disk rows
+    in the size table.` When not every size lowers it, the sizes: `The disks of this VM can do
+    more than Standard_D4ds_v5 and Standard_D4ds_v6 allow.` Then one sentence for each size
+    that has a next size up: `Standard_D8ds_v5 keeps the current limit.` ("limits" for more
+    than one value).
+  - A mix: `Check: this VM has more than one kind of disk. Microsoft does not say which disk
+    limit applies. Compare the disk rows in the size table.`
+  - No disk values: `Check: the list does not give the disk IOPS and MBps. Compare the disk
+    rows in the size table.`
+  - Only Premium SSD v2 or Ultra Disk, no separate limit: `Check: this tool has no limit for
+    Premium SSD v2 and Ultra Disk for Standard_D4ds_v5. Compare the disk rows in the size
+    table.`
+  - No disk types in the list: `Check: the list does not give the disk types. Compare the
+    disk rows in the size table.`
+  - The size table has no limits: `Check: the size table does not give the disk limits of
+    {size}.`
+  - More than one: one "Check:" first, then the other sentences, the comparison once.
+  - vm-target-sizes.csv (each size) and vm-summary.csv (the size of "What to do"): the same
+    short sentences, then the numbers in words, for example `The disks of this VM can do more
+    than the new size allows. The uncached disks of this VM can do 7,500 IOPS and 250 MBps in
+    total. The current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and
+    145 MBps. Standard_D8ds_v5 keeps the current limits.`, `Check: the list does not give the
+    disk IOPS and MBps. For the uncached disks, the current size allows 12,800 IOPS and 192
+    MBps. The new size allows 6,400 IOPS and 145 MBps.`, and for a mix both limits of each size
+    (`The new size allows 6,400 IOPS for Premium SSD and 8,333 IOPS for Premium SSD v2 and
+    Ultra Disk.`).
   - Numbers with a comma for each thousand, with no locale; MBps with one decimal at most.
 - **Where.** The page and the report (the notes), vm-target-sizes.csv (a new last column
   "Disk limits", so that the other columns keep their place), vm-summary.csv ("Good to know"
@@ -1957,7 +1969,11 @@ pages.
   data disks": "Max disk IOPS (uncached)" and "Max disk MBps (uncached)", with the column for
   Premium SSD v2 and Ultra Disk where the tool has it ("6,400 (8,333 for Premium SSD v2 and
   Ultra Disk)"), the values of this VM in the current size column ("12,800 (this VM:
-  20,000)"), and "Less than the current size" where a new size allows less. "Facts from your
+  20,000)", "up to" with Standard HDD or SSD, nothing when the list gives no value). "Max disk
+  IOPS (cached)" and "Max disk MBps (cached)" show only when the VM has cached disk values.
+  Under a value: "Less than the current size (12,800)." or "Less than the 7,500 IOPS of this
+  VM." where the limit of a new size is lower than the ceiling of the VM now (the lower of
+  its total and the limit of the current size; the limit alone with no total). "Facts from your
   list" shows the seven columns. The README says the same; a README fact gives the number and
   read dates of the size pages.
 - `samples/contoso-from-azure.csv`: made-up disk values for each VM (a P10 OS disk with
@@ -1989,6 +2005,8 @@ pages.
   Owner round: the tests changed first and failed; 15 mutation checks, all caught (three only
   after new tests: the higher limit of the current size, the lower limit of the new size, and
   the next size up for a mix).
+  Third round (short notes): the tests changed first; 19 mutation checks, 18 caught; the one left
+  was a check that could never change an answer (a total of 0), and it was removed.
 
 ## Next
 

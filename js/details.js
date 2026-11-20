@@ -41,6 +41,24 @@ export function sizeComparison(m, table) {
     // The uncached disk values of this VM, as the list gives them ("up to" for Standard HDD and SSD).
     const t = diskTotals(m.extra);
     const vmDisk = (v) => (v === null ? undefined : `${t.upTo ? 'up to ' : ''}${diskWords(v)}`);
+    // The disk limit of a size that applies to this VM: the column for Premium SSD v2 and Ultra Disk
+    // when every uncached disk is one, else the limit of the size table.
+    const diskLimitOf = (f, group, k) => {
+        if (group === 'cached') return k === 'iops' ? f.cachedIops : f.cachedMbps;
+        const u = k === 'iops' ? f.ultraIops : f.ultraMbps;
+        return t.ultraOnly && u !== null ? u : k === 'iops' ? f.uncachedIops : f.uncachedMbps;
+    };
+    // A note where the limit of a new size is lower than the ceiling of the VM now: the lower of
+    // the disk total of the VM and the limit of the current size (the limit alone with no total).
+    const diskLess = (f, group, k) => {
+        const T = t[group][k];
+        const c = cur ? diskLimitOf(cur, group, k) : null;
+        const n = diskLimitOf(f, group, k);
+        if (c === null || n === null) return '';
+        const ceiling = T === null ? c : Math.min(T, c);
+        if (n >= ceiling) return '';
+        return T !== null && T < c ? `Less than the ${diskWords(T)} ${k === 'iops' ? 'IOPS' : 'MBps'} of this VM.` : `Less than the current size (${diskWords(c)}).`;
+    };
     // Each row: its label, its value for a size, and what a new size has less of.
     const ROWS = [
         ['vCPUs', (f) => (f.vcpusActive !== null && f.vcpusActive !== f.vcpus ? `${f.vcpus} (${f.vcpusActive} active)` : num(f.vcpus)),
@@ -55,17 +73,21 @@ export function sizeComparison(m, table) {
             (f) => (disks !== undefined && f.maxDataDisks !== null && f.maxDataDisks < disks ? `Less than the ${plural(disks, 'data disk', 'data disks')} of this VM.` : '')],
         // The uncached disk limits (0.9.8-beta), with the separate limit for Premium SSD v2 and
         // Ultra Disk of the Microsoft size page, where this tool has it.
-        ['Max disk IOPS (uncached)', (f) => diskLimit(f.uncachedIops, f.ultraIops),
-            (f) => (cur && cur.uncachedIops !== null && f.uncachedIops !== null && f.uncachedIops < cur.uncachedIops ? `Less than the current size (${diskWords(cur.uncachedIops)}).` : '')],
-        ['Max disk MBps (uncached)', (f) => diskLimit(f.uncachedMbps, f.ultraMbps),
-            (f) => (cur && cur.uncachedMbps !== null && f.uncachedMbps !== null && f.uncachedMbps < cur.uncachedMbps ? `Less than the current size (${diskWords(cur.uncachedMbps)}).` : '')],
+        ['Max disk IOPS (uncached)', (f) => diskLimit(f.uncachedIops, f.ultraIops), (f) => diskLess(f, 'uncached', 'iops')],
+        ['Max disk MBps (uncached)', (f) => diskLimit(f.uncachedMbps, f.ultraMbps), (f) => diskLess(f, 'uncached', 'mbps')],
+        // The cached disk limits, only when the list gives the values of cached disks (owner, 2026-11-20).
+        ...(t.cached.iops > 0 || t.cached.mbps > 0 ? [
+            ['Max disk IOPS (cached)', (f) => diskLimit(f.cachedIops, null), (f) => diskLess(f, 'cached', 'iops')],
+            ['Max disk MBps (cached)', (f) => diskLimit(f.cachedMbps, null), (f) => diskLess(f, 'cached', 'mbps')],
+        ] : []),
         ['Premium SSD', (f) => yesNo(f.premium),
             (f) => (cur && cur.premium === true && f.premium === false ? 'Less than the current size (Yes).' : '')],
         ['Generations', gens,
             (f) => (gen && f.generations && !f.generations.some((g) => g.toUpperCase() === gen.toUpperCase()) ? `Does not take Generation ${gen.replace(/^V/i, '')}, the generation of this VM.` : '')],
     ];
     // The current size: its own values, and the NICs and data disks of this VM.
-    const own = { 'Max NICs': nics, 'Max data disks': disks, 'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps) };
+    const own = { 'Max NICs': nics, 'Max data disks': disks, 'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps),
+        'Max disk IOPS (cached)': vmDisk(t.cached.iops), 'Max disk MBps (cached)': vmDisk(t.cached.mbps) };
     const columns = [{ label: 'Current size', size: m.vm.sourceSize, facts: cur },
         ...shown.map((r) => ({ label: r.series === 'burstable' ? 'Burstable' : r.series, size: r.option.targetSize, facts: facts(r.option.targetSize) }))];
     const rows = ROWS.map(([label, value, less]) => ({

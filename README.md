@@ -184,11 +184,15 @@ For each VM:
   uncached disks (host caching None) and the cached disks. Microsoft: the cached limits of
   a VM are separate from its uncached limits
   ([Virtual machine and disk performance](https://learn.microsoft.com/azure/virtual-machines/disks-performance)).
-  When a new size lowers the ceiling, the note "Disk limits" (Good to know) says so, for
-  example "The uncached disks of this VM can do 7,500 IOPS and 250 MBps in total. The
-  current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145
-  MBps." It also names the next size up in the same series that keeps the current
-  limits, if the size table has one. The recommended size does not change.
+  When a new size lowers the ceiling, the note "Disk limits" (Good to know) says so in
+  short words, once for the VM: "The disks of this VM can do more than the new size
+  allows. Compare the disk rows in the size table." It also names the next size up in the
+  same series that keeps the current limits, if the size table has one, for example
+  "Standard_D8ds_v5 keeps the current limits." The recommended size does not change.
+  The size table of the VM gives the numbers: the rows "Max disk IOPS (uncached)" and
+  "Max disk MBps (uncached)" (and the cached rows when the VM has cached disks), with the
+  values of this VM in the current size column, for example "12,800 (this VM: 7,500)".
+  vm-target-sizes.csv and vm-summary.csv give the numbers in words.
   - The disk values come from the query. If the list does not give them, "To check" says
     so, but only where the new size allows less than the current size. The note "Disk
     limits" never changes the readiness of a VM: a VM that is "Ready" stays "Ready".
@@ -196,8 +200,8 @@ For each VM:
     limit on the Microsoft size pages of v6 and v7. For a size with no such limit, the note
     is "Check:".
   - Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft
-    does not say which limit applies to this mix. The note then gives both limits of each
-    size with "Check:", only where a limit of the new size can lower the ceiling. The
+    does not say which limit applies to this mix. The note is then "Check: this VM has
+    more than one kind of disk.", only where a limit of the new size can lower the ceiling. The
     query column "Disk types (uncached disks)" gives the types of the uncached disks.
   - The tool does not count disk bursting: Microsoft says that credit-based bursting is
     best effort and not guaranteed

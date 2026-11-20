@@ -16,6 +16,7 @@ import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
 import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.8-beta';
 import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.8-beta';
 import { generationShown, workloadFound } from './evidence.js?v=0.9.8-beta';
+import { vmDiskNote } from './disks.js?v=0.9.8-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -109,8 +110,16 @@ export function allNotes(m) {
     if (!m.vm || m.moveRequired !== 'Yes' || serviceManaged(m)) return out;
     const rows = m.rows.filter((r) => r.result === 'Supported' && r.caveats);
     const key = { problem: 'actions', attention: 'attention', check: 'checks' };
+    // "Disk limits": one note for the VM, for all its sizes (disks.js, vmDiskNote; owner, 2026-11-20).
+    const disk = vmDiskNote(rows);
+    let diskDone = false;
     for (const r of rows) {
         for (const t of CAVEAT_TOPICS) {
+            if (t === 'Disk limits') {
+                if (!diskDone && key[disk.state]) out[key[disk.state]].push({ topic: t, text: disk.text, series: rows.map((x) => x.series) });
+                diskDone = true;
+                continue;
+            }
             const c = r.caveats[t];
             if (!c || !key[c.state]) continue;
             const list = out[key[c.state]];
@@ -395,6 +404,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  Microsoft: the cached limits of a VM are separate from its uncached limits.',
         '  When a new size lowers the ceiling, the note "Disk limits" in "Good to know" says so.',
         '  It names the next size up in the same series that keeps the current limit, if the size table has one.',
+        '  On the page and in the report, the note is short and shows once for the VM. The size table of the VM gives the numbers.',
+        '  In vm-target-sizes.csv and vm-summary.csv, the note also gives the numbers in words, for each size.',
         '  The recommended size does not change.',
         '  If the list does not give the disk values, "To check" says so, but only where the new size allows less.',
         '  A note "Disk limits" never changes the readiness of the VM, also when it is in "To check".',
@@ -408,7 +419,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  A VM with Premium SSD v2 or Ultra Disk gets "Check:" for a size with no separate limit.',
         '  It does not get a note that the limit is lower.',
         '  Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
-        '  For such a VM, the note gives both limits of each size with "Check:". It shows only where a limit of the new size can lower the ceiling.',
+        '  For such a VM, the note is "Check:". It shows only where a limit of the new size can lower the ceiling.',
         '  The query gives the types of the uncached disks in the column "Disk types (uncached disks)".',
         '  The cached MBps of a size is the lower of its cached read limit and its cached write limit.',
         '  This tool does not count disk bursting. Microsoft says that credit-based bursting is best effort and not guaranteed.',

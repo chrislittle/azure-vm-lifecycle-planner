@@ -12,7 +12,7 @@ import sample from '../js/sample.js';
 import { SizeTable, sizeFacts, rankedSizes } from '../js/lifecycle.js';
 import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
-import { diskNote, diskTotals, diskWords } from '../js/disks.js';
+import { diskNote, diskTotals, diskWords, vmDiskNote } from '../js/disks.js';
 import { sizeComparison } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import { FACT_GROUPS } from '../js/evidence.js';
@@ -38,7 +38,9 @@ function run(text) {
     return plan(l.rows.map((r, i) => toMachine(r, l.map, i + 2, table, NOW)), table, NOW);
 }
 const one = (row) => run(list([{ 'VM name': 'contoso-db01', ...row }])).machines[0];
-const note = (m, series) => m.rows.find((r) => r.series === series).caveats['Disk limits'];
+const note = (m, series) => { const c = m.rows.find((r) => r.series === series).caveats['Disk limits']; return { state: c.state, text: c.text }; };
+// A note without its parts (the short sentences that vmDiskNote joins).
+const st = (n) => ({ state: n.state, text: n.text });
 
 // ---------------------------------------------------------------------------
 // The size table and the Microsoft size pages
@@ -148,9 +150,9 @@ test('disk limits: the new columns are read; a blank or an unreadable value is n
 
 test('disk limits: a new size that lowers the ceiling gives a note, with the next size up that keeps it', () => {
     const m = one(DISKS);
-    assert.deepEqual(note(m, 'v5'), { state: 'attention', text: 'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v5 keeps the current limit.' });
-    assert.equal(note(m, 'v6').text, 'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v6 keeps the current limit.');
-    assert.equal(note(m, 'v7').text, 'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 8,000 IOPS. Standard_D8ds_v7 keeps the current limit.');
+    assert.deepEqual(note(m, 'v5'), { state: 'attention', text: 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v5 keeps the current limit.' });
+    assert.equal(note(m, 'v6').text, 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v6 keeps the current limit.');
+    assert.equal(note(m, 'v7').text, 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 8,000 IOPS. Standard_D8ds_v7 keeps the current limit.');
     // The owner's rule: a note, not a different recommendation.
     const plain = one({});
     for (const s of ['v5', 'v6', 'v7']) assert.equal(m.rows.find((r) => r.series === s).option.targetSize, plain.rows.find((r) => r.series === s).option.targetSize);
@@ -160,9 +162,9 @@ test('disk limits: a new size that lowers the ceiling gives a note, with the nex
     assert.ok(F.signals(m).attention.some((a) => a.topic === 'Disk limits'));
     // IOPS and MBps both lower: one sentence for each value, and "limits".
     const both = one({ ...DISKS, 'Disk MBps (uncached disks)': '180' });
-    assert.equal(note(both, 'v5').text, 'The uncached disks of this VM can do 20,000 IOPS and 180 MBps in total. The current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps. Standard_D8ds_v5 keeps the current limits.');
+    assert.equal(note(both, 'v5').text, 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS and 180 MBps in total. The current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps. Standard_D8ds_v5 keeps the current limits.');
     // Standard HDD and Standard SSD give "up to" values.
-    assert.match(note(one({ ...DISKS, 'Disk types': 'Premium_LRS, StandardSSD_LRS' }), 'v5').text, /^The uncached disks of this VM can do up to 20,000 IOPS in total\./);
+    assert.match(note(one({ ...DISKS, 'Disk types': 'Premium_LRS, StandardSSD_LRS' }), 'v5').text, /^The disks of this VM can do more than the new size allows\. The uncached disks of this VM can do up to 20,000 IOPS in total\./);
 });
 
 test('disk limits: no note when the ceiling stays or goes up', () => {
@@ -181,19 +183,19 @@ test('disk limits: no note when the ceiling stays or goes up', () => {
 test('disk limits: the uncached and the cached disks are compared apart, each with its own limit', () => {
     // Standard_D4_v4 allows 38,500 cached IOPS; Standard_D4_v5 allows 19,000. No uncached disks.
     const m = one({ ...DISKS, 'Current size': 'Standard_D4_v4', 'Disk IOPS (uncached disks)': '0', 'Disk MBps (uncached disks)': '0', 'Disk IOPS (cached disks)': '30000', 'Disk MBps (cached disks)': '100' });
-    assert.equal(note(m, 'v5').text, 'The cached disks of this VM can do 30,000 IOPS in total. The current size allows 38,500 IOPS. The new size allows 19,000 IOPS. Standard_D8_v5 keeps the current limit.');
+    assert.equal(note(m, 'v5').text, 'The disks of this VM can do more than the new size allows. The cached disks of this VM can do 30,000 IOPS in total. The current size allows 38,500 IOPS. The new size allows 19,000 IOPS. Standard_D8_v5 keeps the current limit.');
     // The same IOPS on uncached disks: the uncached limits (6,400 on both sizes) give no note.
     const u = one({ ...DISKS, 'Current size': 'Standard_D4_v4', 'Disk IOPS (uncached disks)': '30000', 'Disk MBps (uncached disks)': '50', 'Disk IOPS (cached disks)': '0', 'Disk MBps (cached disks)': '0' });
     assert.deepEqual(note(u, 'v5'), { state: '', text: '' });
     // Cached disks that can do more than the current cached limit: the ceiling is the limit
     // (16,000 on Standard_DS3_v2); Standard_D4ds_v6 allows 18,000, so no note for them.
-    assert.equal(note(one({ ...DISKS, 'Disk IOPS (cached disks)': '18000' }), 'v6').text, 'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v6 keeps the current limit.');
+    assert.equal(note(one({ ...DISKS, 'Disk IOPS (cached disks)': '18000' }), 'v6').text, 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v6 keeps the current limit.');
 });
 
 test('disk limits: blank totals give no "lower" note, only a "Check:" where the new size allows less', () => {
     // The list gives no disk values: the new size allows less, so "Check:".
     const m = one({});
-    assert.deepEqual(note(m, 'v5'), { state: 'check', text: 'Check: the list does not give the IOPS and MBps of the uncached disks. The current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.' });
+    assert.deepEqual(note(m, 'v5'), { state: 'check', text: 'Check: the list does not give the disk IOPS and MBps. For the uncached disks, the current size allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.' });
     // Owner, 2026-11-20: a disk "Check:" is a note only. It does not change the readiness.
     assert.equal(F.groupOf(m), 'ready', 'still ready');
     assert.equal(F.summaryRows(run(list([{ 'VM name': 'contoso-db01' }])))[0]['Result group'], 'Move needed - Ready');
@@ -204,14 +206,14 @@ test('disk limits: blank totals give no "lower" note, only a "Check:" where the 
     assert.deepEqual(note(one({ 'Current size': 'Standard_D4s_v3' }), 'v5'), { state: '', text: '' });
     // Only one value blank: only that value.
     assert.equal(note(one({ ...DISKS, 'Disk MBps (uncached disks)': '', 'Disk IOPS (uncached disks)': '5000' }), 'v5').text,
-        'Check: the list does not give the MBps of the uncached disks. The current size allows 192 MBps. The new size allows 145 MBps.');
+        'Check: the list does not give the disk MBps. For the uncached disks, the current size allows 192 MBps. The new size allows 145 MBps.');
     // A blank value and a lower value: the "Check:" first, then the fact.
     assert.equal(note(one({ ...DISKS, 'Disk MBps (uncached disks)': '' }), 'v5').text,
-        'Check: the list does not give the MBps of the uncached disks. The current size allows 192 MBps. The new size allows 145 MBps. '
-        + 'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v5 keeps the current limit.');
+        'Check: the list does not give the disk MBps. For the uncached disks, the current size allows 192 MBps. The new size allows 145 MBps. '
+        + 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 6,400 IOPS. Standard_D8ds_v5 keeps the current limit.');
     // The cached disks blank: Standard_D4_v4 (38,500 cached IOPS) to Standard_D4_v5 (19,000).
     assert.equal(note(one({ ...DISKS, 'Current size': 'Standard_D4_v4', 'Disk IOPS (cached disks)': '', 'Disk IOPS (uncached disks)': '0', 'Disk MBps (uncached disks)': '0' }), 'v5').text,
-        'Check: the list does not give the IOPS of the cached disks. The current size allows 38,500 IOPS. The new size allows 19,000 IOPS.');
+        'Check: the list does not give the disk IOPS. For the cached disks, the current size allows 38,500 IOPS. The new size allows 19,000 IOPS.');
 });
 
 test('disk limits: Premium SSD v2 and Ultra Disk use the column of the size page; with no column, "Check:", never "lower"', () => {
@@ -225,11 +227,11 @@ test('disk limits: Premium SSD v2 and Ultra Disk use the column of the size page
     // (Standard_D4ds_v6: 18,000 cached IOPS, more than the 10,000 that the disks can do).
     assert.deepEqual(note(one({ ...v2, 'Disk IOPS (uncached disks)': '8000', 'Disk IOPS (cached disks)': '10000' }), 'v6'), { state: '', text: '' });
     // v5 has no such column: the single limit of the size table is lower, but that is a guess.
-    assert.deepEqual(note(m, 'v5'), { state: 'check', text: 'Check: this VM uses Premium SSD v2 or Ultra Disk. The uncached disks of this VM can do 8,000 IOPS in total. The current size allows 12,800 IOPS. '
-        + 'For the new size, this tool has no separate limit for Premium SSD v2 and Ultra Disk. The size table gives 6,400 IOPS.' });
+    assert.deepEqual(note(m, 'v5'), { state: 'check', text: 'Check: this tool has no limit for Premium SSD v2 and Ultra Disk for Standard_D4ds_v5. The uncached disks of this VM can do 8,000 IOPS in total. The current size allows 12,800 IOPS. '
+        + 'The size table gives 6,400 IOPS for Premium SSD.' });
     // 12,000 IOPS: the column is lower too, so the note says so, with the limit that it used.
     const h = one({ ...v2, 'Disk IOPS (uncached disks)': '12000' });
-    assert.deepEqual(note(h, 'v6'), { state: 'attention', text: 'The uncached disks of this VM can do 12,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 8,333 IOPS. '
+    assert.deepEqual(note(h, 'v6'), { state: 'attention', text: 'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 12,000 IOPS in total. The current size allows 12,800 IOPS. The new size allows 8,333 IOPS. '
         + 'For the new size, this tool uses the limit for Premium SSD v2 and Ultra Disk. Standard_D8ds_v6 keeps the current limit.' });
     // Without Premium SSD v2 or Ultra Disk, the column is not used: 8,000 IOPS is lower on v6 (6,400).
     assert.equal(note(one({ ...DISKS, 'Disk IOPS (uncached disks)': '8000' }), 'v6').state, 'attention');
@@ -244,7 +246,7 @@ test('disk limits: a mix of Premium SSD v2 or Ultra Disk and other uncached disk
     const mix = { ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'Premium_LRS, PremiumV2_LRS', 'Disk IOPS (uncached disks)': '8000' };
     const m = one(mix);
     // v6: 6,400 for Premium SSD can lower the ceiling of 8,000; the column (8,333) cannot. Microsoft does not say which applies.
-    assert.deepEqual(note(m, 'v6'), { state: 'check', text: 'Check: this VM has Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix. '
+    assert.deepEqual(note(m, 'v6'), { state: 'check', text: 'Check: this VM has more than one kind of disk. Microsoft does not say which disk limit applies. '
         + 'The uncached disks of this VM can do 8,000 IOPS in total. The current size allows 12,800 IOPS for Premium SSD. This tool has no separate limit of the current size for Premium SSD v2 and Ultra Disk. '
         + 'The new size allows 6,400 IOPS for Premium SSD and 8,333 IOPS for Premium SSD v2 and Ultra Disk.' });
     // v5: no column for the new size either.
@@ -271,7 +273,7 @@ test('disk limits: a mix of Premium SSD v2 or Ultra Disk and other uncached disk
     // The lower limit of the new size: a column of 10,000 under the Premium SSD limit of 16,000 can lower a ceiling of 12,000.
     assert.equal(diskNote({ sourceSize: 'Standard_DS3_v2' }, { ...x, diskIopsUncached: '12000' }, v7, table, { Standard_D8ds_v7: { iops: 10000, mbps: 500 } }).state, 'check');
     // When the new size has a column that keeps the ceiling, and a Premium SSD limit that keeps it too: no note.
-    assert.deepEqual(diskNote({ sourceSize: 'Standard_DS3_v2' }, { ...x, diskIopsUncached: '6000' }, { option: 'v6', supported: true, targetSize: 'Standard_D4ds_v6' }, table, cols), { state: '', text: '' });
+    assert.deepEqual(st(diskNote({ sourceSize: 'Standard_DS3_v2' }, { ...x, diskIopsUncached: '6000' }, { option: 'v6', supported: true, targetSize: 'Standard_D4ds_v6' }, table, cols)), { state: '', text: '' });
     // The note is a fact to check: the readiness does not change.
     assert.equal(F.groupOf(m), F.groupOf(one({ ...mix, 'Disk IOPS (uncached disks)': '5000' })));
 });
@@ -292,11 +294,11 @@ test('disk limits: the next size up is in the same series, keeps every limit, an
     assert.match(diskNote(vm, x, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake).text, / Standard_X16_v9 keeps the current limit\.$/);
     // Both groups lower: a sentence for each, then one size that keeps every limit.
     assert.equal(diskNote(vm, { ...x, diskIopsCached: '6000', diskMbpsCached: '50' }, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake).text,
-        'The uncached disks of this VM can do 8,000 IOPS in total. The current size allows 9,000 IOPS. The new size allows 3,000 IOPS. '
+        'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 8,000 IOPS in total. The current size allows 9,000 IOPS. The new size allows 3,000 IOPS. '
         + 'The cached disks of this VM can do 6,000 IOPS in total. The current size allows 9,000 IOPS. The new size allows 4,000 IOPS. Standard_X16_v9 keeps the current limits.');
     // No size of the series keeps it: no sentence about a size.
     assert.equal(diskNote({ sourceSize: 'Standard_C8_v1' }, { ...x, diskIopsUncached: '20000' }, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake).text,
-        'The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 15,000 IOPS. The new size allows 3,000 IOPS.');
+        'The disks of this VM can do more than the new size allows. The uncached disks of this VM can do 20,000 IOPS in total. The current size allows 15,000 IOPS. The new size allows 3,000 IOPS.');
     // Premium SSD v2 or Ultra Disk: the next size must have the column too. X8 keeps the limit
     // only with its single value, which may not apply to these disks; X16 has the column.
     const columns = { Standard_X4_v9: { iops: 3000, mbps: 200 }, Standard_X16_v9: { iops: 12000, mbps: 200 } };
@@ -312,16 +314,16 @@ test('disk limits: the next size up is in the same series, keeps every limit, an
     assert.equal(mixNote.state, 'check');
     assert.match(mixNote.text, / Standard_X16_v9 keeps the current limit\.$/);
     // A blocked option (no size shows), no size, or the Generation 1 row: no note.
-    assert.deepEqual(diskNote(vm, x, { option: 'v5', supported: false, targetSize: 'Standard_X4_v9' }, fake), { state: '', text: '' });
+    assert.deepEqual(st(diskNote(vm, x, { option: 'v5', supported: false, targetSize: 'Standard_X4_v9' }, fake)), { state: '', text: '' });
     // In a plan: a VM already on v6 has a v5 size that is not supported ("already newer"): no note there.
     const newer = one({ 'Current size': 'Standard_D16ads_v6' });
     assert.equal(newer.rows.find((r) => r.series === 'v5').option.supported, false);
     assert.deepEqual(note(newer, 'v5'), { state: '', text: '' });
-    assert.deepEqual(diskNote(vm, x, { option: 'v5', supported: true, targetSize: null }, fake), { state: '', text: '' });
-    assert.deepEqual(diskNote(vm, x, { option: 'gen1Route', supported: true, targetSize: 'Standard_X4_v9' }, fake), { state: '', text: '' });
+    assert.deepEqual(st(diskNote(vm, x, { option: 'v5', supported: true, targetSize: null }, fake)), { state: '', text: '' });
+    assert.deepEqual(st(diskNote(vm, x, { option: 'gen1Route', supported: true, targetSize: 'Standard_X4_v9' }, fake)), { state: '', text: '' });
     // A size that the size table does not have: "Check:" when the list gives the disk values.
-    assert.deepEqual(diskNote({ sourceSize: 'Standard_Q4_v9' }, x, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake), { state: 'check', text: 'Check: the size table does not give the disk limits of Standard_Q4_v9.' });
-    assert.deepEqual(diskNote({ sourceSize: 'Standard_Q4_v9' }, { ...x, diskIopsUncached: '', diskMbpsUncached: '' }, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake), { state: '', text: '' });
+    assert.deepEqual(st(diskNote({ sourceSize: 'Standard_Q4_v9' }, x, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake)), { state: 'check', text: 'Check: the size table does not give the disk limits of Standard_Q4_v9.' });
+    assert.deepEqual(st(diskNote({ sourceSize: 'Standard_Q4_v9' }, { ...x, diskIopsUncached: '', diskMbpsUncached: '' }, { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' }, fake)), { state: '', text: '' });
 });
 
 test('disk limits: numbers in words, with no locale', () => {
@@ -347,9 +349,15 @@ test('disk limits: the note is a note of the VM: the page, the report, vm-target
     const p = run(list([{ 'VM name': 'contoso-db01', ...DISKS }]));
     const rows = F.targetRows(p, table, NOW);
     assert.equal(rows.find((r) => r.Series === 'v5')['Disk limits'], note(p.machines[0], 'v5').text);
-    assert.match(F.summaryRows(p)[0]['Good to know'], /Disk limits: The uncached disks of this VM can do 20,000 IOPS in total\./);
+    // vm-summary.csv: the short sentence and the numbers, of the size that "What to do" uses.
+    assert.match(F.summaryRows(p)[0]['Good to know'], /Disk limits: The disks of this VM can do more than the new size allows\. The uncached disks of this VM can do 20,000 IOPS in total\./);
+    // The page and the report: one note for the VM, short, for all its sizes (owner, 2026-11-20).
+    const VM_NOTE = 'The disks of this VM can do more than the new size allows. Compare the disk rows in the size table. Standard_D8ds_v5 keeps the current limit. Standard_D8ds_v6 keeps the current limit. Standard_D8ds_v7 keeps the current limit.';
+    const n = F.allNotes(p.machines[0]);
+    assert.deepEqual([...n.actions, ...n.attention, ...n.checks].filter((x) => x.topic === 'Disk limits'), [{ topic: 'Disk limits', text: VM_NOTE, series: [] }]);
     const html = reportHtml(p, table, 'test', NOW);
-    assert.match(html, /<b>Disk limits:<\/b> The uncached disks of this VM can do 20,000 IOPS in total\./);
+    assert.equal(html.split('<b>Disk limits:</b>').length, 2, 'one note in the report');
+    assert.ok(html.includes(`<b>Disk limits:</b> ${VM_NOTE}</li>`), 'no series after it');
     // The blank case is in "To check" (vm-summary.csv names the topic).
     assert.match(F.summaryRows(run(list([{ 'VM name': 'contoso-db02' }])))[0]['To check'], /Disk limits/);
 });
@@ -361,7 +369,24 @@ test('disk limits: the size comparison has the uncached IOPS and MBps of each si
     assert.deepEqual(rows['Max disk IOPS (uncached)'].map((x) => x.text), ['12,800 (this VM: 20,000)', '6,400', '6,400 (8,333 for Premium SSD v2 and Ultra Disk)', '8,000 (10,000 for Premium SSD v2 and Ultra Disk)']);
     assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => x.text), ['192 (this VM: 100)', '145', '212 (248 for Premium SSD v2 and Ultra Disk)', '236 (270 for Premium SSD v2 and Ultra Disk)']);
     assert.deepEqual(rows['Max disk IOPS (uncached)'].map((x) => x.less), ['', 'Less than the current size (12,800).', 'Less than the current size (12,800).', 'Less than the current size (12,800).']);
-    assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => x.less), ['', 'Less than the current size (192).', '', '']);
+    // 100 MBps: less than every limit, so no new size lowers the ceiling.
+    assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => x.less), ['', '', '', '']);
+    // The cached rows: the VM gives cached values.
+    assert.deepEqual(rows['Max disk IOPS (cached)'].map((x) => x.text), ['16,000 (this VM: 500)', '19,000', '18,000', '18,000']);
+    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['131.1 (this VM: 100)', '250', '250', '250']);
+    // A total under the current limit is the ceiling: the note names the value of this VM.
+    const v = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk IOPS (uncached disks)': '7500' }), table).rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
+    assert.deepEqual(v['Max disk IOPS (uncached)'], ['', 'Less than the 7,500 IOPS of this VM.', 'Less than the 7,500 IOPS of this VM.', '']);
+    // No uncached disks (0): nothing to lower, no note under a value.
+    const z = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk IOPS (uncached disks)': '0', 'Disk MBps (uncached disks)': '0' }), table).rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
+    assert.deepEqual([...z['Max disk IOPS (uncached)'], ...z['Max disk MBps (uncached)']], ['', '', '', '', '', '', '', '']);
+    // No cached disks (0): no cached rows; no values: no cached rows either.
+    const nc = sizeComparison(one({ ...DISKS, 'Disk IOPS (cached disks)': '0', 'Disk MBps (cached disks)': '0' }), table).rows.map((r) => r.label);
+    assert.ok(!nc.includes('Max disk IOPS (cached)'));
+    assert.ok(!sizeComparison(one({}), table).rows.some((r) => /cached\)$/.test(r.label) && !/uncached/.test(r.label)));
+    // Only Premium SSD v2 and Ultra Disk uncached: the column of the size counts for the note.
+    const u = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'PremiumV2_LRS', 'Disk IOPS (uncached disks)': '8000' }), table).rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
+    assert.deepEqual(u['Max disk IOPS (uncached)'], ['', 'Less than the 8,000 IOPS of this VM.', '', '']);
     // Standard HDD and Standard SSD: "up to"; no values from the list: no "this VM".
     const s = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk types': 'Standard_LRS' }), table).rows.map((r) => [r.label, r.cells[0].text]));
     assert.equal(s['Max disk IOPS (uncached)'], '12,800 (this VM: up to 20,000)');
@@ -369,6 +394,44 @@ test('disk limits: the size comparison has the uncached IOPS and MBps of each si
     assert.equal(b['Max disk IOPS (uncached)'], '12,800');
     // The rows come after "Max data disks".
     assert.deepEqual(c.rows.map((r) => r.label).slice(4, 7), ['Max data disks', 'Max disk IOPS (uncached)', 'Max disk MBps (uncached)']);
+});
+
+test('disk limits: the real row of the test build as a Standard_DS2_v2 VM: one short note, the numbers in the size table', () => {
+    // contoso-disk01 of the test build (2026-11-20): one disk of each type. Current size changed to Standard_DS2_v2.
+    const m = one({ 'Current size': 'Standard_DS2_v2', 'Data-disk count': '4', 'Disk controller': 'SCSI', 'Disk types': 'PremiumV2_LRS, Premium_LRS, StandardSSD_LRS, Standard_LRS, UltraSSD_LRS',
+        'Disk types (uncached disks)': 'PremiumV2_LRS, Standard_LRS, UltraSSD_LRS', 'Disk IOPS (uncached disks)': '4700', 'Disk MBps (uncached disks)': '235', 'Disk IOPS (cached disks)': '620', 'Disk MBps (cached disks)': '125' });
+    const n = F.allNotes(m);
+    assert.deepEqual(n.checks.filter((x) => x.topic === 'Disk limits'), [{ topic: 'Disk limits', text: 'Check: this VM has more than one kind of disk. Microsoft does not say which disk limit applies. Compare the disk rows in the size table.', series: [] }]);
+    const rows = Object.fromEntries(sizeComparison(m, table).rows.map((r) => [r.label, r.cells]));
+    assert.deepEqual(rows['Max disk IOPS (uncached)'].map((x) => [x.text, x.less]), [['6,400 (this VM: up to 4,700)', ''], ['3,750', 'Less than the 4,700 IOPS of this VM.'],
+        ['3,750 (4,167 for Premium SSD v2 and Ultra Disk)', 'Less than the 4,700 IOPS of this VM.'], ['4,000 (5,000 for Premium SSD v2 and Ultra Disk)', 'Less than the 4,700 IOPS of this VM.']]);
+    assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => [x.text, x.less]), [['96 (this VM: up to 235)', ''], ['85', 'Less than the current size (96).'],
+        ['106 (124 for Premium SSD v2 and Ultra Disk)', ''], ['118 (135 for Premium SSD v2 and Ultra Disk)', '']]);
+    assert.deepEqual(rows['Max disk IOPS (cached)'].map((x) => x.text), ['8,000 (this VM: up to 620)', '9,000', '9,000', '9,000']);
+    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['65.5 (this VM: up to 125)', '125', '125', '125']);
+});
+
+test('disk limits: one short note for the VM: each kind of sentence once, the sizes named when not every size lowers it', () => {
+    const allOf = (m) => { const n = F.allNotes(m); return [...n.actions, ...n.attention, ...n.checks].filter((x) => x.topic === 'Disk limits'); };
+    // 7,500 IOPS: v5 and v6 (6,400) lower it, v7 (8,000) does not.
+    assert.deepEqual(allOf(one({ ...DISKS, 'Disk IOPS (uncached disks)': '7500' })), [{ topic: 'Disk limits', series: [],
+        text: 'The disks of this VM can do more than Standard_D4ds_v5 and Standard_D4ds_v6 allow. Compare the disk rows in the size table. Standard_D8ds_v5 keeps the current limit. Standard_D8ds_v6 keeps the current limit.' }]);
+    // No values: one "Check:" for all sizes, also when the rows differ (IOPS and MBps on v5, IOPS on v6 and v7).
+    assert.deepEqual(allOf(one({})), [{ topic: 'Disk limits', series: [], text: 'Check: the list does not give the disk IOPS and MBps. Compare the disk rows in the size table.' }]);
+    // Only Premium SSD v2 or Ultra Disk, no separate limit for the v5 size.
+    assert.deepEqual(allOf(one({ ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'PremiumV2_LRS', 'Disk IOPS (uncached disks)': '8000' })),
+        [{ topic: 'Disk limits', series: [], text: 'Check: this tool has no limit for Premium SSD v2 and Ultra Disk for Standard_D4ds_v5. Compare the disk rows in the size table.' }]);
+    // A "Check:" and a lower size together: one note, "Check:" first, the comparison once.
+    assert.deepEqual(allOf(one({ ...DISKS, 'Disk types': 'Premium_LRS, PremiumV2_LRS', 'Disk types (uncached disks)': 'PremiumV2_LRS', 'Disk IOPS (uncached disks)': '12000' })),
+        [{ topic: 'Disk limits', series: [], text: 'Check: this tool has no limit for Premium SSD v2 and Ultra Disk for Standard_D4ds_v5. The disks of this VM can do more than Standard_D4ds_v6 and Standard_D4ds_v7 allow. '
+            + 'Compare the disk rows in the size table. Standard_D8ds_v6 keeps the current limit. Standard_D8ds_v7 keeps the current limit.' }]);
+    // Nothing to say: no note.
+    assert.deepEqual(allOf(one({ ...DISKS, 'Disk IOPS (uncached disks)': '5000' })), []);
+    // The size table has no limits: the sentence stays, with no comparison.
+    const fake = new SizeTable({ Standard_X4_v9: { family: 'x', capabilities: { vCPUs: '4', vCPUsAvailable: '4', MemoryGB: '16', UncachedDiskIOPS: '3000', UncachedDiskBytesPerSecond: '200000000', CombinedTempDiskAndCachedIOPS: '9000', CombinedTempDiskAndCachedReadBytesPerSecond: '200000000', CombinedTempDiskAndCachedWriteBytesPerSecond: '200000000' } } });
+    const row = { series: 'v5', option: { option: 'v5', supported: true, targetSize: 'Standard_X4_v9' } };
+    row.caveats = { 'Disk limits': diskNote({ sourceSize: 'Standard_Q4_v9' }, { diskTypes: 'Premium_LRS', diskIopsUncached: '8000', diskMbpsUncached: '100', diskIopsCached: '0', diskMbpsCached: '0' }, row.option, fake) };
+    assert.deepEqual(vmDiskNote([row]), { state: 'check', text: 'Check: the size table does not give the disk limits of Standard_Q4_v9.' });
 });
 
 test('disk limits: the about file says how the tool compares the disk limits, with the Microsoft pages', () => {
@@ -386,7 +449,8 @@ test('disk limits: the about file says how the tool compares the disk limits, wi
         'A note "Disk limits" never changes the readiness of the VM, also when it is in "To check".',
         'This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
         'Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
-        'For such a VM, the note gives both limits of each size with "Check:". It shows only where a limit of the new size can lower the ceiling.',
+        'For such a VM, the note is "Check:". It shows only where a limit of the new size can lower the ceiling.',
+        'On the page and in the report, the note is short and shows once for the VM. The size table of the VM gives the numbers.',
         'https://learn.microsoft.com/azure/virtual-machines/disks-performance',
         'https://learn.microsoft.com/azure/virtual-machines/disk-bursting',
         'https://learn.microsoft.com/azure/virtual-machines/disks-types']) assert.ok(about.includes(s), s);
