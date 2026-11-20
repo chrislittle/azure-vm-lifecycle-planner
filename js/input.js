@@ -57,6 +57,7 @@ export const COLUMNS = [
     // names, for example Premium_LRS), the IOPS and MBps that the disks can do in total, for
     // the disks with host caching None (uncached) and the others (cached), and each disk.
     { name: 'Disk types' },
+    { name: 'Disk types (uncached disks)' },
     { name: 'Disk IOPS (uncached disks)' },
     { name: 'Disk MBps (uncached disks)' },
     { name: 'Disk IOPS (cached disks)' },

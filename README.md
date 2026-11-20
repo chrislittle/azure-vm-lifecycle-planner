@@ -190,9 +190,15 @@ For each VM:
   MBps." It also names the next size up in the same series that keeps the current
   limits, if the size table has one. The recommended size does not change.
   - The disk values come from the query. If the list does not give them, "To check" says
-    so, but only where the new size allows less than the current size.
-  - For Premium SSD v2 and Ultra Disk, the tool uses the separate limit on the Microsoft
-    size pages of v6 and v7. For a size with no such limit, the note is "Check:".
+    so, but only where the new size allows less than the current size. The note "Disk
+    limits" never changes the readiness of a VM: a VM that is "Ready" stays "Ready".
+  - When every uncached disk is Premium SSD v2 or Ultra Disk, the tool uses the separate
+    limit on the Microsoft size pages of v6 and v7. For a size with no such limit, the note
+    is "Check:".
+  - Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft
+    does not say which limit applies to this mix. The note then gives both limits of each
+    size with "Check:", only where a limit of the new size can lower the ceiling. The
+    query column "Disk types (uncached disks)" gives the types of the uncached disks.
   - The tool does not count disk bursting: Microsoft says that credit-based bursting is
     best effort and not guaranteed
     ([Managed disk bursting](https://learn.microsoft.com/azure/virtual-machines/disk-bursting)).

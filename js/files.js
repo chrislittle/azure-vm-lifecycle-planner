@@ -138,7 +138,8 @@ export function groupOf(m) {
         default: {
             if (POOL_PATTERNS.includes(m.pattern)) return 'pool';
             const s = signals(m);
-            return s.actions.length || s.checks.length ? 'first' : 'ready';
+            // A disk "Check:" is a note only: it does not change the readiness (owner, 2026-11-20).
+            return s.actions.length || s.checks.some((c) => c.topic !== 'Disk limits') ? 'first' : 'ready';
         }
     }
 }
@@ -396,14 +397,19 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  It names the next size up in the same series that keeps the current limit, if the size table has one.',
         '  The recommended size does not change.',
         '  If the list does not give the disk values, "To check" says so, but only where the new size allows less.',
+        '  A note "Disk limits" never changes the readiness of the VM, also when it is in "To check".',
         '  The values come from the query: the columns "Disk IOPS" and "Disk MBps", for the uncached disks and the cached disks.',
         '  The query leaves a value blank when a disk gives no value, for unmanaged disks, and for a scale set.',
         '  An ephemeral OS disk is not a managed disk. The query leaves it out.',
         '  The size table gives one uncached limit for each size, for Premium SSD.',
-        `  The Microsoft pages of ${ultra.pages.length} v6 and v7 series give a separate limit for Premium SSD v2 and Ultra Disk. This tool uses it.`,
+        `  The Microsoft pages of ${ultra.pages.length} v6 and v7 series give a separate limit for Premium SSD v2 and Ultra Disk.`,
+        '  This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
         `  This tool read these pages on ${[...new Set(ultra.pages.map((x) => x.readUtc))].sort().map(dateWords).join(' and ')}.`,
         '  A VM with Premium SSD v2 or Ultra Disk gets "Check:" for a size with no separate limit.',
         '  It does not get a note that the limit is lower.',
+        '  Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
+        '  For such a VM, the note gives both limits of each size with "Check:". It shows only where a limit of the new size can lower the ceiling.',
+        '  The query gives the types of the uncached disks in the column "Disk types (uncached disks)".',
         '  The cached MBps of a size is the lower of its cached read limit and its cached write limit.',
         '  This tool does not count disk bursting. Microsoft says that credit-based bursting is best effort and not guaranteed.',
         '  Standard HDD and Standard SSD give "up to" values.',

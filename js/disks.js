@@ -44,16 +44,26 @@ export function diskWords(n) {
 }
 
 // The disk values that the list gives for a VM (extras.js, readExtras): { uncached: { iops,
-// mbps }, cached: { iops, mbps }, types, ultra, upTo }. Each value is null when the list does
-// not give it, 0 when the VM has no disk of that kind. types: Azure's names (Premium_LRS), or
-// null. ultra: a Premium SSD v2 or Ultra Disk. upTo: a Standard HDD or Standard SSD.
+// mbps }, cached: { iops, mbps }, types, uncachedTypes, ultra, ultraOnly, mix, upTo }. Each value
+// is null when the list does not give it, 0 when the VM has no disk of that kind. types and
+// uncachedTypes: Azure's names (Premium_LRS), or null. ultra: a Premium SSD v2 or Ultra Disk.
+// ultraOnly: every uncached disk is a Premium SSD v2 or Ultra Disk (the separate column of the
+// size page applies). mix: Premium SSD v2 or Ultra Disk and other uncached disks, or other disks
+// when the list does not give "Disk types (uncached disks)": Microsoft does not say which limit
+// applies to such a mix (owner, 2026-11-20). upTo: a Standard HDD or Standard SSD.
+const isUltra = (t) => /^(PremiumV2_LRS|UltraSSD_LRS)$/i.test(t);
+const typeList = (v) => (v ? String(v).split(/[,;]/).map((s) => s.trim()).filter((s) => s) : null);
 export function diskTotals(x) {
-    const types = x && x.diskTypes ? String(x.diskTypes).split(/[,;]/).map((s) => s.trim()).filter((s) => s) : null;
+    const types = typeList(x && x.diskTypes);
+    const uncachedTypes = typeList(x && x.diskTypesUncached);
+    const decide = uncachedTypes || types;
+    const ultra = Boolean([...(types || []), ...(uncachedTypes || [])].some(isUltra));
+    const ultraOnly = Boolean(decide && decide.length && decide.every(isUltra));
     return {
         uncached: { iops: readAmount(x && x.diskIopsUncached), mbps: readAmount(x && x.diskMbpsUncached) },
         cached: { iops: readAmount(x && x.diskIopsCached), mbps: readAmount(x && x.diskMbpsCached) },
-        types,
-        ultra: Boolean(types && types.some((t) => /^(PremiumV2_LRS|UltraSSD_LRS)$/i.test(t))),
+        types, uncachedTypes, ultra, ultraOnly,
+        mix: !ultraOnly && Boolean(decide && decide.some(isUltra)),
         upTo: Boolean(types && types.some((t) => /^Standard(SSD)?_/i.test(t))),
     };
 }
@@ -70,11 +80,21 @@ function limitsOf(size, table, columns) {
 
 // The limit of a size for one group and one value: { value, column }. column: the value is the
 // separate column for Premium SSD v2 and Ultra Disk of the Microsoft size page, which applies
-// when the VM has such a disk (they are always uncached).
+// when every uncached disk of the VM is such a disk (they are always uncached).
 function limitFor(l, group, k, ultra) {
     if (!l) return { value: null, column: false };
     if (group === 'uncached' && ultra && l.ultra[k] !== null) return { value: l.ultra[k], column: true };
     return { value: l[group][k], column: false };
+}
+
+// For a mix of uncached disks: both limits of each size. { cs, cu, ns, nu, curHigh, newLow }:
+// the Premium SSD limit and the column (null when the size has none) of the current and the new
+// size, the higher limit of the current size and the lower limit of the new size. null when the
+// size table does not give a limit.
+function mixLimits(cur, neu, k) {
+    if (!cur || !neu || cur.uncached[k] === null || neu.uncached[k] === null) return null;
+    const cs = cur.uncached[k], cu = cur.ultra[k], ns = neu.uncached[k], nu = neu.ultra[k];
+    return { cs, cu, ns, nu, curHigh: Math.max(cs, cu ?? cs), newLow: Math.min(ns, nu ?? ns) };
 }
 
 // The sizes of one series (the family of the size table), each once, from small to large:
@@ -107,11 +127,16 @@ function nextKeeping(target, t, cur, table, columns) {
     const keeps = (l) => GROUPS.every((g) => VALUES.every((k) => {
         const T = t[g][k];
         if (T === null || T === 0) return true;
-        const c = limitFor(cur, g, k, t.ultra);
-        const n = limitFor(l, g, k, t.ultra);
+        // A mix: the size must keep the ceiling with either limit.
+        if (g === 'uncached' && t.mix) {
+            const m = mixLimits(cur, l, k);
+            return Boolean(m) && Math.min(T, m.newLow) >= Math.min(T, m.curHigh);
+        }
+        const c = limitFor(cur, g, k, t.ultraOnly);
+        const n = limitFor(l, g, k, t.ultraOnly);
         if (c.value === null) return true;
         // A Premium SSD v2 or Ultra Disk with no column for this size: this tool cannot tell.
-        if (n.value === null || (g === 'uncached' && t.ultra && !n.column)) return false;
+        if (n.value === null || (g === 'uncached' && t.ultraOnly && !n.column)) return false;
         return Math.min(T, n.value) >= Math.min(T, c.value);
     }));
     for (const s of seriesSizes(table, e.family)) {
@@ -136,13 +161,23 @@ export function diskNote(vm, x, option, table, columns = null) {
     const lower = { uncached: [], cached: [] };
     const guess = [];
     const noTypes = [];
+    const mixed = [];
     const unknown = [];
     for (const g of GROUPS) {
         for (const k of VALUES) {
             const T = t[g][k];
             if (T === 0) continue;
-            const c = limitFor(cur, g, k, t.ultra);
-            const n = limitFor(neu, g, k, t.ultra);
+            // A mix of uncached disks: never a "lower" note on a guess. Both limits with "Check:",
+            // only where a limit of the new size can lower the ceiling (owner, 2026-11-20).
+            if (g === 'uncached' && t.mix && T !== null) {
+                const m = mixLimits(cur, neu, k);
+                if (!m) {
+                    for (const [l, size] of [[cur, vm.sourceSize], [neu, option.targetSize]]) if ((!l || l.uncached[k] === null) && !unknown.includes(size)) unknown.push(size);
+                } else if (Math.min(T, m.newLow) < Math.min(T, m.curHigh)) mixed.push({ k, T, ...m });
+                continue;
+            }
+            const c = limitFor(cur, g, k, t.ultraOnly);
+            const n = limitFor(neu, g, k, t.ultraOnly);
             if (T === null) {
                 // No value from the list: a "Check:" only where the new size allows less.
                 if (c.value !== null && n.value !== null && n.value < c.value) blank[g].push({ k, c, n });
@@ -155,7 +190,7 @@ export function diskNote(vm, x, option, table, columns = null) {
             const cc = Math.min(T, c.value);
             if (Math.min(T, n.value) >= cc) continue;
             const e = { k, T, c, n };
-            if (g === 'uncached' && t.ultra && !n.column) guess.push(e);
+            if (g === 'uncached' && t.ultraOnly && !n.column) guess.push(e);
             else if (g === 'uncached' && t.types === null) {
                 // The list does not give the disk types: sure only when the column for Premium
                 // SSD v2 and Ultra Disk of the new size is lower too.
@@ -183,6 +218,19 @@ export function diskNote(vm, x, option, table, columns = null) {
         if (withColumn.length) parts.push(`The new size allows ${vals(withColumn, (e) => e.n.value)} for Premium SSD and ${vals(withColumn, (e) => e.u)} for Premium SSD v2 and Ultra Disk.`);
         if (without.length) parts.push(`The new size allows ${vals(without, (e) => e.n.value)} for Premium SSD. This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`);
         checks.push(`The list does not give the disk types. ${did(noTypes)} ${parts.join(' ')}`);
+    }
+    if (mixed.length) {
+        // The limits of one size for a mix: the Premium SSD limit, and the column when the size has it.
+        const allows = (label, single, column) => {
+            const withColumn = mixed.filter((e) => e[column] !== null);
+            const without = mixed.filter((e) => e[column] === null);
+            const parts = [];
+            if (withColumn.length) parts.push(`The ${label} allows ${vals(withColumn, (e) => e[single])} for Premium SSD and ${vals(withColumn, (e) => e[column])} for Premium SSD v2 and Ultra Disk.`);
+            if (without.length) parts.push(`The ${label} allows ${vals(without, (e) => e[single])} for Premium SSD. This tool has no separate limit of the ${label} for Premium SSD v2 and Ultra Disk.`);
+            return parts.join(' ');
+        };
+        checks.push(`This VM has Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix. `
+            + `The uncached disks of this VM can do ${upTo}${vals(mixed, (e) => e.T)} in total. ${allows('current size', 'cs', 'cu')} ${allows('new size', 'ns', 'nu')}`);
     }
     if (unknown.length) checks.push(`The size table does not give the disk limits of ${unknown.join(' and ')}.`);
 

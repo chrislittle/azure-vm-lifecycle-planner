@@ -57,6 +57,7 @@ export function readExtras(cell) {
         appPlanProduct: cell('Application plan product') || null,
         // The managed disks (0.9.8-beta), as the list gives them: disks.js reads the values.
         diskTypes: cell('Disk types') || null,
+        diskTypesUncached: cell('Disk types (uncached disks)') || null,
         diskIopsUncached: cell('Disk IOPS (uncached disks)') || null,
         diskMbpsUncached: cell('Disk MBps (uncached disks)') || null,
         diskIopsCached: cell('Disk IOPS (cached disks)') || null,

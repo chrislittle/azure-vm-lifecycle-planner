@@ -1890,8 +1890,9 @@ pages.
   record (`sku.name`, `properties.diskSizeGB`, `properties.tier`,
   `properties.diskIOPSReadWrite`, `properties.diskMBpsReadWrite`) and the entry of the VM
   (`caching`, `lun`). The second pass sends each disk group to every VM on the disk (before,
-  only a shared disk), and adds up the values. Six new last columns: "Disk types" (Azure's
-  names, for example "Premium_LRS, PremiumV2_LRS"), "Disk IOPS (uncached disks)", "Disk MBps
+  only a shared disk), and adds up the values. Seven new last columns: "Disk types" (Azure's
+  names, for example "Premium_LRS, PremiumV2_LRS"), "Disk types (uncached disks)" (the types
+  of the uncached disks only, for the mix rule below), "Disk IOPS (uncached disks)", "Disk MBps
   (uncached disks)", "Disk IOPS (cached disks)", "Disk MBps (cached disks)" and "Disks" (each
   disk in words, for "Facts from your list"). Uncached: host caching None; Premium SSD v2
   and Ultra Disk are always uncached. A total is blank when a disk of that group gives no
@@ -1907,11 +1908,24 @@ pages.
   size limit). A note only when the new ceiling is lower (a fact to know, "Good to know": it
   does not change "Ready"). It names the next size up in the same series (the family of the
   size table; not a size with fewer active vCPUs) that keeps every ceiling, when the table
-  has one. For a VM with Premium SSD v2 or Ultra Disk, the uncached limit is the column of
-  the size page; a size without it gets "Check:", never a "lower" note on a guess. A list
-  with totals but no disk types: "Check:", unless the column is lower too. A blank total: no
-  "lower" note, only "Check:" where the new size limit is lower than the current size limit
-  (so that it is not noise). "Check:" makes a VM "Ready with conditions", as every "Check:".
+  has one. When every uncached disk is a Premium SSD v2 or Ultra Disk, the uncached limit is
+  the column of the size page; a size without it gets "Check:", never a "lower" note on a
+  guess. A list with totals but no disk types: "Check:", unless the column is lower too. A
+  blank total: no "lower" note, only "Check:" where the new size limit is lower than the
+  current size limit (so that it is not noise).
+  - **Owner, 2026-11-20 (after the first build): a disk "Check:" never changes the
+    readiness.** It is a note only, in "To check" (`groupOf` in `js/files.js` leaves out the
+    topic "Disk limits"). A VM that was "Ready" stays "Ready". Every other "Check:" still
+    makes "Ready with conditions".
+  - **Owner, 2026-11-20: a mix.** Microsoft does not document which limit applies when one
+    VM has Premium SSD v2 or Ultra Disk disks and other uncached disks (checked on the
+    dsv6-series, disks-performance, disks-types, disks-deploy-premium-v2 and
+    disks-enable-ultra-ssd pages). For such a mix: never a "lower" note. The note gives both
+    limits of each size with "Check:", only where a limit of the new size can lower the
+    ceiling: the lower limit of the new size against the ceiling with the higher limit of the
+    current size. The query column "Disk types (uncached disks)" tells a mix from Premium SSD
+    v2 or Ultra Disk only. A list without that column: a VM whose disk types are only Premium
+    SSD v2 or Ultra Disk has no mix; any other VM with such a disk counts as a mix.
 - **The words** (STE, read line by line):
   - `The uncached disks of this VM can do 7,500 IOPS and 250 MBps in total. The current size
     allows 12,800 IOPS and 192 MBps. The new size allows 6,400 IOPS and 145 MBps.
@@ -1928,6 +1942,13 @@ pages.
     This tool has no separate limit of the new size for Premium SSD v2 and Ultra Disk.`)
   - `Check: the size table does not give the disk limits of {size}.` (only when the list
     gives disk values).
+  - A mix: `Check: this VM has Premium SSD v2 or Ultra Disk disks and other uncached disks.
+    Microsoft does not say which limit applies to this mix. The uncached disks of this VM can
+    do 12,000 IOPS in total. The current size allows 12,800 IOPS for Premium SSD. This tool has
+    no separate limit of the current size for Premium SSD v2 and Ultra Disk. The new size
+    allows 6,400 IOPS for Premium SSD and 8,333 IOPS for Premium SSD v2 and Ultra Disk.` (A
+    size with the column: `The current size allows ... for Premium SSD and ... for Premium SSD
+    v2 and Ultra Disk.` MBps the same way.)
   - Numbers with a comma for each thousand, with no locale; MBps with one decimal at most.
 - **Where.** The page and the report (the notes), vm-target-sizes.csv (a new last column
   "Disk limits", so that the other columns keep their place), vm-summary.csv ("Good to know"
@@ -1937,7 +1958,7 @@ pages.
   Premium SSD v2 and Ultra Disk where the tool has it ("6,400 (8,333 for Premium SSD v2 and
   Ultra Disk)"), the values of this VM in the current size column ("12,800 (this VM:
   20,000)"), and "Less than the current size" where a new size allows less. "Facts from your
-  list" shows the six columns. The README says the same; a README fact gives the number and
+  list" shows the seven columns. The README says the same; a README fact gives the number and
   read dates of the size pages.
 - `samples/contoso-from-azure.csv`: made-up disk values for each VM (a P10 OS disk with
   ReadWrite caching and P10 data disks with caching None; a Standard SSD VM; blank for the
@@ -1949,22 +1970,25 @@ pages.
   "Disk limits", the note in "Good to know" or "To check", and the size table rows. The old
   sample lists, with no disk columns, get only "Check:" notes: contoso-from-azure.csv 13 rows
   of vm-target-sizes.csv, contoso-by-hand.csv 4, contoso-every-series.csv 51, the 4,000-VM
-  list 1,031. Where the row of "What to do" has one, "To check" changes and the result group
-  goes from "Ready" to "Ready with conditions": contoso-every-series.csv 5 VMs, the 4,000-VM
-  list 74 VMs (Standard_D11_v2, DS11_v2, DS11-1_v2 and F16s, whose v5, v6 or v7 size allows
-  fewer uncached IOPS or MBps). The new sample with disk values: only the note of
-  contoso-web02 changes.
+  list 1,031. Where the row of "What to do" has one, the column "To check" of vm-summary.csv
+  names it (contoso-every-series.csv 5 VMs, the 4,000-VM list 87). No result group changes
+  (the first build moved 74 VMs of the 4,000-VM list and 5 of contoso-every-series.csv to
+  "Ready with conditions"; the owner's rule above puts them back). The new sample with disk
+  values: only the note of contoso-web02 changes.
 - Tests: `tests/disks.test.js` (the size facts and the bytes; every size has the values; the
   data file is what the snapshot gives, page by page; the column covers every suggested v6
   and v7 size; the columns read; lower, not lower, equal, one more; uncached and cached
   apart; blank totals and "Check:" only where the new limit is lower; the column of the
-  size page, no column, no disk types; the next size up, not in another series, not a
+  size page, no column, no disk types, a mix; the readiness; the next size up, not in another series, not a
   constrained size, none; a blocked option; the words of the numbers; the page, the report
   and the CSV files; the size table rows; the about file; the query text and its limits; the
   sample and the same sizes with no disk columns), and the merge and diff of the size
   tool. The STE check reads every kind of note (a new made-up list). 43 mutation checks, all
   caught (two only after new tests: the column for Premium SSD v2 and Ultra Disk is for the
   uncached disks only, and the next size up must have the column too).
+  Owner round: the tests changed first and failed; 15 mutation checks, all caught (three only
+  after new tests: the higher limit of the current size, the lower limit of the new size, and
+  the next size up for a mix).
 
 ## Next
 

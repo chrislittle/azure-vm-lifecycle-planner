@@ -85,7 +85,7 @@ export const FACT_GROUPS = [
     ['Size and OS', ['Current size', 'Generation', 'OS', 'Hibernation']],
     ['Disks and network', ['Data-disk count', 'Unmanaged disks', 'Ephemeral OS disk', 'Shared disk',
         // The managed disks (0.9.8-beta): the values behind the note "Disk limits".
-        'Disk types', 'Disk IOPS (uncached disks)', 'Disk MBps (uncached disks)', 'Disk IOPS (cached disks)', 'Disk MBps (cached disks)', 'Disks',
+        'Disk types', 'Disk types (uncached disks)', 'Disk IOPS (uncached disks)', 'Disk MBps (uncached disks)', 'Disk IOPS (cached disks)', 'Disk MBps (cached disks)', 'Disks',
         'NIC count', 'Accelerated NICs', 'Primary NIC accelerated']],
     ['Security', ['Security type', 'Azure Disk Encryption', 'System-assigned identity']],
     ['Workload', ['Resource type', 'Instances', 'Scale set', 'Managed by', 'Azure Virtual Desktop', 'AVD host pool type', 'SQL Server', 'SQL availability group', 'SAP', 'SAP sign']],

@@ -175,6 +175,7 @@ Resources
     cIops = sumif(diskIops, dCached), cMbps = sumif(diskMbps, dCached),
     unknownDisks = countif(dUnknown),
     diskTypes = make_set_if(diskType, self == 0 and diskOfVm == 1 and isnotempty(diskType)),
+    uncachedTypes = make_set_if(diskType, dUncached and isnotempty(diskType)),
     diskList = make_set_if(diskWords, self == 0 and diskOfVm == 1),
     hasSelf = max(self)
     by key = key2
@@ -279,11 +280,12 @@ Resources
     ['Managed application'] = appName,
     ['Application plan publisher'] = appPlanPublisher,
     ['Application plan product'] = appPlanProduct,
-    // The managed disks (planner 0.9.8-beta): the disk types, the IOPS and MBps that the
+    // The managed disks (planner 0.9.8-beta): the disk types (all, and of the uncached disks), the IOPS and MBps that the
     // uncached and the cached disks can do in total, and each disk. A total is blank when a
     // disk of the VM gives no value or no caching setting, for unmanaged disks, and for a
     // scale set (its model has no disk values). 0 means no disk of that kind.
     ['Disk types'] = iff(isVmss == 1, '', strcat_array(array_sort_asc(diskTypes), ', ')),
+    ['Disk types (uncached disks)'] = iff(isVmss == 1, '', strcat_array(array_sort_asc(uncachedTypes), ', ')),
     ['Disk IOPS (uncached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or uIopsN < uDisks, '', tostring(uIops)),
     ['Disk MBps (uncached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or uMbpsN < uDisks, '', tostring(uMbps)),
     ['Disk IOPS (cached disks)'] = iff(isVmss == 1 or unmanaged or unknownDisks > 0 or cIopsN < cDisks, '', tostring(cIops)),

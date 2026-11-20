@@ -262,7 +262,7 @@ test('query: the managed application columns are the last three; Resource Graph 
     const names = [...project.matchAll(/^\s{4}(?:\['([^']+)'\]|([A-Za-z]+)) =/gm)].map((x) => x[1] || x[2]);
     assert.deepEqual(names, COLUMNS.map((c) => c.name), 'the query writes the columns in the order of the template');
     // 0.9.8-beta adds the six disk columns after them, at the end.
-    assert.deepEqual(names.slice(-9, -6), ['Managed application', 'Application plan publisher', 'Application plan product']);
+    assert.deepEqual(names.slice(-10, -7), ['Managed application', 'Application plan publisher', 'Application plan product']);
     const code = q.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
     assert.ok((code.match(/\|\s*(join|union)\b/g) || []).length <= 3, 'at most three join or union');
     assert.ok((code.match(/\|\s*mv-expand\b/g) || []).length <= 3, 'at most three mv-expand');
