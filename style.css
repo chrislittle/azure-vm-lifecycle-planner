@@ -187,6 +187,8 @@ td.size { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Consol
 .pill.pool { background: var(--pool-bg); color: var(--pool); }
 .ans-ok { color: var(--fine); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; white-space: nowrap; }
 .ans-no { color: var(--muted); }
+/* A size of a VM that needs no move: for reference, not a move (0.9.9-beta). */
+.ans-ref { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; white-space: nowrap; }
 .warn { color: var(--problem); }
 
 tr.details > td { background: var(--bg); padding: 12px 14px; }

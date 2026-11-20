@@ -1,12 +1,12 @@
 // What to do for one VM, in words: the same for the page and the report.
 
-import { capacityRestricted } from './planner.js?v=0.9.8-beta';
-import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.8-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
-import { CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, LINK_NAMES, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.8-beta';
-import { sizeFacts } from './lifecycle.js?v=0.9.8-beta';
-import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.8-beta';
-import { diskTotals, diskWords } from './disks.js?v=0.9.8-beta';
+import { capacityRestricted } from './planner.js?v=0.9.9-beta';
+import { CAVEAT_TOPICS, allNotes, likelyRow, signals } from './files.js?v=0.9.9-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
+import { MBPS_NOTE, CHOOSE_WAY, FEATURE_WORDS_UNKNOWN, LINK_NAMES, ONE_WAY, PATTERNS, POOL_PATTERNS, TWO_WAYS, TWO_WAYS_USED, WAYS, fallbackWords, featureSteps, featureWords, poolAdvice, serviceManaged, stageWords, tempDiskPreview, twoWaysAsFor } from './words.js?v=0.9.9-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.9-beta';
+import { gibWords, sapClear, sapSignWords } from './extras.js?v=0.9.9-beta';
+import { diskTotals, diskWords } from './disks.js?v=0.9.9-beta';
 
 // ---------------------------------------------------------------------------
 // The current size beside each new size (0.9.0-beta)
@@ -14,7 +14,11 @@ import { diskTotals, diskWords } from './disks.js?v=0.9.8-beta';
 
 export const NOT_IN_TABLE = 'Not in the size table';
 export const COMPARE_CAPTION = 'The current size and each new size, from the size table';
-export const COMPARE_HINT = 'A note under a value shows where the new size has less than the current size or this VM.';
+// What each note under a value compares (audit, 2026-11-20: the hint said "the current size or
+// this VM", but a disk limit or a NIC count is compared with what this VM needs).
+export const COMPARE_HINT = 'A note under a value of a new size shows where the new size has less than this VM needs. For vCPUs, memory, the temporary disk, Premium SSD and the generation, this tool compares the new size with the current size. For NICs and data disks, it compares with this VM. For the disk limits, it compares with what the disks of this VM can do now.';
+// The MBps limits come from Azure's size list (words.js, MBPS_NOTE).
+export { MBPS_NOTE };
 
 // The current size and each size that this tool shows for the VM (v5, v6, v7,
 // burstable), side by side: { caption, columns: [{ label, size }], rows: [{ label,
@@ -40,7 +44,8 @@ export function sizeComparison(m, table) {
     const diskLimit = (v, ultra) => (v === null ? 'Not given' : `${diskWords(v)}${ultra !== null ? ` (${diskWords(ultra)} for Premium SSD v2 and Ultra Disk)` : ''}`);
     // The uncached disk values of this VM, as the list gives them ("up to" for Standard HDD and SSD).
     const t = diskTotals(m.extra);
-    const vmDisk = (v) => (v === null ? undefined : `${t.upTo ? 'up to ' : ''}${diskWords(v)}`);
+    const vmDisk = (v) => (v === null ? undefined : { value: v, text: `${t.upTo ? 'up to ' : ''}${diskWords(v)}` });
+    const count = (v) => (v === undefined ? undefined : { value: v, text: String(v) });
     // The disk limit of a size that applies to this VM: the column for Premium SSD v2 and Ultra Disk
     // when every uncached disk is one, else the limit of the size table. For a mix, Microsoft does
     // not say which limit applies: the lowest limit of the current size (current: true) and the
@@ -91,7 +96,7 @@ export function sizeComparison(m, table) {
             (f) => (gen && f.generations && !f.generations.some((g) => g.toUpperCase() === gen.toUpperCase()) ? `Does not take Generation ${gen.replace(/^V/i, '')}, the generation of this VM.` : '')],
     ];
     // The current size: its own values, and the NICs and data disks of this VM.
-    const own = { 'Max NICs': nics, 'Max data disks': disks, 'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps),
+    const own = { 'Max NICs': count(nics), 'Max data disks': count(disks), 'Max disk IOPS (uncached)': vmDisk(t.uncached.iops), 'Max disk MBps (uncached)': vmDisk(t.uncached.mbps),
         'Max disk IOPS (cached)': vmDisk(t.cached.iops), 'Max disk MBps (cached)': vmDisk(t.cached.mbps) };
     const columns = [{ label: 'Current size', size: m.vm.sourceSize, facts: cur },
         ...shown.map((r) => ({ label: r.series === 'burstable' ? 'Burstable' : r.series, size: r.option.targetSize, facts: facts(r.option.targetSize) }))];
@@ -100,7 +105,8 @@ export function sizeComparison(m, table) {
         cells: columns.map((c, i) => {
             if (!c.facts) return { text: NOT_IN_TABLE, less: '' };
             let text = value(c.facts);
-            if (i === 0 && own[label] !== undefined) text += ` (this VM: ${own[label]})`;
+            // Only when this VM has disks or NICs of that kind (audit, 2026-11-20: no "this VM: 0").
+            if (i === 0 && own[label] !== undefined && own[label].value > 0) text += ` (this VM: ${own[label].text})`;
             return { text, less: i === 0 ? '' : less(c.facts) };
         }),
     }));
@@ -214,6 +220,9 @@ export function whatToDo(m, g) {
     // each topic and text, so the topic and the text find it).
     const noteOf = (list, topic, text) => list.find((x) => x.topic === topic && x.text === text);
     const placed = new Set();
+    const placedKey = new Set();
+    const own = ownSize(m, g);
+    const shown = own ? allNotes(m, own) : n;
     const ways = keys.map((key) => {
         const a = pool ? poolAdvice(m) : null;
         const w = key === 'pool' ? box('pool', POOL_TITLE, [a.todo, a.more])
@@ -227,6 +236,7 @@ export function whatToDo(m, g) {
             const note = noteOf(c.state === 'problem' ? n.actions : n.attention, topic, c.text);
             if (!note) continue;
             placed.add(note);
+            placedKey.add(noteKey(note));
             // A pool or a service makes new VMs: a note with a part for each way gives only the
             // part for a new VM there, never the words of a resize (review, 2026-11-07).
             // (A note has ways only on v6 and v7, so a box with no two ways is a pool there.)
@@ -255,8 +265,35 @@ export function whatToDo(m, g) {
         // The preview feature words are in the box of the resize.
         more: pool ? [] : t.more.filter((x) => x !== FEATURE_WORDS_UNKNOWN),
         otherSteps: n.actions.filter((x) => !placed.has(x)),
-        attention: n.attention.filter((x) => !placed.has(x)),
+        // "Good to know" and "To check": the notes of the size that "What to do" uses, as in
+        // vm-summary.csv (owner, 2026-11-20). The notes of each other size are in its card
+        // (cardNotes). A pool or a service keeps the notes of all its sizes.
+        attention: (own ? shown.attention : n.attention).filter((x) => !placedKey.has(noteKey(x))),
+        checks: own ? shown.checks : n.checks,
     };
+}
+
+// The size whose notes "Good to know" and "To check" give (owner, 2026-11-20): the size that
+// "What to do" uses, for a VM that must move and is not in a pool or a service. null for any
+// other VM: it keeps the notes of all its sizes, as before.
+function ownSize(m, g) {
+    return m.vm && (g === 'ready' || g === 'first') && !POOL_PATTERNS.includes(m.pattern) ? likelyRow(m) : null;
+}
+const noteKey = (x) => `${x.topic}|${x.text}`;
+
+// The facts to know and to check of one other size, for its card (owner, 2026-11-20):
+// [{ topic, text, state: 'attention' | 'check' }]. Only the notes that "Good to know" and "To
+// check" do not already give (so none for the size of "What to do" itself), and none for a
+// size with no supported size (allNotes) or a VM with no ownSize. Steps stay under "Steps for
+// the other sizes" (0.9.6-beta).
+export function cardNotes(m, g, r) {
+    const own = ownSize(m, g);
+    if (!own) return [];
+    const shown = allNotes(m, own);
+    const seen = new Set([...shown.attention, ...shown.checks].map(noteKey));
+    const mine = allNotes(m, r);
+    return [...mine.attention.map((x) => ({ topic: x.topic, text: x.text, state: 'attention' })), ...mine.checks.map((x) => ({ topic: x.topic, text: x.text, state: 'check' }))]
+        .filter((x) => !seen.has(noteKey(x)));
 }
 
 // The words of one size card (0.9.6-beta): { used, stage, how, link }. used: "What to do"
@@ -275,6 +312,16 @@ export function sizeCard(m, g, r) {
         return { ...card, how: join(TWO_WAYS, featureWords(o.previewFeature)), link: tempDiskPreview(m, r) };
     }
     return { ...card, how: join(ONE_WAY, featureWords(o.previewFeature), fallbackWords(r.series, o.previewFeature, o.featureFallback)) };
+}
+
+// The title of one size card on the page: the series and its size, or why it has none. A VM
+// that this tool cannot check says "not checked", never "no size" (audit, 2026-11-20: unknown
+// is never a fail); a VM on a modern size says "not needed".
+export function cardTitle(m, r) {
+    const name = r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
+    if (r.option.supported && r.option.targetSize) return `${name}: ${r.option.targetSize}`;
+    if (m.moveRequired === 'Review' || r.result === 'Needs team review') return `${name}: not checked`;
+    return m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
 }
 
 // A text with named links in it, in parts: a plain text, or { href, text } for a link, so that
@@ -304,15 +351,23 @@ export function linkParts(text) {
 export function whyLines(m, g, table, now = new Date()) {
     const why = [];
     // With the time left to a retirement date, or since it, from the day the list is planned.
-    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm.sourceSize), now));
+    // A VM that this tool cannot plan (no generation, for example) still has the stage of its
+    // size, when the size is known (audit, 2026-11-20).
+    if (m.stage) why.push(stageWords(m.stage, capacityRestricted(m.vm ? m.vm.sourceSize : m.read.size), now));
     if (!m.vm) why.push(...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })));
-    if (g === 'gate') why.push(...gateReasons(m));
-    // No supported size: the reasons go here, each once, not in size cards.
-    if (g === 'nopath') {
+    // Vendor approval: the reason of the vendor first.
+    const gate = g === 'gate' ? gateReasons(m) : [];
+    why.push(...gate);
+    // Vendor approval and no supported size: the reasons of the series go here, each once, not
+    // in size cards. The same sentences as the Reason column of vm-target-sizes.csv (audit,
+    // 2026-11-20: an appliance on an L size did not say that this tool has no L target).
+    if (g === 'nopath' || g === 'gate') {
         // The sentences that every series gives show once; then what is left for
-        // each series, with the series that give the same words.
+        // each series, with the series that give the same words. A sentence of the
+        // vendor reason does not show again.
         const split = (text) => text.split(/(?<=\.)\s+(?=[A-Z])/);
-        const series = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => ({ name: r.series === 'burstable' ? 'Burstable' : r.series, sentences: split(optionReason(r, table, now)) }));
+        const said = new Set(gate.flatMap(split));
+        const series = m.rows.filter((r) => r.series !== 'gen1Route').map((r) => ({ name: r.series === 'burstable' ? 'Burstable' : r.series, sentences: split(optionReason(r, table, now)).filter((x) => !said.has(x)) }));
         const common = series.length ? series[0].sentences.filter((x) => series.every((r) => r.sentences.includes(x))) : [];
         if (common.length) why.push(common.join(' '));
         const rest = new Map();
@@ -322,7 +377,8 @@ export function whyLines(m, g, table, now = new Date()) {
             if (!rest.has(text)) rest.set(text, []);
             rest.get(text).push(r.name);
         }
-        for (const [text, names] of rest) why.push(`${seriesList(names)}: ${text}`);
+        // A text that starts with its own series name does not repeat it ("v6 sizes support ...").
+        for (const [text, names] of rest) why.push(names.length === 1 && text.startsWith(`${names[0]} `) ? text : `${seriesList(names)}: ${text}`);
         // No "Generation 1 to 2" line (owner, 2026-11-13): the v6 and v7 reasons say it.
     }
     return why;

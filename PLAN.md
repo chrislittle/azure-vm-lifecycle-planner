@@ -2051,6 +2051,138 @@ pages.
   is there, and the query text of the caching for each VM; a pool and unmanaged disks were
   first in the rule, but a pool VM is a VM with disks, and unmanaged disks give no size: removed).
 
+## 0.9.9-beta (2026-11-20): the same answer on every surface
+
+Owner, 2026-11-20: display faults found by eye, then a full audit of the 32-VM sample. Fix
+them all. Each item was checked by running the code first. A few answers change (below);
+the rest is words and layout.
+
+- **Never "null" and never a blank where a value belongs.** The page showed "null" under
+  "What to do" for every VM with no lead line or no box (21 VMs of the sample): the part that
+  is not there is now left out. A VM that this tool cannot plan shows "Not checked" for v5, v6
+  and v7 (page, vm-summary.csv, vm-target-sizes.csv), and the stage cell says "Not checked"
+  when no stage is known. The Burstable column says "Only for B v1, Av2 and Amv2 VMs" for any
+  other VM (it was blank for most VMs), and "Not checked" for a size that this tool does not
+  know.
+- **A VM with no generation gets the stage of its size** (an answer change). The stage reads
+  only the size, so a VM with a blank or unreadable generation now shows its stage and
+  "Move needed" (Yes or No) on every surface; its sizes stay "Not checked" and its result
+  group stays "Readiness unknown". Nothing in this plan forbids it: "Generation is never
+  guessed" is about the sizes, which still need it. vm-target-sizes.csv gives such a VM one
+  row for each series (v5, v6, v7, and Burstable for a B v1, Av2 or Amv2 size), each "Not
+  checked", not one row with no series. A row with no readable size has no stage, as before.
+- **A size that this tool does not know is "Not checked" everywhere**: vm-target-sizes.csv
+  said "Supported: No" and "Not in this tool"; a size card said "no size". The card titles
+  come from one function (`cardTitle` in `js/details.js`): the size, "not checked", "not
+  needed" (a VM that stays) or "no size".
+- **One recommendation.** vm-summary.csv has a new last column **What to do uses**: the size
+  of "What to do" (`likelyRow`), as the page and the report show it, for example "Burstable -
+  Standard_B2ls_v2" for a B-series VM. Its "Before the move", "Good to know" and "To check"
+  are the notes of that size (as before). "Suggested - Current stage" and "Suggested -
+  Extended stage" now hold only a size whose series is at that stage (v6 or v7 for Current, v5
+  for Extended), the size of "What to do" first: before, a Generation 1 VM had a v5
+  (Extended) size under Current, and a v5 VM a v6 size under Extended. With no size at that
+  stage: "No supported Current size" (or Extended); "Vendor approval first", "No supported
+  size" or "Not checked" by result group. The column Suggested of vm-target-sizes.csv says
+  "What to do", "Current stage" and "Extended stage" by the same rule.
+- **A VM that needs no move** (owner, 2026-10-09: a newer size only for reference, and no
+  warnings) now follows that rule on every surface: on the page its sizes have a plain
+  colour, the title "For reference: this VM needs no move." and the heading "Newer sizes,
+  for reference"; vm-summary.csv says "Not needed" in the suggested columns and in What to
+  do uses, and "No move needed." as the Workload type advice; vm-target-sizes.csv has no move
+  notes for it. "Not needed" for v6 and v7 of a Generation 1 VM that stays, against "No -
+  needs a Generation 2 VM" for one that must move, is that rule (never a "no" for a VM that
+  stays): not changed.
+- **A fact of the VM itself shows also when it stays** (owner to confirm): Azure Disk
+  Encryption retires on 15 September 2028 whether the VM moves or not. A VM on a modern size
+  with Azure Disk Encryption gets the note "Disk encryption" in "Good to know" (page,
+  vm-summary.csv, the column Disk encryption of vm-target-sizes.csv, and a list under the VMs
+  on a modern size in the report), in the sentences of the Microsoft migration page that the
+  reason `disk-encryption-present` already uses. Hibernation is a step for a move: it still
+  shows only for a VM that must move.
+- **vm-target-sizes.csv: no target facts on a row with no size.** Target stage, Lifecycle
+  change, Rebuild, Region availability, Premium SSD on target, Burstable ends, How to move,
+  Ranked sizes and Preview feature are blank when the row has no size, and the note columns
+  keep only the note of the reason of that row (Disk encryption on v6 and v7, SAP, Unmanaged
+  disks, Ephemeral OS disk, Network virtual appliance, Storage or backup appliance): the SAP
+  column keeps the SAP note for Yes (0.9.4-beta). A VM that a service manages (AKS, ARO,
+  Azure Databricks) has no notes there either, as the page and the about file say.
+- **Page and report agree.** The report gives the Microsoft guidance links for vendor
+  approval and no supported size, and the notes about the list, as the page does. "Why" of
+  vendor approval gives the reason of the vendor first, then every other reason of the series
+  once (an appliance on an L size now says that this tool has no L target, as the CSV Reason
+  says). The page gives the capacity growth restrictions with the time since they started once
+  a list is planned. The counts are in one order everywhere (`GROUPS` in `js/words.js`).
+- **The disk MBps** (owner's "best match" rule): Azure's size list gives bytes per second, for
+  some sizes in units of 1,024,000 or 1,048,576 bytes. The tool divides by the first of 10^6,
+  1,024,000 and 1,048,576 that leaves no remainder (else 10^6) and rounds to a whole number:
+  Standard_D8s_v3 cached 131,072,000 is 128 MBps (its Microsoft page says 128), D4s_v5 uncached
+  145, L8s_v2 uncached 160, F32s_v2 cached 512 (`bytesToMbps` in `js/lifecycle.js`). Numbers in
+  words are whole numbers. The page, the report and the about file say: "The MBps values come
+  from the Azure size list. They can differ a little from the Microsoft size pages." Known
+  differences (accepted): the FX series, F2s_v2 to F16s_v2 by 1, and Ddsv4 cached. The disk
+  notes and marks use the same whole numbers.
+- **The size table** shows "(this VM: ...)" only when the VM has disks or NICs of that kind
+  (no "this VM: 0"). Its hint now says what each note compares: the current size for vCPUs,
+  memory, the temporary disk, Premium SSD and the generation; this VM for NICs and data disks;
+  what the disks of this VM can do now for the disk limits.
+- **Ranked sizes** of another family say each way in which they differ: "Same shape, other
+  family, AMD processor, no temporary disk*" for Standard_F4als_v6 (it said "Same shape, AMD
+  processor*", the words of the D size above it). The report gives each ranked size on its own
+  line.
+- **Text slips.** The about file wrote "20 Nov 2026" (a short month) and named the lifecycle
+  pages with the date of another file: it now gives the same pages and date as the page. The
+  report wrote "2* *" and "Retired On 30 Sep 2025" (now "Retired", then "On 30 Sep 2025" on a
+  line of its own, as on the page). "Why" said "v6: v6 sizes support ...". The about file
+  leaves out a workload type with no VM. The row of an AKS node pool said "Scale set, 3
+  instances. Node pool or scale set": now "3 instances. Node pool or scale set". A name that
+  is in the list more than once shows the workload type second and "Resource group: ..."
+  third. The advice for a cluster or database gives both ways for v6 and v7 ("add a new node
+  ... You can also change the size of the node."), as "What to do" does.
+- **Vendor names of our storage list** are a company name with the products in brackets:
+  "Cohesity (DataPlatform Cloud Edition)", "Pure Storage (Cloud Block Store)", "Hitachi Vantara
+  (VSP One SDS)", "IBM (Storage Virtualize)", "Microsoft (StorSimple Cloud Appliance, retired
+  in 2022)". The company (the first word) does not change, so the README count does not
+  change. **Not changed:** a network virtual appliance and a managed application still show the
+  publisher ID as Azure gives it (owner, 2026-10-17: the Azure policy list has no vendor names,
+  and the tool does not make one up); the words say "The publisher ID is ...".
+- **"Good to know" and "To check" of one size (owner, 2026-11-20, after the first review).**
+  On the page and in the report they give only the notes of the size that "What to do" uses,
+  as vm-summary.csv already did. The facts to know and to check of each other size that are
+  not the same are in the card of that size (`cardNotes` in `js/details.js`; the report: under
+  the size in the sizes table). This replaces "one note Disk limits for the VM" of 0.9.8-beta
+  on the page and in the report: "Good to know" has the disk note of the size of "What to do",
+  and each card the note of its size. "Steps for the other sizes" stays: it is the owner's
+  layout of 0.9.6-beta ("A step for other series only ... stays outside the boxes under 'Steps
+  for the other sizes', with its series"). A VM in a pool or a service, and a VM that stays,
+  keep their notes as before. In the sample this moves notes of six VMs into a card:
+  contoso-b02, contoso-dev01 and contoso-dev02 (the temporary disk note of the D sizes),
+  contoso-mq01 and contoso-sql02 (the disk note of v5), contoso-ana01 (the availability set
+  note of v5). The about file and the README say so. 9 more mutation checks, all caught (one
+  only after a new test: a fact to check of another size).
+- **Checked and not changed:** v7 accelerated networking. Every v7 page that the tool suggests
+  (14) says "Accelerated Networking | Supported" (`tools/source-snapshot.json`, read
+  2026-11-20; Dsv7 and Easv7 read again on learn.microsoft.com the same day), so
+  `data/families.js` keeps no v7 series that requires it.
+- **The sample** (`samples/contoso-from-azure.csv` and `js/sample.js`): 51 VMs, more like a
+  real list. Kept every VM that a test names; contoso-coh01 and contoso-bkp01 (two of six
+  appliances) went; 21 were added. Results: 13 modern size (v4, v5, v6, v7, Arm64, AMD and
+  Intel, a SQL Server VM, a pooled AVD host), 14 ready and 9 ready with conditions (D, E, F,
+  B and Av2; v2 and v3; Windows and Linux; Generation 1 and 2; eastus2, westus2, westeurope
+  and centralus; temporary disk changes, NVMe OS images, accelerated networking off,
+  hibernation, an availability set, four with lower disk limits), 3 in a service or pool, 5
+  vendor approval first (4 appliances and SAP), 4 no supported size (GPU, two old A sizes, an
+  ephemeral OS disk) and 3 readiness unknown (a size that this tool cannot read, the made-up
+  size Standard_Q4z_v9, no generation). The other sample lists do not change.
+- Tests: `tests/output.test.js` (each item above, on every surface), with
+  `tests/fake-dom.js`: a small stand-in for the browser, so that a test runs `js/page.js`,
+  loads the sample, opens every VM and reads what the page shows. 65 mutation checks, all caught (4 only after new
+  tests: Burstable "Not checked" for a B size with no generation, a blank Azure Disk
+  Encryption value, the notes of a VM that must move, and the stage cell of a row with no
+  size). Tests changed on purpose: the decimal MBps values, the vendor name, the last column
+  of vm-summary.csv, the Burstable answer of a D VM, the doubled asterisk, and the sample VMs
+  that went.
+
 ## Next
 
 - Before each release: `node tools/set-version.mjs <version>`, then check the screen

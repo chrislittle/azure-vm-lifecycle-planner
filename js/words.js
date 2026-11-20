@@ -1,6 +1,8 @@
 // The customer's words for every result (PLAN.md, "Words for a customer").
 // The logic works with plain labels; only this file says them to a customer.
 
+import { burstableSource } from './lifecycle.js?v=0.9.9-beta';
+
 // All customer text follows ASD-STE100 Simplified Technical English (owner,
 // 2026-10-09): short sentences, one idea in each, active voice, no contractions.
 
@@ -68,14 +70,18 @@ export const twoWaysAsFor = (series) => `Two ways, as for ${series}.`;
 // Why a size is on the ranked list. processor: the name of the other processor.
 // feature: 'needed' or 'windows' when this size needs the preview feature and the suggested
 // size does not (lifecycle.js, rankedSizes; review 2026-11-06). The asterisk stays at the end.
-export function rankWords(why, processor, feature = null) {
+// changes: for a size of the same shape in another family (0.9.9-beta, audit 2026-11-20),
+// { processor: true when the processor maker changes, tempDisk: 'removed' | 'added' | null },
+// so that the words say each way in which it differs from the suggested size.
+export function rankWords(why, processor, feature = null, changes = null) {
+    const other = changes ? `${changes.processor ? `, ${processor} processor` : ''}${changes.tempDisk === 'removed' ? ', no temporary disk' : changes.tempDisk === 'added' ? ', with a temporary disk' : ''}${changes.processor ? '*' : ''}` : '';
     const words = {
         'closest': 'Closest match',
         'processor': `Same shape, ${processor} processor*`,
         'temp-disk-removed': 'Same shape, no temporary disk',
         'temp-disk-added': 'Same shape, with a temporary disk',
         'more-memory': 'More memory for each vCPU',
-        'same-shape': 'Same shape, other family',
+        'same-shape': `Same shape, other family${other}`,
         'other-shape': 'Other shape that fits',
     }[why] || why;
     const add = { needed: '. A resize to it needs the preview feature VMTempDiskResizePreview', windows: '. On Windows, a resize to it needs the preview feature VMTempDiskResizePreview' }[feature] || '';
@@ -125,6 +131,9 @@ export function fallbackWords(series, feature, fallback) {
 export function featureColumn(feature) {
     return { needed: 'Needed', 'not-needed': 'Not needed', windows: 'Not checked. Needed on Windows.', unknown: 'Not checked. The size table does not give the temporary disk.' }[feature] || '';
 }
+// The MBps limits come from Azure's size list (lifecycle.js, bytesToMbps): a few differ a little
+// from the Microsoft size page (owner, 2026-11-20). The page, the report and the about file say so.
+export const MBPS_NOTE = 'The MBps values come from the Azure size list. They can differ a little from the Microsoft size pages.';
 export const PREVIEW_LINK = 'Convert SCSI to NVMe (Microsoft)';
 
 // Whether one row (m: a planned VM, r: one of its rows) shows the link to the Microsoft
@@ -148,7 +157,8 @@ export const PATTERNS = {
     C: { name: 'Managed by a service', advice: 'A service (for example Azure Databricks) manages this VM. Do not change the VM. Change the node type or size in the service.' },
     D: { name: 'Cluster in a service', advice: 'Make a new cluster at the new size in the service. Then remove the old cluster.' },
     E: { name: 'Standalone VM', advice: 'You manage this VM. Use the move that this tool gives for each series.' },
-    F: { name: 'Cluster or database', advice: 'This VM holds state or is part of a cluster (SQL Server, a failover cluster or SAP). Move one node at a time. First move the role away from the node (fail over or drain). For v5, resize the node. For v6 and v7, add a new node at the new size and remove the old node. Check the health of the cluster before the next node.' },
+    // v6 and v7 have two ways (0.9.6-beta): the advice gives both, as the boxes of "What to do" do.
+    F: { name: 'Cluster or database', advice: 'This VM holds state or is part of a cluster (SQL Server, a failover cluster or SAP). Move one node at a time. First move the role away from the node (fail over or drain). For v5, resize the node. For v6 and v7, add a new node at the new size, then remove the old node. You can also change the size of the node. Check the health of the cluster before the next node.' },
     G: { name: 'Vendor appliance', advice: 'This VM is a vendor appliance. Do not change the size of this VM. Ask the vendor which sizes they certify. Deploy a new appliance beside this one, then move the traffic.' },
     '': { name: 'Type not checked', advice: 'The list does not give the facts that find the workload type. Run the Azure Resource Graph query in step 1 to get them.' },
 };
@@ -195,6 +205,15 @@ export function dateWords(iso, short = false) {
     if (!m) return String(iso ?? '');
     const month = (short ? MONTHS : LONG_MONTHS)[parseInt(m[2], 10) - 1];
     return `${parseInt(m[3], 10)} ${month} ${m[1]}`;
+}
+
+// Read dates in words, each once, in order: ['2026-11-20', '2026-11-06'] ->
+// '6 November 2026 and 20 November 2026'. The page and the about file give one fact with
+// one date this way (audit, 2026-11-20).
+export function datesWords(list) {
+    const days = [...new Set(list.filter((d) => d))].sort();
+    const words = days.map((d) => dateWords(d));
+    return words.length < 3 ? words.join(' and ') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 }
 
 // Whole calendar months from one day to a later day ('2026-10-17' to '2029-11-15': 36).
@@ -310,12 +329,22 @@ const SHORT = {
 };
 export const shortWords = (label) => (label in SHORT ? SHORT[label] : label);
 
+// The Burstable answer of a VM that is not on a B v1, Av2 or Amv2 size: Microsoft's guide for
+// retired sizes names Bsv2 and Basv2 only for those (index.html, the table of target sizes).
+export const BURSTABLE_ONLY = 'Only for B v1, Av2 and Amv2 VMs';
+
 // The v5 / v6 / v7 answer for one machine. A machine that is not moving shows
 // a newer size only when one is supported (for reference), and otherwise
-// "Not needed" - never a "no" (owner, 2026-10-09).
+// "Not needed" - never a "no" (owner, 2026-10-09). Never blank (audit, 2026-11-20): a
+// VM that this tool cannot plan is "Not checked" for each series, and Burstable says when
+// it does not apply.
 export function answerWords(m, series) {
-    const label = m.short[series] || '';
-    if (!label) return '';
+    const label = (m.short && m.short[series]) || '';
+    if (!label) {
+        const size = m.vm ? m.vm.sourceSize : m.read && m.read.size;
+        if (series === 'burstable' && m.moveRequired !== 'Review' && size && !burstableSource(size)) return BURSTABLE_ONLY;
+        return 'Not checked';
+    }
     if (/^(Standard|Basic)_/.test(label)) return label;
     if (m.moveRequired === 'No') return label.startsWith('Not needed') ? shortWords(label) : 'Not needed';
     // A size that this tool does not recognise: nothing about it is checked.

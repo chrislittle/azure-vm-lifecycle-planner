@@ -13,7 +13,7 @@ import { SizeTable, sizeFacts, rankedSizes } from '../js/lifecycle.js';
 import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { diskNote, diskTotals, diskWords, vmDiskNote } from '../js/disks.js';
-import { sizeComparison } from '../js/details.js';
+import { cardNotes, sizeComparison, whatToDo } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import { FACT_GROUPS } from '../js/evidence.js';
 import * as F from '../js/files.js';
@@ -48,9 +48,10 @@ const st = (n) => ({ state: n.state, text: n.text });
 
 test('disk limits: the size facts give the uncached and cached limits, in IOPS and MBps (Azure gives bytes per second)', () => {
     const f = sizeFacts(table.get('Standard_DS3_v2'));
-    assert.deepEqual([f.uncachedIops, f.uncachedMbps, f.cachedIops, f.cachedMbps, f.ultraIops, f.ultraMbps], [12800, 192, 16000, 131.072, null, null]);
-    // The cached MBps: the lower of the read and the write limit (Standard_D4_v3: 98.304 read, 49.152 write).
-    assert.equal(sizeFacts(table.get('Standard_D4_v3')).cachedMbps, 49.152);
+    assert.deepEqual([f.uncachedIops, f.uncachedMbps, f.cachedIops, f.cachedMbps, f.ultraIops, f.ultraMbps], [12800, 192, 16000, 128, null, null]);
+    // The cached MBps: the lower of the read and the write limit (Standard_D4_v3: 98,304,000 and 49,152,000
+    // bytes per second, whole multiples of 1,024,000: 96 and 48 MBps; lifecycle.js, bytesToMbps).
+    assert.equal(sizeFacts(table.get('Standard_D4_v3')).cachedMbps, 48);
     // A v6 size: Azure gives the Premium SSD column; the Microsoft size page gives the column
     // for Premium SSD v2 and Ultra Disk.
     const v6 = sizeFacts(table.get('Standard_D2s_v6'));
@@ -336,8 +337,8 @@ test('disk limits: the next size up is in the same series, keeps every limit, an
 
 test('disk limits: numbers in words, with no locale', () => {
     assert.equal(diskWords(1234567), '1,234,567');
-    assert.equal(diskWords(131.072), '131.1');
-    assert.equal(diskWords(65.536), '65.5');
+    assert.equal(diskWords(131.072), '131');
+    assert.equal(diskWords(65.536), '66');
     assert.equal(diskWords(12800), '12,800');
     assert.equal(diskWords(0), '0');
 });
@@ -363,9 +364,16 @@ test('disk limits: the note is a note of the VM: the page, the report, vm-target
     const VM_NOTE = 'The disks of this VM can do more than the new size allows. Compare the disk rows in the size table. Standard_D8ds_v5 keeps the current limit. Standard_D8ds_v6 keeps the current limit. Standard_D8ds_v7 keeps the current limit.';
     const n = F.allNotes(p.machines[0]);
     assert.deepEqual([...n.actions, ...n.attention, ...n.checks].filter((x) => x.topic === 'Disk limits'), [{ topic: 'Disk limits', text: VM_NOTE, series: [] }]);
+    // 0.9.9-beta (owner, 2026-11-20): "Good to know" gives the note of the size that "What to do"
+    // uses (v6); the note of each other size is in its card, on the page and in the report.
+    const m = p.machines[0];
+    const g = F.groupOf(m);
+    const own = (s) => `The disks of this VM can do more than the new size allows. Compare the disk rows in the size table. Standard_D8ds_${s} keeps the current limit.`;
+    assert.deepEqual(whatToDo(m, g).attention.filter((x) => x.topic === 'Disk limits').map((x) => x.text), [own('v6')]);
+    for (const s of ['v5', 'v7']) assert.deepEqual(cardNotes(m, g, m.rows.find((r) => r.series === s)).map((x) => x.text), [own(s)], s);
     const html = reportHtml(p, table, 'test', NOW);
-    assert.equal(html.split('<b>Disk limits:</b>').length, 2, 'one note in the report');
-    assert.ok(html.includes(`<b>Disk limits:</b> ${VM_NOTE}</li>`), 'no series after it');
+    assert.equal(html.split('<b>Disk limits:</b>').length, 4, 'the note of v6 in Good to know, and of v5 and v7 in their rows');
+    assert.ok(html.includes(`<b>Disk limits:</b> ${own('v6')}</li>`), 'no series after it');
     // The blank case is in "To check" (vm-summary.csv names the topic).
     assert.match(F.summaryRows(run(list([{ 'VM name': 'contoso-db02' }])))[0]['To check'], /Disk limits/);
 });
@@ -381,7 +389,7 @@ test('disk limits: the size comparison has the uncached IOPS and MBps of each si
     assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => x.less), ['', '', '', '']);
     // The cached rows: the VM gives cached values.
     assert.deepEqual(rows['Max disk IOPS (cached)'].map((x) => x.text), ['16,000 (this VM: 500)', '19,000', '18,000', '18,000']);
-    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['131.1 (this VM: 100)', '250', '250', '250']);
+    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['128 (this VM: 100)', '250', '250', '250']);
     // A total under the current limit is the ceiling: the note names the value of this VM.
     const v = Object.fromEntries(sizeComparison(one({ ...DISKS, 'Disk IOPS (uncached disks)': '7500' }), table).rows.map((r) => [r.label, r.cells.map((x) => x.less)]));
     assert.deepEqual(v['Max disk IOPS (uncached)'], ['', 'Less than the 7,500 IOPS of this VM.', 'Less than the 7,500 IOPS of this VM.', '']);
@@ -417,7 +425,7 @@ test('disk limits: the real row of the test build as a Standard_DS2_v2 VM: one s
     assert.deepEqual(rows['Max disk MBps (uncached)'].map((x) => [x.text, x.less]), [['96 (this VM: up to 235)', ''], ['85', 'Less than the current size (96).'],
         ['106 (124 for Premium SSD v2 and Ultra Disk)', ''], ['118 (135 for Premium SSD v2 and Ultra Disk)', '']]);
     assert.deepEqual(rows['Max disk IOPS (cached)'].map((x) => x.text), ['8,000 (this VM: up to 620)', '9,000', '9,000', '9,000']);
-    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['65.5 (this VM: up to 125)', '125', '125', '125']);
+    assert.deepEqual(rows['Max disk MBps (cached)'].map((x) => x.text), ['64 (this VM: up to 125)', '125', '125', '125']);
 });
 
 test('disk limits: the size table marks for a mix compare every limit that may apply, of both sizes', () => {
@@ -520,7 +528,8 @@ test('disk limits: the about file says how the tool compares the disk limits, wi
         'This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
         'Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
         'For such a VM, the note is "Check:". It shows only where a limit of the new size can lower the ceiling.',
-        'On the page and in the report, the note is short and shows once for the VM. The size table of the VM gives the numbers.',
+        'On the page and in the report, the note is short. The size table of the VM gives the numbers.',
+        '"Good to know" and "To check" give the note of the size that "What to do" uses. Each other size has its note in its card.',
         'https://learn.microsoft.com/azure/virtual-machines/disks-performance',
         'https://learn.microsoft.com/azure/virtual-machines/disk-bursting',
         'https://learn.microsoft.com/azure/virtual-machines/disks-types']) assert.ok(about.includes(s), s);
@@ -552,10 +561,11 @@ test('the query reads the disks of each VM in the disk pass it already has: no n
     for (const c of ['Disk types', 'Disk types (uncached disks)', 'Disk IOPS (uncached disks)', 'Disk MBps (uncached disks)', 'Disk IOPS (cached disks)', 'Disk MBps (cached disks)', 'Disks']) assert.ok(t.includes(c), c);
 });
 
-test('the sample has one VM whose new size lowers the disk ceiling, and one with disk values that does not', () => {
+test('the sample has VMs whose new size lowers the disk ceiling, and one with disk values that does not', () => {
     const p = run(sample);
     const lower = p.machines.filter((m) => m.rows && m.rows.some((r) => r.caveats && r.caveats['Disk limits'] && r.caveats['Disk limits'].state === 'attention'));
-    assert.deepEqual(lower.map((m) => m.read.name), ['contoso-web02']);
+    // 0.9.9-beta: the larger sample has four (P40, two P30 and three disks on a v2 size).
+    assert.deepEqual(lower.map((m) => m.read.name), ['contoso-web02', 'contoso-file01', 'contoso-mq01', 'contoso-sql02']);
     const given = p.machines.find((m) => m.read.name === 'contoso-web01' && m.extra.diskIopsUncached !== null);
     assert.ok(given, 'contoso-web01 gives disk values');
     assert.ok(given.rows.every((r) => !r.caveats || !r.caveats['Disk limits'] || r.caveats['Disk limits'].state === ''), 'no note');

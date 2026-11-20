@@ -659,8 +659,8 @@
   "naming": {
     "name": "VM naming conventions",
     "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/vm-naming-conventions",
-    "readUtc": "2026-10-16",
-    "pageUpdatedUtc": "2026-02-26",
+    "readUtc": "2026-11-20",
+    "pageUpdatedUtc": "2026-11-11",
     "facts": [
       "(top) :: Applies to: ✔️ Linux VMs ✔️ Windows VMs ✔️ Flexible scale sets ✔️ Uniform scale sets",
       "(top) :: This page outlines the naming conventions used for Azure VMs. VMs use these naming conventions to denote varying features and specifications.",
@@ -694,7 +694,7 @@
       "Naming convention explanation :: Value | Explanation = *Accelerator Type | Denotes the type of hardware accelerator in the specialized/GPU SKUs. Only new specialized/GPU SKUs launched from Q3 2020 have the hardware accelerator in the name.",
       "Naming convention explanation :: Value | Explanation = *Constrained vCPUs | Used for certain VM sizes only. Denotes the number of vCPUs for the constrained vCPU capable size",
       "Naming convention explanation :: Value | Explanation = *Memory Capacity | Denotes M-series memory capacity, rounded to the nearest TiB.",
-      "Naming convention explanation :: Value | Explanation = *Subfamily | Used for specialized VM differentiations such as: B = memory bandwidth optimized C = confidential (for DC, EC, NCC series)C = compute intensive (for HC, NC, NCC series) D = AI training and inference optimized G = cloud gaming and remote desktop optimized V = visualization and graphics optimized X = extra memory",
+      "Naming convention explanation :: Value | Explanation = *Subfamily | Used for specialized VM differentiations such as: B = memory bandwidth optimized C = confidential (for DC, EC, NCC series)C = compute intensive (for HC, NC, NCC series) D = AI training and inference optimized G = cloud gaming and remote desktop optimized H = High core density V = visualization and graphics optimized X = extra memory",
       "Naming convention explanation :: Value | Explanation = Additive Features | Lower case letters denote additive features, such as: a = AMD-based processor b = remote storage bandwidth optimized d = includes local temporary disks e = encrypted; contains confidential TDX capabilities f = flat ratio (1:1) of vCPU to memory size i = isolated size l = low memory; decreased vCPU to memory ratio m = memory intensive; highest vCPU to memory ratio in a particular series n = network optimized; increased vCPU to network bandwidth ratio o = increased vCPU to local SSD storage capacity ratiop = ARM-based processor r = includes RDMA (InfiniBand) secondary network s = compatible with any Premium SSD type t = tiny memory; smallest vCPU to memory ratio in a particular size",
       "Naming convention explanation :: Value | Explanation = Family | Indicates the VM Family Series. For more information, see the list of VM size families by type.",
       "Naming convention explanation :: Value | Explanation = Version | Denotes the version number of the VM Family Series",

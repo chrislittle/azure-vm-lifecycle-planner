@@ -7,7 +7,7 @@ A community tool. Not affiliated with or endorsed by Microsoft.
 
 **Open the tool:** https://chrislittle.github.io/azure-vm-lifecycle-planner/
 
-**Status:** beta (version <!-- fact:version -->0.9.8-beta<!-- /fact -->). The results are advice. They are not a check
+**Status:** beta (version <!-- fact:version -->0.9.9-beta<!-- /fact -->). The results are advice. They are not a check
 that a VM is ready to move.
 
 ## How to use it
@@ -53,7 +53,7 @@ For each VM:
   |---|---|
   | 1 or 2 | The list gives Generation 1 or Generation 2. The CSV files show "Generation 1" or "Generation 2". |
   | 2* | The list does not give the generation. The tool uses Generation 2 because of the image SKU or the security type (Trusted launch or a confidential VM). The notes of the VM give the reason. The CSV files show "Generation 2 (from the image SKU)" or "Generation 2 (from the security type)". |
-  | Not given | The list does not give a generation that the tool can read. The tool does not check the VM. |
+  | Not given | The list does not give a generation that the tool can read. The tool does not check the sizes of the VM. It still shows the lifecycle stage of its size. |
   | Set by the service | A service (AKS, Azure Red Hat OpenShift or Azure Databricks) makes the new nodes from its own image. The tool does not need the generation. |
 - A result. The Result column has two lines: "Move needed" (or "Modern size", or
   "Readiness unknown"), and the readiness. The readiness words are similar to the
@@ -76,7 +76,12 @@ For each VM:
   | Readiness unknown - This tool cannot read this VM or its size | The tool cannot read the VM or its size. |
 
 - The supported size on v5, v6 and v7, and the reason when there is no size. For B v1,
-  Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2).
+  Av2 and Amv2 VMs, the tool also shows a burstable size (Bsv2 or Basv2). For other VMs,
+  the Burstable column says "Only for B v1, Av2 and Amv2 VMs". A VM that the tool cannot
+  check shows "Not checked" in each of these columns. No column is empty.
+- A VM on a modern size needs no move. The tool shows a newer size only for reference, in
+  a plain colour, and gives no steps for a move. A fact of the VM itself still shows in
+  "Good to know": Azure Disk Encryption, which Microsoft retires on 15 September 2028.
 - A Generation 1 VM moves to v5: v6 and v7 sizes support only Generation 2 VMs. On the
   page and in the report, the v6 and v7 boxes of a Generation 1 VM add one sentence: can
   the VM change to Generation 2 with the Trusted launch upgrade from Microsoft? Then a link,
@@ -161,6 +166,9 @@ For each VM:
     of the VM. The preview feature and the page file are in the columns "How to move" and
     "Preview feature" of vm-target-sizes.csv.
   - **Good to know** (blue): a fact to know, with nothing to do first.
+  - "Good to know" and "To check" give the notes of the size that "What to do" uses, as
+    vm-summary.csv does. The card of each other size gives the notes of that size that
+    are different. A VM in a pool or a service keeps the notes of all its sizes.
   - **To check** (grey): the list does not give the fact, or the tool cannot judge it
     from what the list gives.
   - **Sizes**: a card for each series, with the lifecycle stage of the series (for
@@ -176,8 +184,14 @@ For each VM:
 - A table with the current size beside each new size: vCPUs, memory, temporary disk,
   the maximum NICs and data disks, the maximum disk IOPS and MBps of the uncached disks,
   Premium SSD and the generations, from the size table.
-  Where a new size has less than the current size or the VM (for example fewer NICs than
-  the VM has), a note under the value says so.
+  A note under a value of a new size shows where it has less than the VM needs. For
+  vCPUs, memory, the temporary disk, Premium SSD and the generation, the tool compares with
+  the current size. For NICs and data disks, it compares with the VM. For the disk limits,
+  it compares with what the disks of the VM can do now. The current size column gives the
+  values of the VM ("this VM") only when the VM has disks or NICs of that kind.
+  Azure gives the MBps limits in bytes per second. The tool shows whole MBps. The MBps
+  values come from the Azure size list. They can differ a little from the Microsoft size
+  pages.
 - The disk limits. A new size is a problem only when it lowers the disk ceiling of the
   VM. The ceiling is the lower of two values: what the disks of the VM can do in total,
   and the disk limit of the size. The tool compares the IOPS and the MBps, for the
@@ -185,7 +199,7 @@ For each VM:
   a VM are separate from its uncached limits
   ([Virtual machine and disk performance](https://learn.microsoft.com/azure/virtual-machines/disks-performance)).
   When a new size lowers the ceiling, the note "Disk limits" (Good to know) says so in
-  short words, once for the VM: "The disks of this VM can do more than the new size
+  short words: "The disks of this VM can do more than the new size
   allows. Compare the disk rows in the size table." It also names the next size up in the
   same series that keeps the current limits, if the size table has one, for example
   "Standard_D8ds_v5 keeps the current limits." The recommended size does not change.
@@ -270,7 +284,8 @@ For each VM:
 
 VMs with the same name in other resource groups, subscriptions or regions stay apart:
 the query gives each VM's resource ID. When a name is in the list more than once, the
-table shows what tells those VMs apart (for example the resource group). The details
+table shows what tells those VMs apart, under the workload type, with a label (for
+example "Resource group: rg-contoso-dr"). The details
 of each VM show its resource ID. **Find** also matches the resource group and the
 subscription ID.
 
@@ -281,8 +296,8 @@ in Excel:
 | File | Contents |
 |---|---|
 | vm-lifecycle-report.html | The report. Start with this file. It opens in any browser, also offline. To make a PDF, print it and select "Save as PDF". It has a summary, what to do for each result group, and the details of each VM that needs a move. The summary counts the VMs by workload type, region, resource group and generation. The summary has the table "Appliances by vendor": send each vendor the list of its VMs. |
-| vm-summary.csv | One row for each VM, to sort and filter in Excel. Near the end are the columns Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. The last column is SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. |
-| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. Near the end is the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. Then the column Preview feature: Needed, Not needed or Not checked, for the preview feature VMTempDiskResizePreview. The last column is Disk limits: the note when the new size lowers the disk ceiling of the VM, or "Check:". The column Rebuild is No for every size. |
+| vm-summary.csv | One row for each VM, to sort and filter in Excel. Near the end are the columns Vendor (the vendor of a storage or backup appliance, or the publisher ID of a network virtual appliance. For a managed application, it is the publisher ID of the Marketplace plan of the application, else of the purchase plan of the VM, when the list has one) and Evidence (the facts behind the workload type). They are empty for a standalone VM. Then the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. The last column is What to do uses: the size that "What to do" uses, as on the page and in the report, for example "Burstable - Standard_B2ls_v2". The columns "Before the move", "Good to know" and "To check" give the notes of that size. "Suggested - Current stage" gives a v6 or v7 size and "Suggested - Extended stage" a v5 size, or why there is none. For a VM that needs no move, these three columns say "Not needed". |
+| vm-target-sizes.csv | One row for each VM and series, with the reasons and the notes. The SAP column has the SAP note. It is empty when "SAP" is not Yes. Near the end is the column SAP sign: the "SAP sign" value from your list, when "SAP" is Yes. Then the column Preview feature: Needed, Not needed or Not checked, for the preview feature VMTempDiskResizePreview. The last column is Disk limits: the note when the new size lowers the disk ceiling of the VM, or "Check:". The column Rebuild is No for every size. A row with no size has no facts of a target and only the note of its reason, for example the SAP note. A VM that a service manages has no notes, and a VM that needs no move has only the facts of the VM itself. A VM that the tool cannot read has one row for each series, each "Not checked". |
 | vm-not-checked.csv | The items that the tool cannot check, with the generation of each VM. The Generation column is new: it comes after Current size, so the columns after it move one place right. |
 | about-these-results.txt | The columns that the tool used, what a result means, and the sources. |
 

@@ -19,7 +19,7 @@
 // Unknown is never a pass and never a fail: a value that the list does not give is no
 // "lower" note, only a "Check:" where the new size allows less than the current size.
 
-import { sizeFacts } from './lifecycle.js?v=0.9.8-beta';
+import { sizeFacts } from './lifecycle.js?v=0.9.9-beta';
 
 const GROUPS = ['uncached', 'cached'];
 const VALUES = ['iops', 'mbps'];
@@ -36,11 +36,10 @@ export function readAmount(text) {
     return null;
 }
 
-// A number in words, with no locale (the same text on every computer): 12800 -> '12,800',
-// 131.072 -> '131.1'.
+// A number in words, with no locale (the same text on every computer), as a whole number
+// (owner, 2026-11-20): 12800 -> '12,800', 131.072 -> '131'.
 export function diskWords(n) {
-    const [whole, part] = String(Math.round(n * 10) / 10).split('.');
-    return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${part ? `.${part}` : ''}`;
+    return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 // The disk values that the list gives for a VM (extras.js, readExtras): { uncached: { iops,

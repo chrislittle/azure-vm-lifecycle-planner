@@ -2,23 +2,23 @@
 // table, and the downloads. Everything stays in this browser tab: nothing is
 // sent anywhere, and nothing is stored.
 
-import sizes from '../data/sizes.js?v=0.9.8-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
-import capacity from '../data/capacity.js?v=0.9.8-beta';
-import nvme from '../data/nvme-images.js?v=0.9.8-beta';
-import query from './query.js?v=0.9.8-beta';
-import sample from './sample.js?v=0.9.8-beta';
-import { SizeTable } from './lifecycle.js?v=0.9.8-beta';
-import { COLUMNS, readList } from './input.js?v=0.9.8-beta';
-import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.8-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
-import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.8-beta';
-import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.8-beta';
-import { REPORT_NAME, reportHtml } from './report.js?v=0.9.8-beta';
-import { GOOD_TO_KNOW, GROUPS, GUIDANCE, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.8-beta';
-import * as F from './files.js?v=0.9.8-beta';
-import { makeZip } from './zip.js?v=0.9.8-beta';
-import version from './version.js?v=0.9.8-beta';
+import sizes from '../data/sizes.js?v=0.9.9-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.9-beta';
+import capacity from '../data/capacity.js?v=0.9.9-beta';
+import nvme from '../data/nvme-images.js?v=0.9.9-beta';
+import query from './query.js?v=0.9.9-beta';
+import sample from './sample.js?v=0.9.9-beta';
+import { SizeTable } from './lifecycle.js?v=0.9.9-beta';
+import { COLUMNS, readList } from './input.js?v=0.9.9-beta';
+import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.9-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
+import { COMPARE_HINT, MBPS_NOTE, cardNotes, cardTitle, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
+import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.9-beta';
+import { REPORT_NAME, reportHtml } from './report.js?v=0.9.9-beta';
+import { GOOD_TO_KNOW, GROUPS, GUIDANCE, datesWords, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.9-beta';
+import * as F from './files.js?v=0.9.9-beta';
+import { makeZip } from './zip.js?v=0.9.9-beta';
+import version from './version.js?v=0.9.9-beta';
 
 const table = new SizeTable(sizes.sizes);
 const vms = (n) => `${n} ${n === 1 ? 'VM' : 'VMs'}`;
@@ -144,6 +144,7 @@ function run() {
         ]));
         box.replaceChildren(...msgs);
         filter = 'all'; $('find').value = '';
+        showSources(now);
         showResults();
     }, 20);
 }
@@ -258,19 +259,24 @@ function addRows() {
 // (Enter or Space). A click on the row does the same.
 function machineRow(m) {
     const tr = el('tr', { class: 'machine' });
+    // Never blank (words.js, answerWords). A size of a VM that needs no move is for
+    // reference only: it does not look like a move (audit, 2026-11-20).
     const answer = (s) => {
-        const t = m.short[s] || '';
-        if (!t) return el('td', {});
-        return /^(Standard|Basic)_/.test(t) ? el('td', {}, el('span', { class: 'ans-ok', title: t, text: shortSize(t) })) : el('td', {}, el('span', { class: 'ans-no', text: answerWords(m, s) }));
+        const t = answerWords(m, s);
+        if (!/^(Standard|Basic)_/.test(t)) return el('td', {}, el('span', { class: 'ans-no', text: t }));
+        return m.moveRequired === 'No' ? el('td', {}, el('span', { class: 'ans-ref', title: `${t}. For reference: this VM needs no move.`, text: shortSize(t) }))
+            : el('td', {}, el('span', { class: 'ans-ok', title: t, text: shortSize(t) }));
     };
     const g = current.group.get(m);
     const same = current.byName.get(m.read.name.toLowerCase());
     const id = `details-${m.read.row}`;
     const button = el('button', { type: 'button', class: 'name', 'aria-expanded': 'false', text: m.read.name });
     tr.append(
+        // The workload type is always the second line; for a name that is in the list more than
+        // once, where the VM is comes next, with a label (audit, 2026-11-20).
         el('th', { class: 'vm', scope: 'row' }, button,
-            same.length > 1 ? el('span', { class: 'sub where', text: whereWords(m, same) }) : null,
-            el('span', { class: 'sub', text: vmSub(m) })),
+            el('span', { class: 'sub', text: vmSub(m) }),
+            same.length > 1 ? el('span', { class: 'sub where', text: whereLabel(m, same) }) : null),
         el('td', { class: 'size', title: m.read.size || m.read.sizeAsWritten || '', text: shortSize(m.read.size || m.read.sizeAsWritten || '') }),
         generationCell(m),
         stageCell(m),
@@ -301,10 +307,19 @@ function machineRow(m) {
     return tr;
 }
 
-// Under the VM name: a scale set and its instances, and the workload type.
+// Under the VM name: a scale set and its instances, and the workload type. The type "Node pool
+// or scale set" already says "scale set" (audit, 2026-11-20).
 function vmSub(m) {
-    const set = m.read.resourceType === 'Scale set' ? `Scale set${m.read.instances !== null && m.read.instances !== undefined ? `, ${m.read.instances} instance${m.read.instances === 1 ? '' : 's'}` : ''}. ` : '';
+    const n = m.read.instances;
+    const count = n !== null && n !== undefined ? `${n} instance${n === 1 ? '' : 's'}` : '';
+    const set = m.read.resourceType !== 'Scale set' ? '' : m.pattern === 'A' ? (count ? `${count}. ` : '') : `Scale set${count ? `, ${count}` : ''}. `;
     return `${set}${m.pattern ? PATTERNS[m.pattern].name : PATTERNS[''].name}`;
+}
+
+// Where a VM is, for a name that is in the list more than once, with what it is (evidence.js, whereWords).
+function whereLabel(m, same) {
+    const w = whereWords(m, same);
+    return w === m.read.resourceGroup ? `Resource group: ${w}` : w === m.read.region ? `Region: ${w}` : w;
 }
 
 // The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
@@ -317,8 +332,9 @@ function generationCell(m) {
 
 // The stage, short: the name, the date, and a tag when Microsoft restricts capacity growth.
 function stageCell(m) {
-    if (!m.stage) return el('td', {});
-    const s = stageShort(m.stage, capacityRestricted(m.vm.sourceSize));
+    // No stage: "Not checked", never a blank cell (audit, 2026-11-20). A VM that this tool cannot
+    // plan still has the stage of its size when the size is known (planner.js).
+    const s = m.stage ? stageShort(m.stage, capacityRestricted(m.vm ? m.vm.sourceSize : m.read.size)) : stageShort({ stage: null }, null);
     return el('td', { class: 'stage' }, el('strong', { text: s.name }), s.detail ? el('span', { class: 'sub', text: s.detail }) : null,
         s.capacity ? el('span', { class: 'tag-limit', text: 'Capacity growth restricted', title: 'Microsoft restricts capacity growth for this series. Select the VM to read more.' }) : null);
 }
@@ -356,7 +372,8 @@ function details(m) {
     const box = el('div', { class: 'd' });
     td.append(box);
     const g = F.groupOf(m);
-    const section = (title, ...content) => box.append(el('h3', { class: 'sec', text: title }), ...content);
+    // A part that is not there (null) shows nothing (audit, 2026-11-20: "null" under "What to do").
+    const section = (title, ...content) => box.append(el('h3', { class: 'sec', text: title }), ...content.filter((c) => c !== null && c !== undefined));
 
     if (m.read.resourceId) box.append(el('p', { class: 'hint rid', text: `Resource ID: ${m.read.resourceId}` }));
 
@@ -394,8 +411,7 @@ function details(m) {
             // No card for the row "Generation 1 to 2" (owner, 2026-11-13): the v6 and v7 cards say it.
             if (r.series === 'gen1Route') continue;
             const o = r.option;
-            const name = r.series === 'gen1Route' ? 'Generation 1 to 2' : r.series === 'burstable' ? 'Burstable (Bsv2, Basv2)' : r.series;
-            const title = o.supported ? `${name}: ${o.targetSize}` : r.series === 'gen1Route' ? name : m.moveRequired === 'No' ? `${name}: not needed` : `${name}: no size`;
+            const title = cardTitle(m, r);
             // The size that "What to do" uses has an outline; each card has the lifecycle stage
             // of its series and the ways to move to it (details.js, sizeCard; 0.9.6-beta).
             const c = sizeCard(m, g, r);
@@ -406,6 +422,13 @@ function details(m) {
             if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no' }, linked(optionReason(r, table, now))));
             // A v6 or v7 resize that needs the preview feature VMTempDiskResizePreview: the link to the Microsoft page that names it.
             if (c.how) card.append(el('p', { class: 'hint' }, c.how, c.link ? ' ' : null, c.link ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
+            // The facts to know and to check of this size, when "What to do" uses another size
+            // (owner, 2026-11-20: "Good to know" and "To check" give the notes of that size only).
+            const notes = cardNotes(m, g, r);
+            for (const state of ['attention', 'check']) {
+                const list = notes.filter((x) => x.state === state);
+                if (list.length) card.append(noteList(state === 'check' ? 'chk' : 'att', list.map((x) => ({ ...x, series: [] }))));
+            }
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;
@@ -414,7 +437,7 @@ function details(m) {
             grid.append(card);
             if (c.used) used = true;
         }
-        section(g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes', grid);
+        section(g === 'pool' ? 'Sizes to look for in the service or pool' : g === 'modern' ? 'Newer sizes, for reference' : 'Sizes', grid);
         const hints = [];
         if (used && others) hints.push(OTHER_SIZES_FIT);
         if (g === 'pool' && serviceManaged(m)) hints.push('Use a size that the service offers.');
@@ -452,7 +475,7 @@ function compareTable(c) {
             r.cells.map((cell) => el('td', {}, cell.text, cell.less ? el('strong', { class: 'less', text: cell.less }) : null))))));
     return el('div', { class: 'compare-box' },
         el('div', { class: 'compare-wrap', tabindex: '0', role: 'region', 'aria-label': c.caption }, table),
-        el('p', { class: 'hint', text: COMPARE_HINT }));
+        el('p', { class: 'hint', text: `${COMPARE_HINT} ${MBPS_NOTE}` }));
 }
 
 // ---------------------------------------------------------------------------
@@ -501,11 +524,16 @@ $('download').addEventListener('click', () => {
 
 const link = (href, text) => el('a', { href, target: '_blank', rel: 'noopener noreferrer', text });
 $('version').textContent = `Version ${version}.`;
-$('sources').replaceChildren(
-    el('li', {}, `Size facts: this tool has a table of ${sizes.sizeCount} Azure VM sizes. It read the table from Azure on ${dateWords(sizes.readUtc)}. The page does not connect to Azure.`),
-    el('li', {}, 'Lifecycle stages and retirement dates: the Microsoft ', link(GUIDANCE.lifecycle, 'lifecycle overview'), ', ',
-        link(GUIDANCE.endOfLife, 'End of Life list'), ' and ', link(GUIDANCE.retirements, 'retirements and capacity growth restrictions'),
-        `. This tool read them on ${dateWords(endOfLife.sources[0].readUtc)}.`),
-    el('li', {}, 'NVMe support of the OS: the Microsoft ', link(nvme.source, 'list of OS images that support NVMe'), `. This tool read it on ${dateWords(nvme.readUtc)}.`),
-    el('li', {}, 'Capacity growth restrictions: ', capacityWords(capacity).join(' ')),
-);
+// now: the day that the list is planned, or null before a list is planned. With it, the capacity
+// growth restrictions say how long ago they started, as in the report (audit, 2026-11-20).
+function showSources(now) {
+    $('sources').replaceChildren(
+        el('li', {}, `Size facts: this tool has a table of ${sizes.sizeCount} Azure VM sizes. It read the table from Azure on ${dateWords(sizes.readUtc)}. The page does not connect to Azure.`),
+        el('li', {}, 'Lifecycle stages and retirement dates: the Microsoft ', link(GUIDANCE.lifecycle, 'lifecycle overview'), ', ',
+            link(GUIDANCE.endOfLife, 'End of Life list'), ' and ', link(GUIDANCE.retirements, 'retirements and capacity growth restrictions'),
+            `. This tool read them on ${datesWords(endOfLife.sources.map((x) => x.readUtc))}.`),
+        el('li', {}, 'NVMe support of the OS: the Microsoft ', link(nvme.source, 'list of OS images that support NVMe'), `. This tool read it on ${dateWords(nvme.readUtc)}.`),
+        el('li', {}, 'Capacity growth restrictions: ', capacityWords(capacity, now).join(' ')),
+    );
+}
+showSources(null);

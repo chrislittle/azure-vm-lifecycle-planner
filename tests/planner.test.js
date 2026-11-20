@@ -257,7 +257,8 @@ test('B v1 and Av2 machines get a burstable option (Bsv2 or Basv2)', async () =>
     const p = run('Machine name,Current size,Generation,OS\ncontoso-b02,Standard_B2ms,2,Linux\ncontoso-a02,Standard_A2m_v2,1,Linux\ncontoso-d02,Standard_D4s_v3,2,Linux\n').plan;
     assert.equal(answerWords(byName(p, 'contoso-b02'), 'burstable'), 'Standard_B2s_v2');
     assert.equal(answerWords(byName(p, 'contoso-a02'), 'burstable'), 'Standard_B4s_v2');
-    assert.equal(answerWords(byName(p, 'contoso-d02'), 'burstable'), '', 'only B v1 and Av2 machines');
+    // Never blank (0.9.9-beta): a VM that is not on a B v1, Av2 or Amv2 size says so.
+    assert.equal(answerWords(byName(p, 'contoso-d02'), 'burstable'), 'Only for B v1, Av2 and Amv2 VMs', 'only B v1 and Av2 machines');
 });
 
 test('every link points to a real Microsoft Learn or GitHub path', () => {
@@ -352,7 +353,8 @@ test('a storage or backup appliance is a hard gate', async () => {
     assert.equal(isStorageApplianceImage('purestorageinc1578960262525', 'cloud_block_store_azure_beta_image'), true);
     assert.equal(isStorageApplianceImage('veeam', 'office365backup'), false, 'only the appliance offers');
     assert.equal(isStorageApplianceImage('', 'veeam-backup-replication'), false, 'a custom image cannot tell');
-    const m = byName(run(sample).plan, 'contoso-bkp01');
+    // 0.9.9-beta: the sample keeps four appliances; contoso-rbk01 is the storage appliance (Rubrik).
+    const m = byName(run(sample).plan, 'contoso-rbk01');
     assert.equal(F.groupOf(m), 'gate');
     assert.equal(m.short.v6, 'No - storage or backup appliance');
 });
@@ -363,7 +365,7 @@ test('each VM gets the workload pattern of its signals', () => {
     const p = run(sample).plan;
     const expect = {
         'contoso-aks-np1': 'A', 'contoso-vmss01': 'A', 'contoso-avd01': 'B', 'contoso-dbx01': 'C', 'contoso-api01': 'E',
-        'contoso-avd02': 'E', 'contoso-sql01': 'F', 'contoso-fc01': 'F', 'contoso-sap01': 'F', 'contoso-fw01': 'G', 'contoso-bkp01': 'G',
+        'contoso-avd02': 'E', 'contoso-sql01': 'F', 'contoso-fc01': 'F', 'contoso-sap01': 'F', 'contoso-fw01': 'G', 'contoso-rbk01': 'G',
     };
     for (const [name, pattern] of Object.entries(expect)) assert.equal(byName(p, name).pattern, pattern, name);
 });
@@ -638,7 +640,7 @@ test('a storage or backup appliance is found by its image, its purchase plan or 
     assert.equal(isAppliance({ planPublisher: 'paloaltonetworks', planProduct: 'vmseries-flex' }), true, 'an NVA by its plan');
     assert.equal(inManagedApplication({ managedBy: 'Managed application' }), true);
     const p = run(sample).plan;
-    for (const n of ['contoso-rbk01', 'contoso-weka01', 'contoso-coh01', 'contoso-pure01']) assert.equal(F.groupOf(byName(p, n)), 'gate', n);
+    for (const n of ['contoso-rbk01', 'contoso-weka01', 'contoso-pure01']) assert.equal(F.groupOf(byName(p, n)), 'gate', n);
     assert.equal(byName(p, 'contoso-weka01').short.v6, 'No - storage or backup appliance', 'vendor approval is the first reason');
     assert.equal(byName(p, 'contoso-pure01').short.v6, 'No - managed application');
 });
@@ -1797,9 +1799,12 @@ test('what to do: Linux on v6 has no preview feature; the availability set split
     // No series in a box (review, 2026-11-07), although the note is for v6 and v7 only.
     assert.deepEqual(w.ways.map((x) => x.info.map((i) => i.series)), [[[]], [[]]]);
     assert.deepEqual(F.allNotes(m).attention.find((x) => x.text === AVSET_BOTH).series, ['v6', 'v7']);
-    // Not again in "Good to know"; the v5 words (a resize) stay there, with the series.
+    // Not again in "Good to know". The v5 words (a resize) are in the card of v5: "Good to know"
+    // gives only the notes of the size that What to do uses (owner, 2026-11-20).
     assert.ok(!w.attention.some((x) => x.text === AVSET_BOTH));
-    assert.ok(w.attention.some((x) => x.text === AVSET_STAYS && x.series.join() === 'v5'));
+    assert.ok(!w.attention.some((x) => x.text === AVSET_STAYS));
+    const { cardNotes } = await import('../js/details.js');
+    assert.ok(cardNotes(m, F.groupOf(m), rowOf(m, 'v5')).some((x) => x.text === AVSET_STAYS && x.state === 'attention'));
     // A Linux VM with nothing to do: no steps in either box.
     const cleanVm = layoutOne(LINUX);
     const clean = whatToDo(cleanVm, F.groupOf(cleanVm));
@@ -1868,15 +1873,22 @@ test('what to do: a step for other series only stays outside the boxes, with the
 
 // Each note of each VM shows: in a box (a step, or good to know), or in "Steps for the
 // other sizes", "Good to know" or "To check". The value from the list stays with it.
-function notesLost(p, whatToDo) {
+// cardNotes (0.9.9-beta, owner 2026-11-20): the facts to know and to check of a size that
+// "What to do" does not use are in the card of that size. The note "Disk limits" of such a card
+// is the note of that size (vmDiskNote of one row): a VM-wide disk note shows when each row note shows.
+function notesLost(p, whatToDo, cardNotes = () => []) {
     const lost = [];
     for (const m of p.machines) {
-        const w = whatToDo(m, F.groupOf(m));
+        const g = F.groupOf(m);
+        const w = whatToDo(m, g);
         const inBox = w.ways.flatMap((b) => [...b.steps, ...b.info]);
-        const shown = [...inBox, ...w.otherSteps, ...w.attention, ...w.checks];
+        const cards = (m.rows || []).flatMap((r) => cardNotes(m, g, r));
+        const shown = [...inBox, ...w.otherSteps, ...w.attention, ...w.checks, ...cards];
+        const rows = (m.rows || []).filter((r) => r.result === 'Supported' && r.caveats);
         const n = F.allNotes(m);
         for (const note of [...n.actions, ...n.attention, ...n.checks]) {
             if (shown.some((x) => x.topic === note.topic && x.text === note.text)) continue;
+            if (note.topic === 'Disk limits' && rows.every((r) => { const one = [...F.allNotes(m, r).attention, ...F.allNotes(m, r).checks].find((x) => x.topic === 'Disk limits'); return !one || shown.some((x) => x.topic === one.topic && x.text === one.text); })) continue;
             // A note in two parts, one for each way: each sentence is in a box.
             const parts = inBox.filter((x) => x.topic === note.topic).map((x) => x.text).join(' ');
             const said = /^"[^"]+" is [^.]+\./.exec(note.text)?.[0] || '';
@@ -1893,14 +1905,14 @@ function notesLost(p, whatToDo) {
 }
 
 test('no note is lost: every note of every VM shows, on the samples and the 4,000-VM list', async () => {
-    const { whatToDo } = await import('../js/details.js');
+    const { whatToDo, cardNotes } = await import('../js/details.js');
     const lists = [...readdirSync(new URL('../samples/', import.meta.url)).map((f) => read(`samples/${f}`)), largeList(4000, 7)];
     let notes = 0;
     let split = 0;
     for (const text of lists) {
         const r = run(text);
         if (r.list.stops.length) continue;
-        assert.deepEqual(notesLost(r.plan, whatToDo), []);
+        assert.deepEqual(notesLost(r.plan, whatToDo, cardNotes), []);
         for (const m of r.plan.machines) {
             const n = F.allNotes(m);
             const all = [...n.actions, ...n.attention, ...n.checks];

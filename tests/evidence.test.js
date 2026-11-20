@@ -60,8 +60,8 @@ const KINDS = list([
 test('evidence: a storage or backup appliance names the vendor and the sign: the image, the plan or the gallery', () => {
     const p = run(KINDS);
     const w = (n) => workloadFound(byName(p, n));
-    assert.deepEqual(pick(w('contoso-stg1')), { pattern: 'G', kind: 'Storage or backup appliance', vendor: 'Cohesity DataPlatform Cloud Edition',
-        lead: 'Storage or backup appliance: Cohesity DataPlatform Cloud Edition.', evidence: 'The image is cohesity / cohesity-cloudtd-tool.' });
+    assert.deepEqual(pick(w('contoso-stg1')), { pattern: 'G', kind: 'Storage or backup appliance', vendor: 'Cohesity (DataPlatform Cloud Edition)',
+        lead: 'Storage or backup appliance: Cohesity (DataPlatform Cloud Edition).', evidence: 'The image is cohesity / cohesity-cloudtd-tool.' });
     assert.equal(w('contoso-stg2').vendor, 'Rubrik');
     assert.equal(w('contoso-stg2').evidence, 'The Marketplace purchase plan is rubrik-inc / rubrik-cloud-data-management.');
     assert.equal(w('contoso-stg3').vendor, 'WEKA');
@@ -160,13 +160,13 @@ test('facts from your list: every column of the query is in one group, except "D
     assert.deepEqual([...grouped].sort(), COLUMNS.map((c) => c.name).filter((c) => c !== 'Disk controller').sort());
 });
 
-test('vm-summary.csv: Vendor, Evidence and SAP sign are the last columns; the other columns keep their place', () => {
+test('vm-summary.csv: Vendor, Evidence, SAP sign and What to do uses are the last columns; the other columns keep their place', () => {
     assert.deepEqual(F.SUMMARY_COLUMNS, ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
         'Result group', 'Workload type', 'Workload type advice', 'v5', 'v6', 'v7', 'Burstable', 'Suggested - Current stage', 'Suggested - Extended stage', 'Before the move', 'Good to know',
-        'To check', 'Needs review', 'Notes', 'Resource ID', 'Vendor', 'Evidence', 'SAP sign']);
+        'To check', 'Needs review', 'Notes', 'Resource ID', 'Vendor', 'Evidence', 'SAP sign', 'What to do uses']);
     const rows = F.summaryRows(run(sample));
     const row = (n) => rows.find((r) => r['VM name'] === n);
-    assert.deepEqual([row('contoso-coh01').Vendor, row('contoso-coh01').Evidence], ['Cohesity DataPlatform Cloud Edition', 'Storage or backup appliance. The image is cohesity / cohesity-cloudtd-tool.']);
+    assert.deepEqual([row('contoso-rbk01').Vendor, row('contoso-rbk01').Evidence], ['Rubrik', 'Storage or backup appliance. The Marketplace purchase plan is rubrik-inc / rubrik-cloud-data-management.']);
     assert.equal(row('contoso-fw01').Vendor, 'paloaltonetworks');
     assert.match(row('contoso-fw01').Evidence, /^Network virtual appliance\. The image is paloaltonetworks \/ vmseries-flex\./);
     // 0.9.0-beta: the sample gives the managed application and its Marketplace plan.
@@ -186,7 +186,7 @@ test('appliances by vendor: one row for each vendor and kind, sorted; same names
     ]));
     const a = appliancesByVendor(p.machines);
     assert.deepEqual(a.map((x) => [x.vendor, x.kind, x.machines.map((y) => `${y.m.read.name}${y.where ? ` (${y.where})` : ''}`)]), [
-        ['Cohesity DataPlatform Cloud Edition', 'Storage or backup appliance', ['contoso-nas1']],
+        ['Cohesity (DataPlatform Cloud Edition)', 'Storage or backup appliance', ['contoso-nas1']],
         ['paloaltonetworks', 'Network virtual appliance', ['contoso-fw1 (rg-contoso-hub)', 'contoso-fw1 (rg-contoso-dr)']],
         ['Veeam', 'Storage or backup appliance', ['contoso-bkp1']],
         ['', 'Managed application', ['contoso-ma1']],
@@ -213,7 +213,7 @@ test('the report: "Appliances by vendor" links only to a VM that has a card; no 
     const t = /<h3 class="label">Appliances by vendor<\/h3>[\s\S]*?<\/table>/.exec(html)[0];
     assert.match(t, /<td>paloaltonetworks <span class="muted">\(publisher ID\)<\/span><\/td><td>Network virtual appliance<\/td><td>2<\/td><td><a href="#vm-2">contoso-fw1<\/a>, contoso-fw2<\/td>/);
     assert.match(t, /<span class="muted">The list does not give the vendor.<\/span><\/td><td>Managed application<\/td><td>1<\/td><td><a href="#vm-4">contoso-ma1<\/a>/);
-    assert.match(t, /<td>Cohesity DataPlatform Cloud Edition<\/td><td>Storage or backup appliance<\/td>/, 'a storage vendor is a name, not a publisher ID');
+    assert.match(t, /<td>Cohesity \(DataPlatform Cloud Edition\)<\/td><td>Storage or backup appliance<\/td>/, 'a storage vendor is a name, not a publisher ID');
     for (const [, id] of html.matchAll(/href="#(vm-\d+)"/g)) assert.match(html, new RegExp(`id="${id}"`), `the link to ${id} has a card`);
     assert.match(html, /<h4>Workload type<\/h4><p><b>Network virtual appliance. The publisher ID is paloaltonetworks.<\/b> The image is paloaltonetworks/);
     assert.doesNotMatch(html, /Facts from your list|<details/);
