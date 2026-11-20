@@ -181,11 +181,12 @@ test('pattern: a list with no SAP column still cannot say that the VM is standal
 });
 
 test('vm-summary.csv and vm-target-sizes.csv: "SAP sign" is the last column; "SAP" is blank when the list does not say Yes', () => {
-    assert.equal(F.SUMMARY_COLUMNS.at(-1), 'SAP sign');
+    // 0.9.9-beta adds "What to do uses" after it, at the end of vm-summary.csv.
+    assert.deepEqual(F.SUMMARY_COLUMNS.slice(-2), ['SAP sign', 'What to do uses']);
     // 0.9.5-beta adds "Preview feature" after it, at the end.
     // 0.9.8-beta adds "Disk limits" after them, at the end.
     assert.deepEqual(F.TARGET_COLUMNS.slice(-3, -1), ['SAP sign', 'Preview feature']);
-    assert.deepEqual(F.SUMMARY_COLUMNS.slice(-3, -1), ['Vendor', 'Evidence'], 'the other columns keep their place');
+    assert.deepEqual(F.SUMMARY_COLUMNS.slice(-4, -2), ['Vendor', 'Evidence'], 'the other columns keep their place');
     const p = run(list([
         { 'VM name': 'contoso-s1', 'SAP': 'Yes', 'SAP sign': EXT },
         { 'VM name': 'contoso-s2', 'SAP': 'No' },

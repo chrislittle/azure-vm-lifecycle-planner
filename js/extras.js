@@ -3,10 +3,10 @@
 // notes on every target - a problem, or "check" when the list
 // does not say. Unknown is never a pass.
 
-import storageImages from '../data/storage-appliance-images.js?v=0.9.8-beta';
-import nvaImages from '../data/nva-images.js?v=0.9.8-beta';
-import nvme from '../data/nvme-images.js?v=0.9.8-beta';
-import { readCount } from './planner.js?v=0.9.8-beta';
+import storageImages from '../data/storage-appliance-images.js?v=0.9.9-beta';
+import nvaImages from '../data/nva-images.js?v=0.9.9-beta';
+import nvme from '../data/nvme-images.js?v=0.9.9-beta';
+import { readCount } from './planner.js?v=0.9.9-beta';
 
 // Yes / No -> true / false; anything else (blank) -> null.
 export function readYesNo(text) {
@@ -326,6 +326,16 @@ export function sapClear(x) {
 }
 // The sign in words: '"SAP sign" is "Licence type SLES_SAP".', or '' with no sign.
 export const sapSignWords = (x) => (x && x.sapSign ? said('SAP sign', `"${x.sapSign}"`) : '');
+
+// The facts of the VM itself, not of a move, for a VM that needs no move (audit, 2026-11-20): a
+// VM that stays shows no move notes (owner, 2026-10-09), but Azure Disk Encryption retires
+// whether the VM moves or not. The sentences of the Microsoft migration page, as in the reason
+// disk-encryption-present (reasons.js; disk-encryption-migrate page, read 2026-10-10).
+// [{ topic, text }].
+export function vmNotes(x) {
+    if (!x || x.diskEncryption !== true) return [];
+    return [{ topic: 'Disk encryption', text: `${said('Azure Disk Encryption')} Microsoft retires Azure Disk Encryption on 15 September 2028. Move to encryption at host with the Microsoft migration steps. They make new disks and a new VM.` }];
+}
 
 // The caveats for one option of one machine. Agreed wording (PLAN.md).
 // pool: the VM is in a pool or a service (patterns A to D), which makes new nodes.

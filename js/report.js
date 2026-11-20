@@ -2,14 +2,14 @@
 // browser and prints to PDF. No scripts and nothing to load: the CSS is in the
 // file. The same words as the page (details.js).
 
-import capacity from '../data/capacity.js?v=0.9.8-beta';
-import { capacityRestricted } from './planner.js?v=0.9.8-beta';
-import * as F from './files.js?v=0.9.8-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
-import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.8-beta';
-import { APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.8-beta';
-import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.8-beta';
-import version from './version.js?v=0.9.8-beta';
+import capacity from '../data/capacity.js?v=0.9.9-beta';
+import { capacityRestricted } from './planner.js?v=0.9.9-beta';
+import * as F from './files.js?v=0.9.9-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
+import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
+import { MBPS_NOTE, APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.9-beta';
+import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.9-beta';
+import version from './version.js?v=0.9.9-beta';
 
 export const REPORT_NAME = 'vm-lifecycle-report.html';
 
@@ -21,12 +21,14 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
 
     const target = (m, g) => { if (!m.vm || ['modern', 'gate', 'nopath', 'unchecked'].includes(g)) return ''; const r = F.likelyRow(m); return r ? `${r.series === 'burstable' ? 'Burstable' : r.series}: ${short(r.option.targetSize)}` : ''; };
     const where = (m) => [m.read.resourceGroup, m.read.region].filter((x) => x).join(' · ');
-    const stageCell = (m) => { if (!m.stage) return 'Not checked'; const s = stageShort(m.stage, capacityRestricted(m.vm.sourceSize)); return `${s.name}${s.detail ? ` <span class="muted">${esc(s.detail)}</span>` : ''}`; };
+    // The stage and its date on two lines, as on the page (audit, 2026-11-20: "Retired On 30 Sep 2025").
+    const stageCell = (m) => { if (!m.stage) return 'Not checked'; const s = stageShort(m.stage, capacityRestricted(m.vm ? m.vm.sourceSize : m.read.size)); return `${esc(s.name)}${s.detail ? `<br><span class="muted">${esc(s.detail)}</span>` : ''}`; };
 
     const groups = Object.keys(GROUPS);
     const by = (key) => { const c = new Map(); for (const m of p.machines) { const k = key(m) || '(not in the list)'; c.set(k, (c.get(k) || 0) + 1); } return [...c].sort((a, b) => b[1] - a[1]); };
     const count = (g) => p.machines.filter((m) => F.groupOf(m) === g).length;
-    const ORDER = ['first', 'ready', 'pool', 'gate', 'nopath', 'unchecked', 'modern'];
+    // The same order as the page and the about file (audit, 2026-11-20).
+    const ORDER = Object.keys(GROUPS);
     const TONE = { modern: 'ok', ready: 'ok', first: 'act', pool: 'pool', gate: 'act', nopath: 'no', unchecked: 'muted' };
 
     // The generation (evidence.js): 1 or 2 from the list, 2* when this tool found it,
@@ -37,7 +39,8 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     // One count for each value, always in the same order; a value with no VM is left out.
     const genCount = () => { const c = new Map(); for (const g of gen.values()) c.set(g.group, (c.get(g.group) || 0) + 1); return GENERATION_GROUPS.filter((k) => c.has(k)).map((k) => [k, c.get(k)]); };
     // In a VM card: the value, and for 2* and "Set by the service" the note that says why.
-    const genLine = (m) => { const g = gen.get(m); return `<p class="meta">Generation: ${esc(g.value)}${g.note ? ` <span class="muted">${g.found ? '* ' : ''}${esc(g.note)}</span>` : ''}</p>`; };
+    // The value 2* has its asterisk already (audit, 2026-11-20: "2* *").
+    const genLine = (m) => { const g = gen.get(m); return `<p class="meta">Generation: ${esc(g.value)}${g.note ? ` <span class="muted">${esc(g.note)}</span>` : ''}</p>`; };
 
     // The workload type and the facts behind it (evidence.js).
     function workloadHtml(m) {
@@ -64,7 +67,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     // The current size beside each new size (details.js), with each note in words.
     function compareHtml(c) {
         if (!c) return '';
-        return `<div class="scroll"><table class="compare"><caption>${esc(c.caption)}</caption><thead><tr><th scope="col">Fact</th>${c.columns.map((col) => `<th scope="col">${esc(col.label)}<br><span class="mono">${esc(short(col.size))}</span></th>`).join('')}</tr></thead><tbody>${c.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((cell) => `<td>${esc(cell.text)}${cell.less ? `<br><b class="less">${esc(cell.less)}</b>` : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="muted">${esc(COMPARE_HINT)}</p>`;
+        return `<div class="scroll"><table class="compare"><caption>${esc(c.caption)}</caption><thead><tr><th scope="col">Fact</th>${c.columns.map((col) => `<th scope="col">${esc(col.label)}<br><span class="mono">${esc(short(col.size))}</span></th>`).join('')}</tr></thead><tbody>${c.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((cell) => `<td>${esc(cell.text)}${cell.less ? `<br><b class="less">${esc(cell.less)}</b>` : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="muted">${esc(COMPARE_HINT)} ${esc(MBPS_NOTE)}</p>`;
     }
 
     // A list of notes or steps: the topic in bold, the text, and the series when the note is
@@ -81,6 +84,9 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
         return `<div class="way${w.tag ? ' rec' : ''}">${w.label ? `<p class="way-label">${esc(w.label)}${w.tag ? ` <span class="tag ok">${esc(w.tag)}</span>` : ''}</p>` : ''}<h5>${esc(w.title)}</h5>${w.lines.map((x) => `<p>${esc(x)}</p>`).join('')}${cond}${w.info.length ? `<p class="cond">${esc(GOOD_TO_KNOW)}</p>${noteItems(w.info, 'att')}` : ''}${w.after.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}</div>`;
     }
 
+    // The Microsoft guidance for vendor approval and no supported size, as on the page.
+    const guidanceHtml = `<p class="muted">Microsoft guidance: <a href="${GUIDANCE.endOfLife}">End of Life sizes</a>, <a href="${GUIDANCE.retirements}">retirements</a>.</p>`;
+
     function vmCard(m) {
         const g = F.groupOf(m); const t = whatToDo(m, g);
         const why = whyLines(m, g, table, now);
@@ -94,7 +100,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 // ways to move to it (details.js, sizeCard), as on the page.
                 const c = sizeCard(m, g, r);
                 const how = c.how ? `<br><span class="muted">${esc(c.how)}${c.link ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</span>` : '';
-                return `<tr${c.used ? ' class="used"' : ''}><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b>${c.stage ? ` <span class="tag muted">${esc(c.stage)}</span>` : ''}${c.used ? `<br><b class="used-note">${esc(SIZE_USED)}</b>` : ''}${how}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why.replace(/\*$/, '*'))})`).join(', ') || '-'}</td></tr>`;
+                return `<tr${c.used ? ' class="used"' : ''}><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b>${c.stage ? ` <span class="tag muted">${esc(c.stage)}</span>` : ''}${c.used ? `<br><b class="used-note">${esc(SIZE_USED)}</b>` : ''}${how}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why)})`).join('<br>') || '-'}</td></tr>`;
             }).join('');
             const fits = m.rows.some((r) => sizeCard(m, g, r).used) && m.rows.filter((r) => r.series !== 'gen1Route' && r.option.supported).length > 1 ? `<p class="muted">${esc(OTHER_SIZES_FIT)}</p>` : '';
             sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>${fits}`;
@@ -107,11 +113,13 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
       ${genLine(m)}
       <h4>What to do</h4><div class="todo">${todoHtml}</div>
       ${why.length ? `<h4>Why</h4>${why.map((w) => `<p>${linked(w)}</p>`).join('')}` : ''}
+      ${m.vm && (g === 'gate' || g === 'nopath') ? guidanceHtml : ''}
       ${workloadHtml(m)}
       ${notes(t.ways.length ? OTHER_STEPS : STEPS, t.otherSteps, 'act')}
       ${notes(GOOD_TO_KNOW, t.attention, 'att')}
       ${notes('To check', t.checks, 'chk', true)}
       ${sizesHtml}
+      ${m.notes.length ? `<p class="muted">${esc(`Notes about the list: ${m.notes.join(' ')}`)}</p>` : ''}
       ${m.read.resourceId ? `<p class="rid">${esc(m.read.resourceId)}</p>` : ''}
     </section>`;
     }
@@ -127,6 +135,10 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     }).join('');
 
     const modern = p.machines.filter((m) => F.groupOf(m) === 'modern');
+    // A VM on a modern size has no card. A fact of the VM itself (Azure Disk Encryption) still
+    // shows, as on the page (files.js, stayNotes; audit 2026-11-20).
+    const stay = modern.filter((m) => F.stayNotes(m).length);
+    const stayHtml = !stay.length ? '' : `<h4>${esc(GOOD_TO_KNOW)}</h4><ul class="att">${stay.flatMap((m) => F.stayNotes(m).map((n) => `<li><b>${esc(m.read.name)}</b>: ${esc(n.topic)}: ${esc(n.text)}</li>`)).join('')}</ul>`;
     return `<!doctype html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
@@ -191,6 +203,7 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
     ${actionTables}
     <h3 class="grp"><span class="tag ok">${modern.length}</span> ${esc(GROUPS.modern.short)}</h3>
     <p class="muted">${modern.map((m) => esc(m.read.name)).join(', ')}</p>
+    ${stayHtml}
 
     <h2>3. Each VM to act on</h2>
     ${p.machines.filter(hasCard).map((m) => vmCard(m).replace('<section class="vm">', `<section class="vm" id="vm-${m.read.row}">`)).join('\n')}

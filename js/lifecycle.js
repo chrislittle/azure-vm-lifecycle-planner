@@ -8,9 +8,9 @@
 //   - Size names are compared ignoring case, as Azure does, except where a rule
 //     says otherwise (family letters, which are capitals).
 
-import families from '../data/families.js?v=0.9.8-beta';
-import seriesRules from '../data/series-rules.js?v=0.9.8-beta';
-import ultraLimits from '../data/premium-v2-ultra-limits.js?v=0.9.8-beta';
+import families from '../data/families.js?v=0.9.9-beta';
+import seriesRules from '../data/series-rules.js?v=0.9.9-beta';
+import ultraLimits from '../data/premium-v2-ultra-limits.js?v=0.9.9-beta';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -375,7 +375,8 @@ const ULTRA = new Map(ultraLimits.pages.flatMap((p) => Object.entries(p.sizes).m
 // table gives MiB (MaxResourceVolumeMB is MiB, as Azure reports it). tempKind:
 // 'SCSI' or 'NVMe'. generations: ['V1', 'V2'].
 // The disk limits (0.9.8-beta): Azure gives throughput in bytes per second, and an MBps is
-// 10^6 bytes per second (Microsoft's size pages), so 145000000 is 145 MBps. cachedMbps: the
+// 10^6 bytes per second (Microsoft's size pages), so 145000000 is 145 MBps (bytesToMbps, below,
+// for the values in other units, 0.9.9-beta). cachedMbps: the
 // lower of the cached read and write limits (the safer value). ultraIops, ultraMbps: the
 // separate column for Ultra Disk and Premium SSD v2 of the Microsoft size page, for a v6 or
 // v7 size that this tool suggests; null for every other size.
@@ -397,8 +398,20 @@ export function sizeFacts(entry) {
     };
 }
 
+// Bytes per second -> whole MBps (owner, 2026-11-20: the "best match" rule). Azure's size list
+// gives some sizes in 10^6 bytes, others in 1,024,000 or 1,048,576 bytes for each MB: the first of
+// these three that divides the value with no remainder, else 10^6. Rounded to a whole number.
+// For example 131,072,000 is 128 MBps (Standard_D8s_v3 cached, as its Microsoft page says), and
+// 167,772,160 is 160 MBps. Some values still differ a little from the Microsoft size page (the
+// page and the report say so: words.js, MBPS_NOTE).
+export function bytesToMbps(bytes) {
+    if (bytes === null || !Number.isFinite(bytes)) return null;
+    const unit = [1e6, 1024000, 1048576].find((d) => bytes % d === 0) || 1e6;
+    return Math.round(bytes / unit);
+}
+
 function diskLimits(entry, num) {
-    const mbps = (name) => { const v = num(name); return v === null ? null : v / 1e6; };
+    const mbps = (name) => bytesToMbps(num(name));
     const read = mbps('CombinedTempDiskAndCachedReadBytesPerSecond');
     const write = mbps('CombinedTempDiskAndCachedWriteBytesPerSecond');
     // A size with constrained vCPUs keeps "the memory, storage, and I/O bandwidth specifications"
@@ -1197,7 +1210,8 @@ export function burstableOption(vm, table, now = new Date()) {
 // temporary disk, the next family up for more memory, and the shape choices.
 // Each must pass every check that the option's own size passed, and must not be
 // smaller than the VM. [{ size, why }], why: 'closest' | 'processor' |
-// 'temp-disk-added' | 'temp-disk-removed' | 'more-memory' | 'other-shape'.
+// 'temp-disk-added' | 'temp-disk-removed' | 'more-memory' | 'same-shape' | 'other-shape'.
+// A 'same-shape' size (another family) also has changes: { processor, tempDisk } (words.js, rankWords).
 export function rankedSizes(vm, table, option, now = new Date()) {
     if (!option.supported || !option.targetSize || option.option === 'gen1Route') return [];
     const best = option.targetSize;
@@ -1226,10 +1240,15 @@ export function rankedSizes(vm, table, option, now = new Date()) {
         if (option.option === 'burstable') { candidates.push({ size: c.size, why: 'processor' }); continue; }
         // Same vCPUs and memory in another family (for example Falsv6 for an F VM):
         // say so, and say when the processor changes (review, 2026-10-10).
+        // Each way in which it differs: the family, the processor maker and the temporary disk
+        // (audit, 2026-11-20: Standard_F4als_v6 said only "AMD processor", as the D size did).
         const shape = skuShape(table.has(c.size) ? table.get(c.size) : null);
         const same = shape.vcpus !== null && shape.vcpus === bestShape.vcpus && shape.memoryGB === bestShape.memoryGB;
-        const why = !same ? 'other-shape' : sizeProcessor(c.size) !== sizeProcessor(best) ? 'processor' : 'same-shape';
-        candidates.push({ size: c.size, why });
+        if (!same) { candidates.push({ size: c.size, why: 'other-shape' }); continue; }
+        const temp = (s) => { const f = table.has(s) ? sizeFacts(table.get(s)) : null; return f && f.tempGiB !== null ? f.tempGiB > 0 : null; };
+        const [tb, tc] = [temp(best), temp(c.size)];
+        const tempDisk = tb === null || tc === null || tb === tc ? null : tc ? 'added' : 'removed';
+        candidates.push({ size: c.size, why: 'same-shape', changes: { processor: sizeProcessor(c.size) !== sizeProcessor(best), tempDisk } });
     }
 
     const source = skuShape(table.has(vm.sourceSize) ? table.get(vm.sourceSize) : null);
@@ -1258,6 +1277,7 @@ export function rankedSizes(vm, table, option, now = new Date()) {
         // (review, 2026-11-06). When the suggested size needs it, the move already says so;
         // a pool or a service (null) gets the pool advice.
         const item = { size, why: c.why };
+        if (c.changes) item.changes = c.changes;
         if (crosses && option.previewFeature === 'not-needed') item.feature = vm.os ? 'needed' : 'windows';
         out.push(item);
     }

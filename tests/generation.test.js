@@ -142,7 +142,7 @@ test('generation: the report shows it in the VM tables, in each VM card and as a
     }
     // A card with 2* gives the note that says why; "Set by the service" too.
     const sku = byName(ALL, 'contoso-sku');
-    assert.match(html, new RegExp(`<p class="meta">Generation: 2\\* <span class="muted">\\* The generation is empty\\. The image SKU '22_04-lts-gen2'`));
+    assert.match(html, new RegExp(`<p class="meta">Generation: 2\\* <span class="muted">The generation is empty\\. The image SKU '22_04-lts-gen2'`));
     assert.match(html, /<p class="meta">Generation: Set by the service <span class="muted">The generation is empty\. The service makes the new nodes/);
     assert.ok(sku);
     // The summary: one count for each value, always in the same order, and the hint.

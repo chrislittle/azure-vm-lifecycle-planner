@@ -11,7 +11,7 @@ export default {
   "rule": "A VM is a storage or backup appliance when (1) its image publisher is one of these AND its image offer matches one of that publisher's offers, or (2) its Marketplace purchase plan (plan publisher and product) matches the same way, or (3) its image ID matches one of the galleries. A * matches any text. Case is ignored.",
   "vendors": [
     { "vendor": "NetApp (Cloud Volumes ONTAP, Global File Cache)", "publisher": "netapp", "offers": ["netapp-ontap-cloud*", "netapp-cloud-ontap*", "netapp-gfc-*"] },
-    { "vendor": "Pure Storage Cloud Block Store", "publisher": "purestorageinc1578960262525", "offers": ["cloud_block_store*"] },
+    { "vendor": "Pure Storage (Cloud Block Store)", "publisher": "purestorageinc1578960262525", "offers": ["cloud_block_store*"] },
     { "vendor": "Rubrik", "publisher": "rubrik-inc", "offers": ["rubrik-*"] },
     { "vendor": "Silk", "publisher": "silk", "offers": ["silk_cloud_data_platform*"] },
     { "vendor": "Nasuni", "publisher": "nasunicorporation", "offers": ["nasuni-*", "naa-server"] },
@@ -19,8 +19,8 @@ export default {
     { "vendor": "Dell (APEX, Data Domain)", "publisher": "dellemceisi123456", "offers": ["apex_block_storage*", "apexfilestorage*", "ddve*"] },
     { "vendor": "Dell (APEX)", "publisher": "dell-australia", "offers": ["dell_apex_block_storage*"] },
     { "vendor": "Dell (APEX, Data Domain)", "publisher": "dell-canada-inc", "offers": ["apexfilestorage*", "dell-datadomain-virtual-edition*"] },
-    { "vendor": "Cohesity DataPlatform Cloud Edition", "publisher": "cohesity", "offers": ["cohesity-cloudtd-tool"] },
-    { "vendor": "Cohesity DataPlatform Cloud Edition", "publisher": "cohesitydev1592001764720", "offers": ["sol-4471-ixk"] },
+    { "vendor": "Cohesity (DataPlatform Cloud Edition)", "publisher": "cohesity", "offers": ["cohesity-cloudtd-tool"] },
+    { "vendor": "Cohesity (DataPlatform Cloud Edition)", "publisher": "cohesitydev1592001764720", "offers": ["sol-4471-ixk"] },
     { "vendor": "Veeam", "publisher": "veeam", "offers": ["veeam-backup-replication*", "veeamcloudconnect", "veeam-cloud-connect-enterprise", "azure_backup*", "veeamhubimage"] },
     { "vendor": "Commvault", "publisher": "commvault", "offers": ["*"] },
     { "vendor": "CTERA", "publisher": "cteranetworksltd1651947437632", "offers": ["ctera-*"] },
@@ -29,13 +29,13 @@ export default {
     { "vendor": "Veritas (NetBackup, InfoScale)", "publisher": "veritas", "offers": ["*"] },
     { "vendor": "BackupAssure", "publisher": "backupassure", "offers": ["*"] },
     { "vendor": "Hammerspace", "publisher": "hammerspace", "offers": ["*"] },
-    { "vendor": "Hitachi Vantara VSP One SDS", "publisher": "hitachivantara", "offers": ["vsp_one_sds_block_image*", "gad_cloud_quorum*", "hv-gadcloudquorum"] },
-    { "vendor": "IBM Storage Virtualize", "publisher": "ibm-alliance-usa-ny-armonk-hq-ibmstorage-6201192", "offers": ["ibm-svpc-*"] },
+    { "vendor": "Hitachi Vantara (VSP One SDS)", "publisher": "hitachivantara", "offers": ["vsp_one_sds_block_image*", "gad_cloud_quorum*", "hv-gadcloudquorum"] },
+    { "vendor": "IBM (Storage Virtualize)", "publisher": "ibm-alliance-usa-ny-armonk-hq-ibmstorage-6201192", "offers": ["ibm-svpc-*"] },
     { "vendor": "Lightbits", "publisher": "lightbitslabsinc1670948060485", "offers": ["lightbits-*"] },
     { "vendor": "Panzura", "publisher": "panzura-file-system", "offers": ["*"] },
     { "vendor": "SoftNAS (Buurst)", "publisher": "softnas", "offers": ["*"] },
     { "vendor": "Zerto", "publisher": "zerto", "offers": ["*"] },
-    { "vendor": "Microsoft StorSimple Cloud Appliance (StorSimple retired in 2022)", "publisher": "MicrosoftHybridCloudStorage", "offers": ["StorSimple*"] }
+    { "vendor": "Microsoft (StorSimple Cloud Appliance, retired in 2022)", "publisher": "MicrosoftHybridCloudStorage", "offers": ["StorSimple*"] }
   ],
   // A vendor that deploys from its own gallery, not the Marketplace. WEKA's Terraform
   // module builds both its storage VMs and its client VMs from this image. The client

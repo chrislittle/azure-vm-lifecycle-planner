@@ -5,18 +5,18 @@
 //   vm-not-checked.csv      what the tool could not check
 //   about-these-results.txt the columns used, what a result means, where the data came from
 
-import sizes from '../data/sizes.js?v=0.9.8-beta';
-import families from '../data/families.js?v=0.9.8-beta';
-import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
-import capacity from '../data/capacity.js?v=0.9.8-beta';
-import nvme from '../data/nvme-images.js?v=0.9.8-beta';
-import ultra from '../data/premium-v2-ultra-limits.js?v=0.9.8-beta';
-import { capacityRestricted } from './planner.js?v=0.9.8-beta';
-import { optionReason, reasonFor } from './reasons.js?v=0.9.8-beta';
-import { GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.8-beta';
-import { rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.8-beta';
-import { generationShown, workloadFound } from './evidence.js?v=0.9.8-beta';
-import { vmDiskNote } from './disks.js?v=0.9.8-beta';
+import sizes from '../data/sizes.js?v=0.9.9-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.9-beta';
+import capacity from '../data/capacity.js?v=0.9.9-beta';
+import nvme from '../data/nvme-images.js?v=0.9.9-beta';
+import ultra from '../data/premium-v2-ultra-limits.js?v=0.9.9-beta';
+import { capacityRestricted } from './planner.js?v=0.9.9-beta';
+import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
+import { MBPS_NOTE, GROUPS, GUIDANCE, NOT_FOUND, PATTERNS, POOL_PATTERNS, PROCESSOR_NOTE, poolAdvice, serviceManaged, answerWords, capacityWords, dateWords, datesWords, featureColumn, moveWords, rankWords, stageWords } from './words.js?v=0.9.9-beta';
+import { burstableSource, rankedSizes, sizeProcessor } from './lifecycle.js?v=0.9.9-beta';
+import { generationShown, workloadFound } from './evidence.js?v=0.9.9-beta';
+import { vmDiskNote } from './disks.js?v=0.9.9-beta';
+import { vmNotes } from './extras.js?v=0.9.9-beta';
 
 // The vendor of an appliance and the facts behind the workload type (evidence.js).
 function vendorAndEvidence(m) {
@@ -86,6 +86,12 @@ export function likelyRow(m) {
         || m.rows.find((r) => r.result === 'Supported') || null;
 }
 
+// The notes of a VM that needs no move: the facts of the VM itself, never a step for a move
+// (owner, 2026-10-09: a VM that stays has no warnings). [{ topic, text }].
+export function stayNotes(m) {
+    return m.vm && m.moveRequired === 'No' ? vmNotes(m.extra) : [];
+}
+
 // The readiness signals of a VM that must move and has a supported size:
 // { actions, attention, checks }, each [{ topic, text }]. An action is a
 // recommended action (Microsoft's term); attention is a fact to know, with
@@ -93,6 +99,8 @@ export function likelyRow(m) {
 // that stays where it is has none.
 export function signals(m) {
     const none = { actions: [], attention: [], checks: [] };
+    // A VM that stays: only the facts of the VM itself (extras.js, vmNotes; audit 2026-11-20).
+    if (m.vm && m.moveRequired === 'No') return { ...none, attention: stayNotes(m) };
     if (!m.vm || m.moveRequired !== 'Yes') return none;
     // The service manages the image and the disks: nothing on the VM to do.
     if (serviceManaged(m)) return none;
@@ -107,6 +115,7 @@ export function signals(m) {
 // supported series names them.
 export function allNotes(m) {
     const out = { actions: [], attention: [], checks: [] };
+    if (m.vm && m.moveRequired === 'No') return { ...out, attention: stayNotes(m).map((n) => ({ ...n, series: [] })) };
     if (!m.vm || m.moveRequired !== 'Yes' || serviceManaged(m)) return out;
     const rows = m.rows.filter((r) => r.result === 'Supported' && r.caveats);
     const key = { problem: 'actions', attention: 'attention', check: 'checks' };
@@ -156,7 +165,7 @@ export function groupOf(m) {
 // The ranked sizes of one supported option, in words.
 export function rankedFor(m, r, table, now = new Date()) {
     const list = rankedSizes(m.vm, table, r.option, now);
-    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel', x.feature) }));
+    return list.map((x) => ({ size: x.size, why: rankWords(x.why, sizeProcessor(x.size) === 'AMD' ? 'AMD' : 'Intel', x.feature, x.changes || null) }));
 }
 
 // How to move to one supported option: the pattern decides it for a pool or
@@ -166,8 +175,10 @@ export function howToMove(m, r) {
     return moveWords(r.series, r.option.previewFeature, r.option.featureFallback);
 }
 
+// The stage in words. A VM that this tool cannot plan has the stage of its size when the size
+// is known; with no stage: "Not checked" (stageWords), never a blank (audit, 2026-11-20).
 function stageText(m) {
-    return m.stage ? stageWords(m.stage, capacityRestricted(m.vm.sourceSize)) : '';
+    return stageWords(m.stage || { stage: null }, m.stage ? capacityRestricted(m.vm ? m.vm.sourceSize : m.read.size) : null);
 }
 
 export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
@@ -175,7 +186,9 @@ export const SUMMARY_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resourc
     // Added in 0.8.0-beta at the end, so that the other columns keep their place.
     'Vendor', 'Evidence',
     // Added in 0.9.4-beta at the end: the sign that the query found for SAP, as the list gives it.
-    'SAP sign'];
+    'SAP sign',
+    // Added in 0.9.9-beta at the end: the size that "What to do" uses (one recommendation on every surface).
+    'What to do uses'];
 
 // The page shows a note "Disk limits" for the VM, but the size of "What to do" has none: a short
 // pointer to the other sizes, in the list of the note (review, 2026-11-20).
@@ -186,16 +199,45 @@ function diskPointer(m, list) {
     return allNotes(m)[list].some((x) => x.topic === 'Disk limits') ? [DISK_POINTER] : [];
 }
 
+// The suggested sizes of a VM (0.9.9-beta, audit 2026-11-20): one recommendation on every
+// surface. { used, current, extended }: each is the row, or null. used: the row that "What to
+// do" uses (likelyRow), as the page and the report show it. current and extended: a supported
+// size whose series is at that lifecycle stage (v6 or v7 Current, v5 Extended), the size of
+// "What to do" first. Only a VM that must move has suggestions.
+export function suggestions(m) {
+    if (!m.vm || m.moveRequired !== 'Yes' || !['ready', 'first', 'pool'].includes(groupOf(m))) return { used: null, current: null, extended: null };
+    const used = likelyRow(m);
+    const atStage = (stage) => [used, ...['v6', 'v7', 'v5'].map((s) => m.rows.find((r) => r.series === s))]
+        .find((r) => r && r.result === 'Supported' && r.option.targetStage && r.option.targetStage.stage === stage) || null;
+    return { used, current: atStage('Current'), extended: atStage('Extended') };
+}
+
+// The words of a suggestion in vm-summary.csv: 'v6 - Standard_D4ds_v6', or why there is none.
+// stage: 'Current' or 'Extended', for a VM that must move and has no size at that stage.
+function suggestionWords(m, r, stage) {
+    if (r) return `${SERIES(r.series).replace(/ \(.*\)$/, '')} - ${r.option.targetSize}`;
+    if (m.vm && m.moveRequired === 'No') return 'Not needed';
+    const g = groupOf(m);
+    if (g === 'unchecked') return 'Not checked';
+    if (g === 'gate') return GROUPS.gate.readiness;
+    if (g === 'nopath' || !stage) return 'No supported size';
+    return `No supported ${stage} size`;
+}
+
 export function summaryRows(p) {
-    return p.machines.map((m) => ({
+    return p.machines.map((m) => {
+        const s = suggestions(m);
+        const g = groupOf(m);
+        return {
         ...base(m),
         'Current stage': stageText(m),
         'Move needed': MOVE_NEEDED[m.moveRequired],
-        'Result group': GROUPS[groupOf(m)].short,
+        'Result group': GROUPS[g].short,
         'Workload type': PATTERNS[m.pattern || ''].name,
-        'Workload type advice': POOL_PATTERNS.includes(m.pattern) ? howToMove(m) : PATTERNS[m.pattern || ''].advice,
+        // A VM that stays needs no move advice (audit, 2026-11-20).
+        'Workload type advice': g === 'modern' ? 'No move needed.' : POOL_PATTERNS.includes(m.pattern) ? howToMove(m) : PATTERNS[m.pattern || ''].advice,
         'v5': answerWords(m, 'v5'), 'v6': answerWords(m, 'v6'), 'v7': answerWords(m, 'v7'), 'Burstable': answerWords(m, 'burstable'),
-        'Suggested - Current stage': m.defaults.current, 'Suggested - Extended stage': m.defaults.extended,
+        'Suggested - Current stage': suggestionWords(m, s.current, 'Current'), 'Suggested - Extended stage': suggestionWords(m, s.extended, 'Extended'),
         'Before the move': warnings(m).join('; '),
         'Good to know': [...signals(m).attention.map((a) => `${a.topic}: ${a.text}`), ...diskPointer(m, 'attention')].join('; '),
         'To check': [...signals(m).checks.map((c) => c.topic), ...diskPointer(m, 'checks')].join(', '),
@@ -203,7 +245,11 @@ export function summaryRows(p) {
         'Notes': [...m.problems.map((pr) => reasonFor(pr.why, { problem: pr })), ...m.notes].join('; '),
         ...vendorAndEvidence(m),
         'SAP sign': sapSign(m),
-    }));
+        // 0.9.9-beta: the size that "What to do" uses, as on the page and in the report. The notes of
+        // "Before the move", "Good to know" and "To check" are the notes of this size.
+        'What to do uses': suggestionWords(m, s.used, null),
+        };
+    });
 }
 
 export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource group', 'Current size', 'Generation', 'OS', 'Security type', 'Current stage', 'Move needed',
@@ -216,46 +262,75 @@ export const TARGET_COLUMNS = ['VM name', 'Region', 'Subscription ID', 'Resource
     // Added in 0.9.8-beta at the end: the note when the new size lowers the disk ceiling of the VM.
     'Disk limits'];
 
+// The note column of each reason that blocks a series (extras.js, extraBlockers).
+const BLOCKER_TOPICS = { 'disk-encryption-present': 'Disk encryption', 'sap-needs-a-certified-size': 'SAP', 'unmanaged-os-disk': 'Unmanaged disks', 'ephemeral-os-disk': 'Ephemeral OS disk',
+    'nva-requires-parallel-deployment': 'Network virtual appliance', 'storage-appliance-requires-vendor': 'Storage or backup appliance' };
+
 export function targetRows(p, table, now = new Date()) {
     const out = [];
     for (const m of p.machines) {
         if (!m.vm) {
-            out.push({ ...base(m), 'Workload type': PATTERNS[m.pattern || ''].name, 'Move needed': 'Not checked', 'Series result': 'Not checked', 'Supported': 'Not checked',
-                'Reason': m.problems.map((pr) => reasonFor(pr.why, { problem: pr })).join(' '), 'Notes': m.notes.join('; ') });
+            // A VM that this tool cannot plan: one row for each series, each "Not checked", with
+            // the stage of its size when the size is known (audit, 2026-11-20).
+            const size = m.read.size;
+            const series = ['v5', 'v6', 'v7', ...(size && burstableSource(size) ? ['burstable'] : [])];
+            for (const s of series) {
+                out.push({ ...base(m), 'Current stage': stageText(m), 'Workload type': PATTERNS[m.pattern || ''].name, 'Move needed': MOVE_NEEDED[m.moveRequired] || 'Not checked',
+                    'Series': SERIES(s), 'Series result': 'Not checked', 'Supported': 'Not checked',
+                    'Reason': m.problems.map((pr) => reasonFor(pr.why, { problem: pr })).join(' '), 'Notes': m.notes.join('; ') });
+            }
             continue;
         }
+        const s = suggestions(m);
+        // The notes of a row (audit, 2026-11-20): only a row with a target size has move notes; a VM
+        // that a service manages has none (the service makes the new nodes); a VM that stays has
+        // only the facts of the VM itself (stayNotes).
+        const stay = stayNotes(m);
+        const service = serviceManaged(m);
         for (const r of m.rows) {
             const o = r.option;
-            const has = Boolean(o.targetSize);
+            // A target size: only where it is supported. A blocked option shows no size and no
+            // facts of a target (audit, 2026-11-20).
+            const has = Boolean(o.supported && o.targetSize);
+            // A VM that this tool cannot check (an unknown size): "Not checked", never a "No".
+            const review = m.moveRequired === 'Review' && r.result !== 'Supported';
             const row = {
                 ...base(m),
                 'Current stage': stageText(m),
                 'Move needed': MOVE_NEEDED[m.moveRequired],
                 'Workload type': PATTERNS[m.pattern || ''].name,
                 'Series': SERIES(r.series),
-                // A size only where it is supported: a blocked option shows no size.
-                'Target size': o.supported ? o.targetSize : '',
-                'Series result': m.moveRequired === 'No' && r.result !== 'Supported' ? 'Not needed' : RESULT[r.result],
-                'Supported': r.result === 'Supported' ? 'Yes' : r.result === 'Needs team review' ? 'Not checked' : 'No',
+                'Target size': has ? o.targetSize : '',
+                'Series result': review ? 'Not checked' : m.moveRequired === 'No' && r.result !== 'Supported' ? 'Not needed' : RESULT[r.result],
+                'Supported': r.result === 'Supported' ? 'Yes' : review || r.result === 'Needs team review' ? 'Not checked' : 'No',
                 'Reason': optionReason(r, table, now),
-                'Target stage': o.targetStage ? o.targetStage.stage : '',
+                'Target stage': has && o.targetStage ? o.targetStage.stage : '',
                 'Lifecycle change': has ? CHANGE[o.stageChange] : '',
-                'Suggested': r.isDefault.map((d) => (d === 'Current default' ? 'Current stage' : 'Extended stage')).join(', '),
-                'How to move': o.supported ? howToMove(m, r) : '',
-                'Ranked sizes': o.supported ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
+                // The size of "What to do", and the suggested size of each lifecycle stage (suggestions).
+                'Suggested': [r === s.used ? 'What to do' : null, r === s.current ? 'Current stage' : null, r === s.extended ? 'Extended stage' : null].filter((x) => x).join(', '),
+                'How to move': has ? howToMove(m, r) : '',
+                'Ranked sizes': has ? rankedFor(m, r, table, now).map((x, i) => `${i + 1}. ${x.size} (${x.why})`).join('; ') : '',
                 // The tool never recommends a rebuild (0.9.5-beta, owner 2026-11-06). The column
                 // stays, so that the other columns keep their place.
                 'Rebuild': has ? 'No' : '',
                 'Premium SSD on target': !has ? '' : o.premiumDisks === null ? 'Not checked' : o.premiumDisks ? 'Yes' : 'No',
-                'Burstable ends': o.burstableEnds ? 'Yes. The new size has fixed CPU performance. It does not use CPU credits.' : '',
+                'Burstable ends': has && o.burstableEnds ? 'Yes. The new size has fixed CPU performance. It does not use CPU credits.' : '',
                 'Region availability': has ? 'Not checked' : '',
                 'Notes': m.notes.join('; '),
             };
-            for (const t of CAVEAT_TOPICS) row[t] = r.caveats && r.caveats[t] ? r.caveats[t].text : '';
+            // A row with no size keeps only the notes that say why it has none: the topic of a
+            // reason of this row (the SAP column has the SAP note for Yes: 0.9.4-beta).
+            const why = new Set(r.codes.map((c) => BLOCKER_TOPICS[c]).filter((x) => x));
+            for (const t of CAVEAT_TOPICS) {
+                const vmNote = stay.find((n) => n.topic === t);
+                const note = r.caveats && r.caveats[t] ? r.caveats[t].text : '';
+                row[t] = m.moveRequired === 'No' ? (vmNote ? vmNote.text : '')
+                    : service ? '' : has || why.has(t) ? note : '';
+            }
             row['SAP sign'] = sapSign(m);
             // Needed, Not needed or Not checked (words.js, featureColumn). Blank with no
             // supported size, and for a pool or a service (the move makes new VMs).
-            row['Preview feature'] = featureColumn(o.previewFeature);
+            row['Preview feature'] = has ? featureColumn(o.previewFeature) : '';
             out.push(row);
         }
     }
@@ -291,7 +366,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         `Made:         ${now.toISOString().slice(0, 16).replace('T', ' ')} UTC. Your browser made these files. This tool sent no data.`,
         `Size facts:   a table of ${sizes.sizeCount} sizes. This tool read it from Azure on ${dateWords(sizes.readUtc)}.`,
         'Region:       this tool does not check if a size is available in your region.',
-        `Lifecycle:    the Microsoft lifecycle pages, read on ${dateWords(families.updatedUtc)}. The End of Life list, read on ${dateWords(endOfLife.sources[0].readUtc)}.`,
+        // The same pages and dates as the page (audit, 2026-11-20: one fact, one date).
+        `Lifecycle:    the Microsoft lifecycle overview, End of Life list, and retirements and capacity growth restrictions, read on ${datesWords(endOfLife.sources.map((x) => x.readUtc))}.`,
         `NVMe:         the Microsoft list of OS images that support NVMe, read on ${dateWords(nvme.readUtc)}.`,
         '',
         'COLUMNS THAT THIS TOOL USED',
@@ -305,8 +381,9 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         'WORKLOAD TYPES',
         '  The workload type tells you how to move the VM.',
         '  The types come from the workload patterns in the Microsoft guide for the move to v6 and v7.',
-        ...Object.keys(PATTERNS).filter((k) => k).map((k) => `  ${PATTERNS[k].name}: ${p.machines.filter((m) => m.pattern === k).length}. ${PATTERNS[k].advice}`),
-        `  ${PATTERNS[''].name}: ${p.machines.filter((m) => !m.pattern).length}. ${PATTERNS[''].advice}`,
+        // Only the types that the list has (audit, 2026-11-20).
+        ...[...Object.keys(PATTERNS).filter((k) => k), ''].map((k) => [k, p.machines.filter((m) => (m.pattern || '') === k).length]).filter(([, n]) => n)
+            .map(([k, n]) => `  ${PATTERNS[k].name}: ${n}. ${PATTERNS[k].advice}`),
         `  ${NOT_FOUND}`,
         '',
         'FILES',
@@ -426,7 +503,7 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  The size table gives one uncached limit for each size, for Premium SSD.',
         `  The Microsoft pages of ${ultra.pages.length} v6 and v7 series give a separate limit for Premium SSD v2 and Ultra Disk.`,
         '  This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
-        `  This tool read these pages on ${[...new Set(ultra.pages.map((x) => x.readUtc))].sort().map(dateWords).join(' and ')}.`,
+        `  This tool read these pages on ${datesWords(ultra.pages.map((x) => x.readUtc))}.`,
         '  A VM with Premium SSD v2 or Ultra Disk gets "Check:" for a size with no separate limit.',
         '  It does not get a note that the limit is lower.',
         '  Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
@@ -435,6 +512,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  The cached MBps of a size is the lower of its cached read limit and its cached write limit.',
         '  This tool does not count disk bursting. Microsoft says that credit-based bursting is best effort and not guaranteed.',
         '  Standard HDD and Standard SSD give "up to" values.',
+        '  Azure gives the MBps limits of a size in bytes per second. This tool shows them as whole MBps.',
+        ...MBPS_NOTE.split(/(?<=\.) /).map((x) => `  ${x}`),
         '  https://learn.microsoft.com/azure/virtual-machines/disks-performance',
         '  https://learn.microsoft.com/azure/virtual-machines/disk-bursting',
         '  https://learn.microsoft.com/azure/virtual-machines/disks-types',

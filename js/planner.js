@@ -9,17 +9,17 @@
 //   - Generation is never guessed. A blank or odd value: that row is not
 //     checked, and the other rows still run.
 
-import endOfLife from '../data/end-of-life.js?v=0.9.8-beta';
-import capacity from '../data/capacity.js?v=0.9.8-beta';
+import endOfLife from '../data/end-of-life.js?v=0.9.9-beta';
+import capacity from '../data/capacity.js?v=0.9.9-beta';
 import {
     diskArchitecture, generationController, machineAdvice, sizeGeneration,
     sizeFacts, sizeLifecycleStage, sizeReplacement, sizeRetiredForTool, sizeRetirement, tempDiskCount,
     unsupportedFamilyCode,
-} from './lifecycle.js?v=0.9.8-beta';
-import { caveats, extraBlockers, gen1Upgrade, readExtras } from './extras.js?v=0.9.8-beta';
-import { diskNote } from './disks.js?v=0.9.8-beta';
-import { patternOf } from './patterns.js?v=0.9.8-beta';
-import { POOL_PATTERNS } from './words.js?v=0.9.8-beta';
+} from './lifecycle.js?v=0.9.9-beta';
+import { caveats, extraBlockers, gen1Upgrade, readExtras } from './extras.js?v=0.9.9-beta';
+import { diskNote } from './disks.js?v=0.9.9-beta';
+import { patternOf } from './patterns.js?v=0.9.9-beta';
+import { POOL_PATTERNS } from './words.js?v=0.9.9-beta';
 
 // ---------------------------------------------------------------------------
 // Values
@@ -405,9 +405,15 @@ export function plan(machines, table, now = new Date()) {
     for (const m of machines) {
         if (m.vm) continue;
         const size = m.read.size || m.read.sizeAsWritten;
-        results.push({ machine: m, series: '', result: 'Needs team review', moveRequired: 'Review', codes: m.problems.map((p) => p.why) });
+        // The stage of the size does not depend on the generation or on the other facts that this
+        // row lacks: with a size that this tool can read, the stage and "Move needed" show. The
+        // sizes stay "Not checked" (audit, 2026-11-20). With no size: no stage, as before.
+        const known = m.read.size ? currentStage(m.read.size, table, now) : null;
+        const stage = known && known.stage ? known : null;
+        const moveRequired = stage ? (stage.mustMove ? 'Yes' : 'No') : 'Review';
+        results.push({ machine: m, series: '', result: 'Needs team review', moveRequired, codes: m.problems.map((p) => p.why) });
         for (const p of m.problems) addReview(m, size, '', p.what, p.why);
-        out.push({ ...m, stage: null, moveRequired: 'Review', outcome: 'Needs team review', rows: [], short: { v5: '', v6: '', v7: '', burstable: '' }, shortCodes: { v5: [], v6: [], v7: [], burstable: [] }, defaults: { current: '', extended: '' }, needsReview: true });
+        out.push({ ...m, stage, moveRequired, outcome: 'Needs team review', rows: [], short: { v5: '', v6: '', v7: '', burstable: '' }, shortCodes: { v5: [], v6: [], v7: [], burstable: [] }, defaults: { current: '', extended: '' }, needsReview: true });
     }
 
     for (const m of machines) {

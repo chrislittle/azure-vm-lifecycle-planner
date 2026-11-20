@@ -257,7 +257,8 @@ test('B v1 and Av2 machines get a burstable option (Bsv2 or Basv2)', async () =>
     const p = run('Machine name,Current size,Generation,OS\ncontoso-b02,Standard_B2ms,2,Linux\ncontoso-a02,Standard_A2m_v2,1,Linux\ncontoso-d02,Standard_D4s_v3,2,Linux\n').plan;
     assert.equal(answerWords(byName(p, 'contoso-b02'), 'burstable'), 'Standard_B2s_v2');
     assert.equal(answerWords(byName(p, 'contoso-a02'), 'burstable'), 'Standard_B4s_v2');
-    assert.equal(answerWords(byName(p, 'contoso-d02'), 'burstable'), '', 'only B v1 and Av2 machines');
+    // Never blank (0.9.9-beta): a VM that is not on a B v1, Av2 or Amv2 size says so.
+    assert.equal(answerWords(byName(p, 'contoso-d02'), 'burstable'), 'Only for B v1, Av2 and Amv2 VMs', 'only B v1 and Av2 machines');
 });
 
 test('every link points to a real Microsoft Learn or GitHub path', () => {
@@ -352,7 +353,8 @@ test('a storage or backup appliance is a hard gate', async () => {
     assert.equal(isStorageApplianceImage('purestorageinc1578960262525', 'cloud_block_store_azure_beta_image'), true);
     assert.equal(isStorageApplianceImage('veeam', 'office365backup'), false, 'only the appliance offers');
     assert.equal(isStorageApplianceImage('', 'veeam-backup-replication'), false, 'a custom image cannot tell');
-    const m = byName(run(sample).plan, 'contoso-bkp01');
+    // 0.9.9-beta: the sample keeps four appliances; contoso-rbk01 is the storage appliance (Rubrik).
+    const m = byName(run(sample).plan, 'contoso-rbk01');
     assert.equal(F.groupOf(m), 'gate');
     assert.equal(m.short.v6, 'No - storage or backup appliance');
 });
@@ -363,7 +365,7 @@ test('each VM gets the workload pattern of its signals', () => {
     const p = run(sample).plan;
     const expect = {
         'contoso-aks-np1': 'A', 'contoso-vmss01': 'A', 'contoso-avd01': 'B', 'contoso-dbx01': 'C', 'contoso-api01': 'E',
-        'contoso-avd02': 'E', 'contoso-sql01': 'F', 'contoso-fc01': 'F', 'contoso-sap01': 'F', 'contoso-fw01': 'G', 'contoso-bkp01': 'G',
+        'contoso-avd02': 'E', 'contoso-sql01': 'F', 'contoso-fc01': 'F', 'contoso-sap01': 'F', 'contoso-fw01': 'G', 'contoso-rbk01': 'G',
     };
     for (const [name, pattern] of Object.entries(expect)) assert.equal(byName(p, name).pattern, pattern, name);
 });
@@ -638,7 +640,7 @@ test('a storage or backup appliance is found by its image, its purchase plan or 
     assert.equal(isAppliance({ planPublisher: 'paloaltonetworks', planProduct: 'vmseries-flex' }), true, 'an NVA by its plan');
     assert.equal(inManagedApplication({ managedBy: 'Managed application' }), true);
     const p = run(sample).plan;
-    for (const n of ['contoso-rbk01', 'contoso-weka01', 'contoso-coh01', 'contoso-pure01']) assert.equal(F.groupOf(byName(p, n)), 'gate', n);
+    for (const n of ['contoso-rbk01', 'contoso-weka01', 'contoso-pure01']) assert.equal(F.groupOf(byName(p, n)), 'gate', n);
     assert.equal(byName(p, 'contoso-weka01').short.v6, 'No - storage or backup appliance', 'vendor approval is the first reason');
     assert.equal(byName(p, 'contoso-pure01').short.v6, 'No - managed application');
 });

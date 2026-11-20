@@ -49,7 +49,7 @@ test('size facts: from the size table, with the temporary disk in GiB (SCSI or N
     assert.deepEqual(sizeFacts(table.get('Standard_D4s_v3')), { name: 'Standard_D4s_v3', vcpus: 4, vcpusActive: 4, memoryGiB: 16, tempGiB: 32, tempKind: 'SCSI', tempDisks: 1,
         maxNics: 2, maxDataDisks: 8, premium: true, generations: ['V1', 'V2'],
         // The disk limits (0.9.8-beta): IOPS, and MBps from Azure's bytes per second.
-        uncachedIops: 6400, uncachedMbps: 96, cachedIops: 8000, cachedMbps: 65.536, ultraIops: null, ultraMbps: null });
+        uncachedIops: 6400, uncachedMbps: 96, cachedIops: 8000, cachedMbps: 64, ultraIops: null, ultraMbps: null });
     const v6 = sizeFacts(table.get('Standard_D4ds_v6'));
     assert.deepEqual([v6.tempGiB, v6.tempKind, v6.tempDisks, v6.generations], [220, 'NVMe', 1, ['V2']]);
     assert.deepEqual([sizeFacts(table.get('Standard_D4s_v5')).tempGiB, sizeFacts(table.get('Standard_D4s_v5')).tempKind], [0, null]);
@@ -166,7 +166,7 @@ test('notes: the notes that a blocked VM gets in vm-target-sizes.csv say the val
     assert.equal(cav({ 'Image publisher': 'paloaltonetworks', 'Image offer': 'vmseries-flex' })['Network virtual appliance'].text, 'The image is paloaltonetworks / vmseries-flex. Ask the vendor which sizes they certify.');
     assert.equal(cav({ 'Image publisher': '', 'Image offer': '', 'Image SKU': '', 'Plan publisher': 'fortinet', 'Plan product': 'fortinet_fortigate-vm_v5' })['Network virtual appliance'].text,
         'The Marketplace purchase plan is fortinet / fortinet_fortigate-vm_v5. Ask the vendor which sizes they certify.');
-    assert.equal(cav({ 'Image publisher': 'cohesity', 'Image offer': 'cohesity-cloudtd-tool' })['Storage or backup appliance'].text, 'The vendor is Cohesity DataPlatform Cloud Edition. Ask the vendor which sizes they certify.');
+    assert.equal(cav({ 'Image publisher': 'cohesity', 'Image offer': 'cohesity-cloudtd-tool' })['Storage or backup appliance'].text, 'The vendor is Cohesity (DataPlatform Cloud Edition). Ask the vendor which sizes they certify.');
 });
 
 test('notes: "To check" says the value it has, and says when the list does not give it', () => {
