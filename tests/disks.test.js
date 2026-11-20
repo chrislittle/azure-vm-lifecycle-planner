@@ -13,7 +13,7 @@ import { SizeTable, sizeFacts, rankedSizes } from '../js/lifecycle.js';
 import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
 import { diskNote, diskTotals, diskWords, vmDiskNote } from '../js/disks.js';
-import { sizeComparison } from '../js/details.js';
+import { cardNotes, sizeComparison, whatToDo } from '../js/details.js';
 import { reportHtml } from '../js/report.js';
 import { FACT_GROUPS } from '../js/evidence.js';
 import * as F from '../js/files.js';
@@ -364,9 +364,16 @@ test('disk limits: the note is a note of the VM: the page, the report, vm-target
     const VM_NOTE = 'The disks of this VM can do more than the new size allows. Compare the disk rows in the size table. Standard_D8ds_v5 keeps the current limit. Standard_D8ds_v6 keeps the current limit. Standard_D8ds_v7 keeps the current limit.';
     const n = F.allNotes(p.machines[0]);
     assert.deepEqual([...n.actions, ...n.attention, ...n.checks].filter((x) => x.topic === 'Disk limits'), [{ topic: 'Disk limits', text: VM_NOTE, series: [] }]);
+    // 0.9.9-beta (owner, 2026-11-20): "Good to know" gives the note of the size that "What to do"
+    // uses (v6); the note of each other size is in its card, on the page and in the report.
+    const m = p.machines[0];
+    const g = F.groupOf(m);
+    const own = (s) => `The disks of this VM can do more than the new size allows. Compare the disk rows in the size table. Standard_D8ds_${s} keeps the current limit.`;
+    assert.deepEqual(whatToDo(m, g).attention.filter((x) => x.topic === 'Disk limits').map((x) => x.text), [own('v6')]);
+    for (const s of ['v5', 'v7']) assert.deepEqual(cardNotes(m, g, m.rows.find((r) => r.series === s)).map((x) => x.text), [own(s)], s);
     const html = reportHtml(p, table, 'test', NOW);
-    assert.equal(html.split('<b>Disk limits:</b>').length, 2, 'one note in the report');
-    assert.ok(html.includes(`<b>Disk limits:</b> ${VM_NOTE}</li>`), 'no series after it');
+    assert.equal(html.split('<b>Disk limits:</b>').length, 4, 'the note of v6 in Good to know, and of v5 and v7 in their rows');
+    assert.ok(html.includes(`<b>Disk limits:</b> ${own('v6')}</li>`), 'no series after it');
     // The blank case is in "To check" (vm-summary.csv names the topic).
     assert.match(F.summaryRows(run(list([{ 'VM name': 'contoso-db02' }])))[0]['To check'], /Disk limits/);
 });
@@ -521,7 +528,8 @@ test('disk limits: the about file says how the tool compares the disk limits, wi
         'This tool uses it when every uncached disk of the VM is Premium SSD v2 or Ultra Disk.',
         'Some VMs have Premium SSD v2 or Ultra Disk disks and other uncached disks. Microsoft does not say which limit applies to this mix.',
         'For such a VM, the note is "Check:". It shows only where a limit of the new size can lower the ceiling.',
-        'On the page and in the report, the note is short and shows once for the VM. The size table of the VM gives the numbers.',
+        'On the page and in the report, the note is short. The size table of the VM gives the numbers.',
+        '"Good to know" and "To check" give the note of the size that "What to do" uses. Each other size has its note in its card.',
         'https://learn.microsoft.com/azure/virtual-machines/disks-performance',
         'https://learn.microsoft.com/azure/virtual-machines/disk-bursting',
         'https://learn.microsoft.com/azure/virtual-machines/disks-types']) assert.ok(about.includes(s), s);

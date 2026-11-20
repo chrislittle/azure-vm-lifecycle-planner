@@ -166,6 +166,9 @@ For each VM:
     of the VM. The preview feature and the page file are in the columns "How to move" and
     "Preview feature" of vm-target-sizes.csv.
   - **Good to know** (blue): a fact to know, with nothing to do first.
+  - "Good to know" and "To check" give the notes of the size that "What to do" uses, as
+    vm-summary.csv does. The card of each other size gives the notes of that size that
+    are different. A VM in a pool or a service keeps the notes of all its sizes.
   - **To check** (grey): the list does not give the fact, or the tool cannot judge it
     from what the list gives.
   - **Sizes**: a card for each series, with the lifecycle stage of the series (for
@@ -196,7 +199,7 @@ For each VM:
   a VM are separate from its uncached limits
   ([Virtual machine and disk performance](https://learn.microsoft.com/azure/virtual-machines/disks-performance)).
   When a new size lowers the ceiling, the note "Disk limits" (Good to know) says so in
-  short words, once for the VM: "The disks of this VM can do more than the new size
+  short words: "The disks of this VM can do more than the new size
   allows. Compare the disk rows in the size table." It also names the next size up in the
   same series that keeps the current limits, if the size table has one, for example
   "Standard_D8ds_v5 keeps the current limits." The recommended size does not change.

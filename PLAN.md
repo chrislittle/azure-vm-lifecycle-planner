@@ -2146,6 +2146,20 @@ the rest is words and layout.
   change. **Not changed:** a network virtual appliance and a managed application still show the
   publisher ID as Azure gives it (owner, 2026-10-17: the Azure policy list has no vendor names,
   and the tool does not make one up); the words say "The publisher ID is ...".
+- **"Good to know" and "To check" of one size (owner, 2026-11-20, after the first review).**
+  On the page and in the report they give only the notes of the size that "What to do" uses,
+  as vm-summary.csv already did. The facts to know and to check of each other size that are
+  not the same are in the card of that size (`cardNotes` in `js/details.js`; the report: under
+  the size in the sizes table). This replaces "one note Disk limits for the VM" of 0.9.8-beta
+  on the page and in the report: "Good to know" has the disk note of the size of "What to do",
+  and each card the note of its size. "Steps for the other sizes" stays: it is the owner's
+  layout of 0.9.6-beta ("A step for other series only ... stays outside the boxes under 'Steps
+  for the other sizes', with its series"). A VM in a pool or a service, and a VM that stays,
+  keep their notes as before. In the sample this moves notes of six VMs into a card:
+  contoso-b02, contoso-dev01 and contoso-dev02 (the temporary disk note of the D sizes),
+  contoso-mq01 and contoso-sql02 (the disk note of v5), contoso-ana01 (the availability set
+  note of v5). The about file and the README say so. 9 more mutation checks, all caught (one
+  only after a new test: a fact to check of another size).
 - **Checked and not changed:** v7 accelerated networking. Every v7 page that the tool suggests
   (14) says "Accelerated Networking | Supported" (`tools/source-snapshot.json`, read
   2026-11-20; Dsv7 and Easv7 read again on learn.microsoft.com the same day), so

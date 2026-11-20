@@ -220,6 +220,9 @@ export function whatToDo(m, g) {
     // each topic and text, so the topic and the text find it).
     const noteOf = (list, topic, text) => list.find((x) => x.topic === topic && x.text === text);
     const placed = new Set();
+    const placedKey = new Set();
+    const own = ownSize(m, g);
+    const shown = own ? allNotes(m, own) : n;
     const ways = keys.map((key) => {
         const a = pool ? poolAdvice(m) : null;
         const w = key === 'pool' ? box('pool', POOL_TITLE, [a.todo, a.more])
@@ -233,6 +236,7 @@ export function whatToDo(m, g) {
             const note = noteOf(c.state === 'problem' ? n.actions : n.attention, topic, c.text);
             if (!note) continue;
             placed.add(note);
+            placedKey.add(noteKey(note));
             // A pool or a service makes new VMs: a note with a part for each way gives only the
             // part for a new VM there, never the words of a resize (review, 2026-11-07).
             // (A note has ways only on v6 and v7, so a box with no two ways is a pool there.)
@@ -261,8 +265,35 @@ export function whatToDo(m, g) {
         // The preview feature words are in the box of the resize.
         more: pool ? [] : t.more.filter((x) => x !== FEATURE_WORDS_UNKNOWN),
         otherSteps: n.actions.filter((x) => !placed.has(x)),
-        attention: n.attention.filter((x) => !placed.has(x)),
+        // "Good to know" and "To check": the notes of the size that "What to do" uses, as in
+        // vm-summary.csv (owner, 2026-11-20). The notes of each other size are in its card
+        // (cardNotes). A pool or a service keeps the notes of all its sizes.
+        attention: (own ? shown.attention : n.attention).filter((x) => !placedKey.has(noteKey(x))),
+        checks: own ? shown.checks : n.checks,
     };
+}
+
+// The size whose notes "Good to know" and "To check" give (owner, 2026-11-20): the size that
+// "What to do" uses, for a VM that must move and is not in a pool or a service. null for any
+// other VM: it keeps the notes of all its sizes, as before.
+function ownSize(m, g) {
+    return m.vm && (g === 'ready' || g === 'first') && !POOL_PATTERNS.includes(m.pattern) ? likelyRow(m) : null;
+}
+const noteKey = (x) => `${x.topic}|${x.text}`;
+
+// The facts to know and to check of one other size, for its card (owner, 2026-11-20):
+// [{ topic, text, state: 'attention' | 'check' }]. Only the notes that "Good to know" and "To
+// check" do not already give (so none for the size of "What to do" itself), and none for a
+// size with no supported size (allNotes) or a VM with no ownSize. Steps stay under "Steps for
+// the other sizes" (0.9.6-beta).
+export function cardNotes(m, g, r) {
+    const own = ownSize(m, g);
+    if (!own) return [];
+    const shown = allNotes(m, own);
+    const seen = new Set([...shown.attention, ...shown.checks].map(noteKey));
+    const mine = allNotes(m, r);
+    return [...mine.attention.map((x) => ({ topic: x.topic, text: x.text, state: 'attention' })), ...mine.checks.map((x) => ({ topic: x.topic, text: x.text, state: 'check' }))]
+        .filter((x) => !seen.has(noteKey(x)));
 }
 
 // The words of one size card (0.9.6-beta): { used, stage, how, link }. used: "What to do"

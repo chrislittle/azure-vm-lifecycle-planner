@@ -6,7 +6,7 @@ import capacity from '../data/capacity.js?v=0.9.9-beta';
 import { capacityRestricted } from './planner.js?v=0.9.9-beta';
 import * as F from './files.js?v=0.9.9-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
-import { COMPARE_HINT, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
+import { COMPARE_HINT, cardNotes, linkParts, seriesList, sizeCard, sizeComparison, todo, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
 import { MBPS_NOTE, APPLIANCE_KINDS, GOOD_TO_KNOW, GROUPS, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, NOT_FOUND, SIZE_USED, STEPS, stageShort, dateWords, capacityWords, conditionsWords, GUIDANCE, PREVIEW_LINK } from './words.js?v=0.9.9-beta';
 import { GENERATION_GROUPS, GENERATION_HINT, appliancesByVendor, generationHint, generationShown, workloadFound } from './evidence.js?v=0.9.9-beta';
 import version from './version.js?v=0.9.9-beta';
@@ -100,7 +100,9 @@ export function reportHtml(p, table, sourceName, now = new Date()) {
                 // ways to move to it (details.js, sizeCard), as on the page.
                 const c = sizeCard(m, g, r);
                 const how = c.how ? `<br><span class="muted">${esc(c.how)}${c.link ? ` <a href="${GUIDANCE.tempDiskPreview}">${esc(PREVIEW_LINK)}</a>` : ''}</span>` : '';
-                return `<tr${c.used ? ' class="used"' : ''}><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b>${c.stage ? ` <span class="tag muted">${esc(c.stage)}</span>` : ''}${c.used ? `<br><b class="used-note">${esc(SIZE_USED)}</b>` : ''}${how}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why)})`).join('<br>') || '-'}</td></tr>`;
+                // The notes of this size when "What to do" uses another size, as on the page (owner, 2026-11-20).
+                const own = cardNotes(m, g, r).map((x) => `<br><span class="muted"><b>${esc(x.topic)}:</b> ${esc(x.text)}</span>`).join('');
+                return `<tr${c.used ? ' class="used"' : ''}><th scope="row">${name}</th><td><b>${esc(o.targetSize)}</b>${c.stage ? ` <span class="tag muted">${esc(c.stage)}</span>` : ''}${c.used ? `<br><b class="used-note">${esc(SIZE_USED)}</b>` : ''}${how}${own}</td><td class="muted">${ranked.slice(1).map((x) => `${esc(short(x.size))} (${esc(x.why)})`).join('<br>') || '-'}</td></tr>`;
             }).join('');
             const fits = m.rows.some((r) => sizeCard(m, g, r).used) && m.rows.filter((r) => r.series !== 'gen1Route' && r.option.supported).length > 1 ? `<p class="muted">${esc(OTHER_SIZES_FIT)}</p>` : '';
             sizesHtml = `<h4>${g === 'pool' ? 'Sizes to look for in the service or pool' : 'Sizes'}</h4><table class="sizes"><thead><tr><th scope="col">Series</th><th scope="col">Size</th><th scope="col">Other sizes that fit</th></tr></thead><tbody>${rows}</tbody></table>${fits}`;

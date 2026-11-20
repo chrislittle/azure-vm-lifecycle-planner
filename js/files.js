@@ -113,11 +113,13 @@ export function signals(m) {
 // The notes of every supported series, each once: { actions, attention, checks },
 // each [{ topic, text, series: [] }]. A note that applies to only some of the
 // supported series names them.
-export function allNotes(m) {
+// only: one row, for the notes of that size alone (the size that "What to do" uses, or the
+// size of one card; details.js, 0.9.9-beta).
+export function allNotes(m, only = null) {
     const out = { actions: [], attention: [], checks: [] };
     if (m.vm && m.moveRequired === 'No') return { ...out, attention: stayNotes(m).map((n) => ({ ...n, series: [] })) };
     if (!m.vm || m.moveRequired !== 'Yes' || serviceManaged(m)) return out;
-    const rows = m.rows.filter((r) => r.result === 'Supported' && r.caveats);
+    const rows = m.rows.filter((r) => r.result === 'Supported' && r.caveats && (!only || r === only));
     const key = { problem: 'actions', attention: 'attention', check: 'checks' };
     // "Disk limits": one note for the VM, for all its sizes (disks.js, vmDiskNote; owner, 2026-11-20).
     const disk = vmDiskNote(rows);
@@ -471,6 +473,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  On the page and in the report, these steps are in the boxes of "What to do".',
         '  A step for only the other sizes is under "Steps for the other sizes".',
         '  Good to know: a fact to know, with nothing to do first. A VM with only these notes is ready.',
+        '  On the page and in the report, "Good to know" and "To check" give the notes of the size that "What to do" uses.',
+        '  The card of each other size gives its own notes. A VM in a pool or a service keeps the notes of all its sizes.',
         '  To check: the list does not give the fact, or this tool cannot judge it from what the list gives.',
         '  A VM that a service manages (AKS, Azure Red Hat OpenShift, Azure Databricks) has no notes.',
         '  The service manages its image and its disks.',
@@ -496,7 +500,8 @@ export function aboutText(p, list, sourceName, now = new Date()) {
         '  Microsoft: the cached limits of a VM are separate from its uncached limits.',
         '  When a new size lowers the ceiling, the note "Disk limits" in "Good to know" says so.',
         '  It names the next size up in the same series that keeps the current limit, if the size table has one.',
-        '  On the page and in the report, the note is short and shows once for the VM. The size table of the VM gives the numbers.',
+        '  On the page and in the report, the note is short. The size table of the VM gives the numbers.',
+        '  "Good to know" and "To check" give the note of the size that "What to do" uses. Each other size has its note in its card.',
         '  In vm-target-sizes.csv and vm-summary.csv, the note also gives the numbers in words, for each size.',
         '  The recommended size does not change.',
         '  If the list does not give the disk values, "To check" says so, but only where the new size allows less.',

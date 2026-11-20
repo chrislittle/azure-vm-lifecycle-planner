@@ -1799,9 +1799,12 @@ test('what to do: Linux on v6 has no preview feature; the availability set split
     // No series in a box (review, 2026-11-07), although the note is for v6 and v7 only.
     assert.deepEqual(w.ways.map((x) => x.info.map((i) => i.series)), [[[]], [[]]]);
     assert.deepEqual(F.allNotes(m).attention.find((x) => x.text === AVSET_BOTH).series, ['v6', 'v7']);
-    // Not again in "Good to know"; the v5 words (a resize) stay there, with the series.
+    // Not again in "Good to know". The v5 words (a resize) are in the card of v5: "Good to know"
+    // gives only the notes of the size that What to do uses (owner, 2026-11-20).
     assert.ok(!w.attention.some((x) => x.text === AVSET_BOTH));
-    assert.ok(w.attention.some((x) => x.text === AVSET_STAYS && x.series.join() === 'v5'));
+    assert.ok(!w.attention.some((x) => x.text === AVSET_STAYS));
+    const { cardNotes } = await import('../js/details.js');
+    assert.ok(cardNotes(m, F.groupOf(m), rowOf(m, 'v5')).some((x) => x.text === AVSET_STAYS && x.state === 'attention'));
     // A Linux VM with nothing to do: no steps in either box.
     const cleanVm = layoutOne(LINUX);
     const clean = whatToDo(cleanVm, F.groupOf(cleanVm));
@@ -1870,15 +1873,22 @@ test('what to do: a step for other series only stays outside the boxes, with the
 
 // Each note of each VM shows: in a box (a step, or good to know), or in "Steps for the
 // other sizes", "Good to know" or "To check". The value from the list stays with it.
-function notesLost(p, whatToDo) {
+// cardNotes (0.9.9-beta, owner 2026-11-20): the facts to know and to check of a size that
+// "What to do" does not use are in the card of that size. The note "Disk limits" of such a card
+// is the note of that size (vmDiskNote of one row): a VM-wide disk note shows when each row note shows.
+function notesLost(p, whatToDo, cardNotes = () => []) {
     const lost = [];
     for (const m of p.machines) {
-        const w = whatToDo(m, F.groupOf(m));
+        const g = F.groupOf(m);
+        const w = whatToDo(m, g);
         const inBox = w.ways.flatMap((b) => [...b.steps, ...b.info]);
-        const shown = [...inBox, ...w.otherSteps, ...w.attention, ...w.checks];
+        const cards = (m.rows || []).flatMap((r) => cardNotes(m, g, r));
+        const shown = [...inBox, ...w.otherSteps, ...w.attention, ...w.checks, ...cards];
+        const rows = (m.rows || []).filter((r) => r.result === 'Supported' && r.caveats);
         const n = F.allNotes(m);
         for (const note of [...n.actions, ...n.attention, ...n.checks]) {
             if (shown.some((x) => x.topic === note.topic && x.text === note.text)) continue;
+            if (note.topic === 'Disk limits' && rows.every((r) => { const one = [...F.allNotes(m, r).attention, ...F.allNotes(m, r).checks].find((x) => x.topic === 'Disk limits'); return !one || shown.some((x) => x.topic === one.topic && x.text === one.text); })) continue;
             // A note in two parts, one for each way: each sentence is in a box.
             const parts = inBox.filter((x) => x.topic === note.topic).map((x) => x.text).join(' ');
             const said = /^"[^"]+" is [^.]+\./.exec(note.text)?.[0] || '';
@@ -1895,14 +1905,14 @@ function notesLost(p, whatToDo) {
 }
 
 test('no note is lost: every note of every VM shows, on the samples and the 4,000-VM list', async () => {
-    const { whatToDo } = await import('../js/details.js');
+    const { whatToDo, cardNotes } = await import('../js/details.js');
     const lists = [...readdirSync(new URL('../samples/', import.meta.url)).map((f) => read(`samples/${f}`)), largeList(4000, 7)];
     let notes = 0;
     let split = 0;
     for (const text of lists) {
         const r = run(text);
         if (r.list.stops.length) continue;
-        assert.deepEqual(notesLost(r.plan, whatToDo), []);
+        assert.deepEqual(notesLost(r.plan, whatToDo, cardNotes), []);
         for (const m of r.plan.machines) {
             const n = F.allNotes(m);
             const all = [...n.actions, ...n.attention, ...n.checks];

@@ -14,7 +14,7 @@ import sample from '../js/sample.js';
 import { SizeTable, sizeFacts } from '../js/lifecycle.js';
 import { COLUMNS, readList } from '../js/input.js';
 import { plan, toMachine } from '../js/planner.js';
-import { COMPARE_HINT, MBPS_NOTE, cardTitle, sizeComparison, whatToDo, whyLines } from '../js/details.js';
+import { COMPARE_HINT, MBPS_NOTE, cardNotes, cardTitle, sizeComparison, whatToDo, whyLines } from '../js/details.js';
 import { diskWords } from '../js/disks.js';
 import { reportHtml } from '../js/report.js';
 import { optionReason } from '../js/reasons.js';
@@ -318,6 +318,60 @@ test('items 7, 10: the about file says what "What to do uses" and the two Sugges
         '                         With no size of that stage, they say why, for example "No supported Current size".',
         '                         They can also say "Not needed", "Vendor approval first", "No supported size" or "Not checked".',
     ]) assert.ok(about.includes(`${line}\r\n`), line);
+});
+
+test('owner, 2026-11-20: "Good to know" and "To check" give the notes of the size that "What to do" uses; the other sizes have theirs in their card', () => {
+    const m = vm('contoso-b02');
+    const g = F.groupOf(m);
+    const burstable = 'Temporary disk: The current size Standard_B2s has a temporary disk of 8 GiB. The new size has no temporary disk. The move deletes the data on the current temporary disk.';
+    const d = 'The current size Standard_B2s has a temporary disk of 8 GiB. The move deletes the data on the temporary disk. Keep nothing there that you need.';
+    const t = whatToDo(m, g);
+    assert.deepEqual(t.attention.map((x) => `${x.topic}: ${x.text}`), [burstable]);
+    assert.ok(t.attention.every((x) => x.series.length === 0));
+    // The same as vm-summary.csv.
+    assert.equal(sumOf(m)['Good to know'], burstable);
+    // The D sizes: their own note in their card. The card of "What to do" has none.
+    const row = (s) => m.rows.find((r) => r.series === s);
+    for (const s of ['v5', 'v6', 'v7']) assert.deepEqual(cardNotes(m, g, row(s)).map((x) => [x.topic, x.text, x.state]), [['Temporary disk', d, 'attention']], s);
+    assert.deepEqual(cardNotes(m, g, row('burstable')), []);
+    // "Steps for the other sizes" stays (owner, 0.9.6-beta): accelerated networking for v5 and v6.
+    assert.deepEqual(t.otherSteps.map((x) => [x.topic, x.series]), [['Accelerated networking', ['v5', 'v6']]]);
+    // The page and the report.
+    const { details } = detailsOf('contoso-b02');
+    const good = details.textContent.split('Good to know')[1].split('Sizes')[0];
+    assert.ok(good.includes(burstable.replace('Temporary disk: ', '')) && !good.includes(d), good);
+    const cards = details.byClass('series')[0].children;
+    assert.ok(cards.find((c) => c.textContent.startsWith('v5:')).textContent.includes(`Temporary disk: ${d}`));
+    assert.ok(!cards.find((c) => c.textContent.startsWith('Burstable')).textContent.includes(d));
+    const c = card(m);
+    assert.equal(c.split(d).length, 4, 'the report: the note of each D size, in its row of the sizes table');
+    assert.ok(!c.split('<h4>Good to know</h4>')[1].split('</ul>')[0].includes(d));
+    // A disk note of another size only: in the card of that size (mq01: v5 lowers the ceiling, What to do uses v6).
+    const mq = vm('contoso-mq01');
+    const mt = whatToDo(mq, F.groupOf(mq));
+    assert.ok(!mt.attention.some((x) => x.topic === 'Disk limits'));
+    assert.match(cardNotes(mq, F.groupOf(mq), mq.rows.find((r) => r.series === 'v5')).find((x) => x.topic === 'Disk limits').text, /^The disks of this VM can do more than the new size allows\./);
+    // A VM whose notes are the same on each size: nothing in the cards.
+    const w = vm('contoso-web01', 'rg-contoso-prod');
+    for (const r of w.rows) assert.deepEqual(cardNotes(w, F.groupOf(w), r), []);
+    // A fact to check of another size only: in its card, not in "To check" (a B VM with no
+    // accelerated networking facts: Burstable does not need it, v5 and v6 do).
+    const { p: cp } = run(csv([{ 'VM name': 'contoso-x7', 'Current size': 'Standard_B2s', 'Accelerated NICs': '', 'Primary NIC accelerated': '' }]));
+    const ck = cp.machines[0];
+    const ckt = whatToDo(ck, F.groupOf(ck));
+    assert.ok(!ckt.checks.some((x) => x.topic === 'Accelerated networking'), JSON.stringify(ckt.checks));
+    assert.ok(cardNotes(ck, F.groupOf(ck), ck.rows.find((r) => r.series === 'v5')).some((x) => x.topic === 'Accelerated networking' && x.state === 'check'));
+    // A scale set of the customer's own on a B size: the notes of all its sizes, as before.
+    const { p: sp } = run(csv([{ 'VM name': 'contoso-x6', 'Current size': 'Standard_B2s', 'Resource type': 'Scale set', 'Scale set': 'Yes', 'Generation': 'V2' }]));
+    const ss = sp.machines[0];
+    assert.equal(F.groupOf(ss), 'pool');
+    assert.equal(whatToDo(ss, 'pool').attention.filter((x) => x.topic === 'Temporary disk').length, 2);
+    // A pool, a service and a VM that stays keep their notes as before.
+    for (const name of ['contoso-vmss01', 'contoso-sql01']) {
+        const x = vm(name);
+        assert.deepEqual(whatToDo(x, F.groupOf(x)).attention, F.allNotes(x).attention.filter((n) => !whatToDo(x, F.groupOf(x)).ways.some((b) => b.info.includes(n))), name);
+        for (const r of x.rows) assert.deepEqual(cardNotes(x, F.groupOf(x), r), [], name);
+    }
 });
 
 test('item 10: the stage columns of vm-summary.csv hold only sizes of that stage', () => {

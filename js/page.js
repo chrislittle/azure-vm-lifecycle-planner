@@ -12,7 +12,7 @@ import { SizeTable } from './lifecycle.js?v=0.9.9-beta';
 import { COLUMNS, readList } from './input.js?v=0.9.9-beta';
 import { capacityRestricted, plan, toMachine } from './planner.js?v=0.9.9-beta';
 import { optionReason, reasonFor } from './reasons.js?v=0.9.9-beta';
-import { COMPARE_HINT, MBPS_NOTE, cardTitle, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
+import { COMPARE_HINT, MBPS_NOTE, cardNotes, cardTitle, linkParts, seriesList, sizeCard, sizeComparison, whatToDo, whyLines } from './details.js?v=0.9.9-beta';
 import { factsRead, generationHint, generationShown, whereWords, workloadFound } from './evidence.js?v=0.9.9-beta';
 import { REPORT_NAME, reportHtml } from './report.js?v=0.9.9-beta';
 import { GOOD_TO_KNOW, GROUPS, GUIDANCE, datesWords, NOT_FOUND, NO_CONDITIONS, OTHER_SIZES_FIT, OTHER_STEPS, PATTERNS, PROCESSOR_NOTE, SIZE_USED, STEPS, serviceManaged, answerWords, capacityWords, conditionsWords, dateWords, PREVIEW_LINK, stageShort } from './words.js?v=0.9.9-beta';
@@ -422,6 +422,13 @@ function details(m) {
             if (!o.supported || r.result !== 'Supported') card.append(el('p', { class: o.supported ? '' : 'no' }, linked(optionReason(r, table, now))));
             // A v6 or v7 resize that needs the preview feature VMTempDiskResizePreview: the link to the Microsoft page that names it.
             if (c.how) card.append(el('p', { class: 'hint' }, c.how, c.link ? ' ' : null, c.link ? el('a', { href: GUIDANCE.tempDiskPreview, target: '_blank', rel: 'noopener noreferrer', text: PREVIEW_LINK }) : null));
+            // The facts to know and to check of this size, when "What to do" uses another size
+            // (owner, 2026-11-20: "Good to know" and "To check" give the notes of that size only).
+            const notes = cardNotes(m, g, r);
+            for (const state of ['attention', 'check']) {
+                const list = notes.filter((x) => x.state === state);
+                if (list.length) card.append(noteList(state === 'check' ? 'chk' : 'att', list.map((x) => ({ ...x, series: [] }))));
+            }
             if (o.supported) {
                 const ranked = F.rankedFor(m, r, table, now);
                 if (ranked.some((x) => x.why.endsWith('*'))) processorChange = true;
